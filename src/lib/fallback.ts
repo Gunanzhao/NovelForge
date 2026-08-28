@@ -241,7 +241,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     return store.data as T
   }
   if (command === 'list_entities') {
-    const kind = input?.kind as string | undefined
+    const kind = (args.kind ?? input?.kind) as string | undefined
     return store.data.entities.filter((item) => !kind || item.kind === kind) as T
   }
   if (command === 'delete_entity') {

@@ -38,3 +38,38 @@
 ### 下一步
 
 - 按 V0.2 增加场景卡、章节看板、人物关系图和命令注册接口；再接入可选 AI Provider 与显式上下文预览。
+## 2026-08-29：V0.2 写作规划第一阶段
+
+### 完成内容
+
+- 增加“写作规划”入口，内部提供章节大纲、场景卡和写作看板三个工作区。
+- 大纲按章节关联，支持目标、冲突、重要事件、结果和备注，并保存为本地资料 Markdown 镜像。
+- 场景卡支持 POV、地点、时间、参与人物、目标、冲突、结果和备注，支持拖拽及上下移动排序。
+- 看板复用章节状态，支持拖拽到列或使用状态下拉框更新状态，并可点击卡片进入正文。
+- 新增规划数据排序/重排工具和浏览器 fallback 规划实体集成测试。
+
+### 修改文件
+
+- `src/components/PlanningView.tsx`
+- `src/components/OutlineView.tsx`
+- `src/components/SceneView.tsx`
+- `src/components/KanbanView.tsx`
+- `src/lib/planning-data.ts`
+- `src/planning.css`
+- `tests/planning.test.ts`、`tests/planning.integration.test.ts`
+
+### 验证结果
+
+- `pnpm typecheck`：通过。
+- `pnpm lint`：通过，0 error / 0 warning。
+- `pnpm test`：通过，4 个测试文件、10 个测试。
+- `pnpm build`：通过；规划页面已进入 Vite 生产产物。
+
+### 已知问题
+
+- 尚未完成真实桌面鼠标级 E2E、1000 章 / 100 万字性能验收和本阶段 Tauri release build。
+- 时间线、伏笔专用管理视图、人物关系图和命令面板仍待后续阶段。
+
+### 下一步
+
+- 完成桌面 E2E 与数据安全异常测试，再开发时间线 / 伏笔专用视图。

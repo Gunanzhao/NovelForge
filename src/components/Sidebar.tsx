@@ -14,6 +14,7 @@ import { IconButton } from './ui'
 const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: 'dashboard', label: '总览', icon: LayoutDashboard },
   { id: 'manuscript', label: '正文', icon: BookOpen },
+  { id: 'outline', label: '写作规划', icon: BookOpen },
   { id: 'character', label: '人物', icon: CircleUserRound },
   { id: 'location', label: '地点', icon: GalleryVerticalEnd },
   { id: 'world', label: '世界观 Wiki', icon: Globe2 },
