@@ -154,6 +154,14 @@ function replaceNodePath(path: string, oldPrefix: string, newPrefix: string) {
   return path.startsWith(boundary) ? newPrefix.replace(/\/$/u, '') + '/' + path.slice(boundary.length) : path
 }
 
+function replaceMarkdownTitle(content: string, title: string) {
+  if (content.startsWith('# ')) {
+    const end = content.indexOf('\n')
+    return '# ' + title + (end < 0 ? '\n' : content.slice(end))
+  }
+  return '# ' + title + '\n\n' + content
+}
+
 function nodeVolumeOrder(store: FallbackStore, current: NodeRecord) {
   if (current.kind === 'volume') return current.orderIndex
   let parentId = current.parentId
@@ -268,6 +276,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     const id = input?.nodeId as string
     const current = node(store, id)
     if (!current) throw new Error('章节不存在')
+    if (current.kind === 'volume') throw new Error('卷没有正文文件')
     return { node: current, content: store.documents[id] ?? '' } as T
   }
   if (command === 'create_node') {
@@ -297,6 +306,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     const title = (input?.title as string | undefined)?.trim() ?? ''
     if (!title) throw new Error('名称不能为空')
     current.title = title
+    if (current.kind !== 'volume') store.documents[current.id] = replaceMarkdownTitle(store.documents[current.id] ?? '', title)
     current.updatedAt = new Date().toISOString()
     updateTime(store.data)
     persist(projectPath, store)
@@ -388,7 +398,9 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     const id = input?.nodeId as string
     const current = node(store, id)
     if (!current) throw new Error('章节不存在')
-    const content = input?.content as string
+    if (current.kind === 'volume') throw new Error('只有未删除的章节或小节可以编辑')
+    if (typeof input?.content !== 'string') throw new Error('正文内容无效')
+    const content = input.content
     const old = store.documents[id] ?? ''
     const now = new Date().toISOString()
     const revision: StoredHistory = {
@@ -412,7 +424,18 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   if (command === 'restore_history') {
     const item = store.history.find((history) => history.id === input?.revisionId)
     if (!item) throw new Error('版本不存在')
+    const current = node(store, item.nodeId)
+    if (!current) throw new Error('章节不存在')
+    if (current.kind === 'volume') throw new Error('只有未删除的章节或小节可以编辑')
+    const oldContent = store.documents[item.nodeId] ?? ''
+    const now = new Date().toISOString()
+    store.history.unshift({
+      id: uid(), nodeId: item.nodeId, nodeTitle: current.title, reason: '恢复前自动快照',
+      wordCount: countWords(oldContent), createdAt: now, path: 'fallback://history/' + item.nodeId, content: oldContent,
+    })
     store.documents[item.nodeId] = item.content
+    store.activities.push({ createdAt: now, deltaWords: countWords(item.content) - countWords(oldContent) })
+    current.updatedAt = now
     updateTime(store.data)
     persist(projectPath, store)
     return store.data as T

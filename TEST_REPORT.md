@@ -177,3 +177,9 @@
 - 浏览器 fallback 指定章节导出覆盖选中章节正文和递归小节，不再因缺少卷根节点而生成空正文。
 - 缺少章节 ID、卷路径或不存在目标均返回明确错误；正文内容回归已加入 fallback 集成测试。
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：全部通过，12 个测试文件 / 44 个测试。
+
+## fallback 正文编辑边界验证（2026-08-30）
+
+- 章节重命名后 Markdown 一级标题同步更新；卷节点读取/保存被明确拒绝。
+- 历史恢复保留恢复前快照，并更新正文、统计和节点时间。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：全部通过，12 个测试文件 / 45 个测试。

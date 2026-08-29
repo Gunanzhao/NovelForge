@@ -146,4 +146,28 @@ describe('browser fallback project workflow', () => {
     await expect(fallbackInvoke<ProjectData>('delete_node', { input: { projectPath: path, nodeId: 'missing-node' } })).rejects.toThrow('节点不存在')
     await expect(fallbackInvoke<ProjectData>('delete_entity', { input: { projectPath: path, nodeId: 'missing-entity' } })).rejects.toThrow('资料条目不存在')
   })
+
+  it('keeps markdown titles and history aligned with desktop editing rules', async () => {
+    const path = 'fallback-document-boundaries-project'
+    const created = await fallbackInvoke<ProjectData>('create_project', { input: { ...input, path } })
+    const chapter = created.nodes.find((node) => node.kind === 'chapter')
+    const volume = created.nodes.find((node) => node.kind === 'volume')
+    expect(chapter && volume).toBeTruthy()
+    if (!chapter || !volume) return
+    await fallbackInvoke<DocumentData>('save_document', {
+      input: { projectPath: path, nodeId: chapter.id, content: '# 第一章\n\n第一版正文', reason: '第一版' },
+    })
+    await fallbackInvoke<DocumentData>('save_document', {
+      input: { projectPath: path, nodeId: chapter.id, content: '# 第一章\n\n第二版正文', reason: '第二版' },
+    })
+    await fallbackInvoke<ProjectData>('rename_node', { input: { projectPath: path, nodeId: chapter.id, title: '重命名章节' } })
+    const renamed = await fallbackInvoke<DocumentData>('get_document', { input: { projectPath: path, nodeId: chapter.id } })
+    expect(renamed.content).toContain('# 重命名章节')
+    const history = await fallbackInvoke<{ id: string }[]>('list_history', { input: { projectPath: path, nodeId: chapter.id } })
+    await fallbackInvoke<ProjectData>('restore_history', { input: { projectPath: path, revisionId: history[history.length - 1].id } })
+    const restored = await fallbackInvoke<DocumentData>('get_document', { input: { projectPath: path, nodeId: chapter.id } })
+    expect(restored.content).toContain('第一版正文')
+    await expect(fallbackInvoke<DocumentData>('get_document', { input: { projectPath: path, nodeId: volume.id } })).rejects.toThrow('卷没有正文文件')
+    await expect(fallbackInvoke<DocumentData>('save_document', { input: { projectPath: path, nodeId: volume.id, content: '非法', reason: '测试' } })).rejects.toThrow('只有未删除的章节或小节可以编辑')
+  })
 })
