@@ -21,6 +21,15 @@ export function SearchView() {
   const [tag, setTag] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
 
+  useEffect(() => {
+    const onScope = (event: Event) => {
+      const scope = (event as CustomEvent<'project' | 'current'>).detail
+      if (scope === 'project' || scope === 'current') setScope(scope)
+    }
+    window.addEventListener('novelforge:search-scope', onScope)
+    return () => window.removeEventListener('novelforge:search-scope', onScope)
+  }, [])
+
   const volumes = useMemo(() => (data?.nodes ?? [])
     .filter((node) => node.kind === 'volume')
     .sort((left, right) => left.orderIndex - right.orderIndex), [data?.nodes])

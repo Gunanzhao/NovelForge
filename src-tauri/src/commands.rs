@@ -1,7 +1,7 @@
 use crate::models::{
-    DocumentData, EntityInput, EntityRecord, ExportInput, HistoryItem, NodeInput, NodeRecord,
-    ProjectData, ProjectInput, ProjectMetadata, RecoveryItem, SaveDocumentInput, SearchInput,
-    SearchResult, Stats, StatisticsInput, TrashItem,
+    CopyNodeInput, DocumentData, EntityInput, EntityRecord, ExportInput, HistoryItem, MoveNodeInput,
+    NodeInput, NodeRecord, ProjectData, ProjectInput, ProjectMetadata, RecoveryItem,
+    SaveDocumentInput, SearchInput, SearchResult, Stats, StatisticsInput, TrashItem,
 };
 use crate::storage_impl as storage;
 use chrono::{Duration, Utc};
@@ -11,6 +11,7 @@ use serde::Deserialize;
 use std::fs;
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
+use std::collections::{HashMap, HashSet};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
@@ -74,6 +75,159 @@ fn descendant_ids(nodes: &[NodeRecord], root_id: &str) -> Vec<String> {
         index += 1;
     }
     result
+}
+
+fn validate_target_parent(
+    nodes: &[NodeRecord],
+    node_kind: &str,
+    target_parent_id: Option<&str>,
+) -> Result<Option<NodeRecord>, String> {
+    let parent = target_parent_id
+        .map(|id| {
+            nodes
+                .iter()
+                .find(|node| node.id == id)
+                .cloned()
+                .ok_or_else(|| "目标父节点不存在".to_string())
+        })
+        .transpose()?;
+    match node_kind {
+        "volume" if parent.is_some() => Err("卷不能移动到其他节点下面".to_string()),
+        "volume" => Ok(parent),
+        "chapter" if parent.as_ref().is_some_and(|node| node.kind == "volume") => Ok(parent),
+        "section" if parent.as_ref().is_some_and(|node| node.kind == "chapter") => Ok(parent),
+        "chapter" => Err("章节只能放在卷下面".to_string()),
+        "section" => Err("小节只能放在章节下面".to_string()),
+        _ => Err("节点类型无效".to_string()),
+    }
+}
+
+fn next_node_location(
+    root: &Path,
+    nodes: &[NodeRecord],
+    kind: &str,
+    parent: Option<&NodeRecord>,
+) -> Result<(String, i64), String> {
+    let prefix = match kind {
+        "volume" => "manuscript/volume_".to_string(),
+        "chapter" => format!("{}/chapter_", parent.ok_or_else(|| "章节缺少目标卷".to_string())?.file_path),
+        "section" => {
+            let chapter_dir = Path::new(&parent.ok_or_else(|| "小节缺少目标章节".to_string())?.file_path)
+                .with_extension("")
+                .to_string_lossy()
+                .replace('\\', "/");
+            format!("{}/section_", chapter_dir)
+        }
+        _ => return Err("节点类型无效".to_string()),
+    };
+    for index in 1_i64..100_000 {
+        let relative = if kind == "volume" {
+            format!("{}{:03}", prefix, index)
+        } else {
+            format!("{}{:03}.md", prefix, index)
+        };
+        let occupied_in_db = nodes.iter().any(|node| node.file_path == relative);
+        let absolute = storage::safe_relative(root, &relative)?;
+        let sidecar_occupied = kind == "chapter" && absolute.with_extension("").exists();
+        if !occupied_in_db && !absolute.exists() && !sidecar_occupied {
+            let sibling_order = nodes
+                .iter()
+                .filter(|node| node.parent_id.as_deref() == parent.map(|item| item.id.as_str()))
+                .map(|node| node.order_index)
+                .max()
+                .unwrap_or(-1)
+                + 1;
+            return Ok((relative, sibling_order));
+        }
+    }
+    Err("无法为节点分配新的文件路径".to_string())
+}
+
+fn replace_path_prefix(path: &str, old_prefix: &str, new_prefix: &str) -> String {
+    if path == old_prefix {
+        return new_prefix.to_string();
+    }
+    let boundary = format!("{}/", old_prefix.trim_end_matches('/'));
+    if let Some(rest) = path.strip_prefix(&boundary) {
+        format!("{}/{}", new_prefix.trim_end_matches('/'), rest)
+    } else {
+        path.to_string()
+    }
+}
+
+fn node_path_prefix(node: &NodeRecord) -> String {
+    if node.kind == "chapter" {
+        Path::new(&node.file_path)
+            .with_extension("")
+            .to_string_lossy()
+            .replace('\\', "/")
+    } else {
+        node.file_path.clone()
+    }
+}
+
+fn copy_path_recursive(source: &Path, target: &Path) -> Result<(), String> {
+    let metadata = fs::symlink_metadata(source)
+        .map_err(|error| format!("读取节点文件失败：{}", error))?;
+    if metadata.file_type().is_symlink() {
+        return Err("不支持复制符号链接节点".to_string());
+    }
+    if metadata.is_dir() {
+        fs::create_dir_all(target).map_err(|error| format!("创建复制目录失败：{}", error))?;
+        for entry in fs::read_dir(source).map_err(|error| format!("读取复制目录失败：{}", error))? {
+            let entry = entry.map_err(|error| format!("读取复制目录项失败：{}", error))?;
+            copy_path_recursive(&entry.path(), &target.join(entry.file_name()))?;
+        }
+    } else {
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).map_err(|error| format!("创建复制父目录失败：{}", error))?;
+        }
+        fs::copy(source, target).map_err(|error| format!("复制节点文件失败：{}", error))?;
+    }
+    Ok(())
+}
+
+fn remove_path_if_exists(path: &Path) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    if path.is_dir() {
+        fs::remove_dir_all(path).map_err(|error| format!("清理复制节点失败：{}", error))
+    } else {
+        fs::remove_file(path).map_err(|error| format!("清理复制节点失败：{}", error))
+    }
+}
+
+fn move_node_files(source: &Path, target: &Path, kind: &str) -> Result<bool, String> {
+    if !source.exists() {
+        return Err(format!("节点文件不存在：{}", source.display()));
+    }
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|error| format!("创建目标目录失败：{}", error))?;
+    }
+    fs::rename(source, target).map_err(|error| format!("移动节点文件失败：{}", error))?;
+    if kind == "chapter" {
+        let source_sidecar = source.with_extension("");
+        let target_sidecar = target.with_extension("");
+        if source_sidecar.exists() {
+            if let Err(error) = fs::rename(&source_sidecar, &target_sidecar) {
+                let _ = fs::rename(target, source);
+                return Err(format!("移动章节小节目录失败：{}", error));
+            }
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn rollback_node_move(source: &Path, target: &Path, kind: &str, sidecar_moved: bool) {
+    if sidecar_moved {
+        let _ = fs::rename(target.with_extension(""), source.with_extension(""));
+    }
+    let _ = fs::rename(target, source);
+    if kind == "chapter" {
+        let _ = fs::create_dir_all(source.parent().unwrap_or_else(|| Path::new(".")));
+    }
 }
 
 fn default_status() -> &'static str {
@@ -328,6 +482,248 @@ pub fn reorder_node(input: crate::models::ReorderNodeInput) -> Result<ProjectDat
             .execute("UPDATE nodes SET order_index = ?1 WHERE id = ?2", params![current.order_index, neighbour_id])
             .map_err(|error| format!("更新节点顺序失败：{}", error))?;
     }
+    storage::touch_project(&root)?;
+    project_data(&root, &connection)
+}
+
+#[tauri::command]
+pub fn move_node(input: MoveNodeInput) -> Result<ProjectData, String> {
+    let (root, mut connection) = project_connection(&input.project_path)?;
+    let nodes = storage::all_nodes(&connection, false)?;
+    let current = nodes
+        .iter()
+        .find(|node| node.id == input.node_id)
+        .cloned()
+        .ok_or_else(|| "节点不存在或已在回收站".to_string())?;
+    let target_parent_id = input.target_parent_id.as_deref();
+    let target_parent = validate_target_parent(&nodes, &current.kind, target_parent_id)?;
+    let descendants = descendant_ids(&nodes, &current.id);
+    if target_parent_id.is_some_and(|id| descendants.iter().any(|item| item == id)) {
+        return Err("不能将节点移动到自己的后代下面".to_string());
+    }
+
+    let sibling_count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM nodes WHERE parent_id IS ?1 AND deleted_at IS NULL",
+            params![target_parent_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| format!("读取目标顺序失败：{}", error))?;
+    let requested_order = input.target_order_index.unwrap_or(sibling_count);
+    let max_order = if current.parent_id.as_deref() == target_parent_id {
+        sibling_count.saturating_sub(1)
+    } else {
+        sibling_count
+    };
+    let target_order = requested_order.clamp(0, max_order);
+
+    if current.parent_id.as_deref() == target_parent_id {
+        if target_order != current.order_index {
+            let transaction = connection
+                .transaction()
+                .map_err(|error| format!("无法开始排序事务：{}", error))?;
+            if target_order < current.order_index {
+                transaction
+                    .execute(
+                        "UPDATE nodes SET order_index = order_index + 1 WHERE parent_id IS ?1 AND order_index >= ?2 AND order_index < ?3 AND deleted_at IS NULL",
+                        params![current.parent_id.clone(), target_order, current.order_index],
+                    )
+                    .map_err(|error| format!("更新节点顺序失败：{}", error))?;
+            } else {
+                transaction
+                    .execute(
+                        "UPDATE nodes SET order_index = order_index - 1 WHERE parent_id IS ?1 AND order_index > ?2 AND order_index <= ?3 AND deleted_at IS NULL",
+                        params![current.parent_id.clone(), current.order_index, target_order],
+                    )
+                    .map_err(|error| format!("更新节点顺序失败：{}", error))?;
+            }
+            transaction
+                .execute(
+                    "UPDATE nodes SET order_index = ?1, updated_at = ?2 WHERE id = ?3",
+                    params![target_order, storage::now(), current.id],
+                )
+                .map_err(|error| format!("更新节点顺序失败：{}", error))?;
+            transaction
+                .commit()
+                .map_err(|error| format!("提交节点排序失败：{}", error))?;
+            storage::touch_project(&root)?;
+        }
+        return project_data(&root, &connection);
+    }
+
+    let (target_path, _) = next_node_location(&root, &nodes, &current.kind, target_parent.as_ref())?;
+    let source_absolute = storage::safe_relative(&root, &current.file_path)?;
+    let target_absolute = storage::safe_relative(&root, &target_path)?;
+    let sidecar_moved = move_node_files(&source_absolute, &target_absolute, &current.kind)?;
+    let timestamp = storage::now();
+    let current_prefix = node_path_prefix(&current);
+    let target_prefix = node_path_prefix(&NodeRecord {
+        file_path: target_path.clone(),
+        kind: current.kind.clone(),
+        id: current.id.clone(),
+        parent_id: current.parent_id.clone(),
+        title: current.title.clone(),
+        order_index: current.order_index,
+        status: current.status.clone(),
+        created_at: current.created_at.clone(),
+        updated_at: current.updated_at.clone(),
+        deleted_at: None,
+        deleted_path: None,
+    });
+    let database_result = (|| -> Result<(), String> {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("无法开始移动事务：{}", error))?;
+        transaction
+            .execute(
+                "UPDATE nodes SET order_index = order_index - 1 WHERE parent_id IS ?1 AND order_index > ?2 AND deleted_at IS NULL",
+                params![current.parent_id.clone(), current.order_index],
+            )
+            .map_err(|error| format!("整理原父节点顺序失败：{}", error))?;
+        transaction
+            .execute(
+                "UPDATE nodes SET order_index = order_index + 1 WHERE parent_id IS ?1 AND order_index >= ?2 AND deleted_at IS NULL",
+                params![target_parent_id, target_order],
+            )
+            .map_err(|error| format!("整理目标父节点顺序失败：{}", error))?;
+        transaction
+            .execute(
+                "UPDATE nodes SET parent_id = ?1, order_index = ?2, file_path = ?3, updated_at = ?4 WHERE id = ?5",
+                params![target_parent_id, target_order, target_path, timestamp, current.id],
+            )
+            .map_err(|error| format!("更新移动节点失败：{}", error))?;
+        for node in nodes.iter().filter(|node| node.id != current.id && descendants.iter().any(|id| id == &node.id)) {
+            let next_path = replace_path_prefix(&node.file_path, &current_prefix, &target_prefix);
+            transaction
+                .execute(
+                    "UPDATE nodes SET file_path = ?1, updated_at = ?2 WHERE id = ?3",
+                    params![next_path, timestamp, node.id],
+                )
+                .map_err(|error| format!("更新子节点路径失败：{}", error))?;
+        }
+        transaction
+            .commit()
+            .map_err(|error| format!("提交节点移动失败：{}", error))?;
+        Ok(())
+    })();
+    if let Err(error) = database_result {
+        rollback_node_move(&source_absolute, &target_absolute, &current.kind, sidecar_moved);
+        return Err(error);
+    }
+    storage::refresh_search_index(&root, &connection)?;
+    storage::touch_project(&root)?;
+    project_data(&root, &connection)
+}
+
+#[tauri::command]
+pub fn copy_node(input: CopyNodeInput) -> Result<ProjectData, String> {
+    let (root, mut connection) = project_connection(&input.project_path)?;
+    let nodes = storage::all_nodes(&connection, false)?;
+    let current = nodes
+        .iter()
+        .find(|node| node.id == input.node_id)
+        .cloned()
+        .ok_or_else(|| "节点不存在或已在回收站".to_string())?;
+    let target_parent = validate_target_parent(&nodes, &current.kind, input.target_parent_id.as_deref())?;
+    let descendants = descendant_ids(&nodes, &current.id);
+    let target_parent_id = input.target_parent_id.as_deref();
+    if target_parent_id.is_some_and(|id| descendants.iter().any(|item| item == id)) {
+        return Err("不能将节点复制到自己的后代下面".to_string());
+    }
+    let (target_path, target_order) = next_node_location(&root, &nodes, &current.kind, target_parent.as_ref())?;
+    let source_absolute = storage::safe_relative(&root, &current.file_path)?;
+    let target_absolute = storage::safe_relative(&root, &target_path)?;
+    copy_path_recursive(&source_absolute, &target_absolute)?;
+    if current.kind == "chapter" {
+        let source_sidecar = source_absolute.with_extension("");
+        let target_sidecar = target_absolute.with_extension("");
+        if source_sidecar.exists() {
+            if let Err(error) = copy_path_recursive(&source_sidecar, &target_sidecar) {
+                let _ = remove_path_if_exists(&target_absolute);
+                return Err(error);
+            }
+        }
+    }
+
+    let timestamp = storage::now();
+    let mut id_map = HashMap::new();
+    for node in nodes.iter().filter(|node| descendants.iter().any(|id| id == &node.id)) {
+        id_map.insert(node.id.clone(), storage::new_id());
+    }
+    let copied_root_title = input
+        .title
+        .as_deref()
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("{} 副本", current.title));
+    let current_prefix = node_path_prefix(&current);
+    let target_prefix = node_path_prefix(&NodeRecord {
+        file_path: target_path.clone(),
+        kind: current.kind.clone(),
+        id: current.id.clone(),
+        parent_id: target_parent_id.map(str::to_string),
+        title: copied_root_title.clone(),
+        order_index: target_order,
+        status: current.status.clone(),
+        created_at: timestamp.clone(),
+        updated_at: timestamp.clone(),
+        deleted_at: None,
+        deleted_path: None,
+    });
+    let database_result = (|| -> Result<(), String> {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("无法开始复制事务：{}", error))?;
+        for node in nodes.iter().filter(|node| descendants.iter().any(|id| id == &node.id)) {
+            let new_id = id_map
+                .get(&node.id)
+                .ok_or_else(|| "复制节点 ID 映射失败".to_string())?;
+            let new_parent_id = if node.id == current.id {
+                target_parent_id.map(str::to_string)
+            } else {
+                node.parent_id
+                    .as_ref()
+                    .and_then(|id| id_map.get(id))
+                    .cloned()
+            };
+            let new_title = if node.id == current.id {
+                copied_root_title.clone()
+            } else {
+                node.title.clone()
+            };
+            let new_path = if node.id == current.id {
+                target_path.clone()
+            } else {
+                replace_path_prefix(&node.file_path, &current_prefix, &target_prefix)
+            };
+            let new_order = if node.id == current.id { target_order } else { node.order_index };
+            transaction
+                .execute(
+                    "INSERT INTO nodes (id, kind, parent_id, title, order_index, status, file_path, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    params![new_id, node.kind, new_parent_id, new_title, new_order, node.status, new_path, timestamp, timestamp],
+                )
+                .map_err(|error| format!("写入复制节点失败：{}", error))?;
+        }
+        transaction
+            .execute(
+                "UPDATE nodes SET order_index = order_index + 1 WHERE parent_id IS ?1 AND order_index >= ?2 AND id NOT IN (SELECT id FROM nodes WHERE id = ?3)",
+                params![target_parent_id, target_order, id_map.get(&current.id)],
+            )
+            .map_err(|error| format!("整理复制节点顺序失败：{}", error))?;
+        transaction
+            .commit()
+            .map_err(|error| format!("提交节点复制失败：{}", error))?;
+        Ok(())
+    })();
+    if let Err(error) = database_result {
+        let _ = remove_path_if_exists(&target_absolute);
+        if current.kind == "chapter" {
+            let _ = remove_path_if_exists(&target_absolute.with_extension(""));
+        }
+        return Err(error);
+    }
+    storage::refresh_search_index(&root, &connection)?;
     storage::touch_project(&root)?;
     project_data(&root, &connection)
 }
@@ -1239,6 +1635,11 @@ pub fn get_statistics(input: StatisticsInput) -> Result<Stats, String> {
     })
 }
 
+struct ExportRenderOptions {
+    include_volume_titles: bool,
+    include_chapter_titles: bool,
+}
+
 fn export_nodes(
     root: &Path,
     nodes: &[NodeRecord],
@@ -1246,12 +1647,20 @@ fn export_nodes(
     level: usize,
     format: &str,
     output: &mut String,
+    options: &ExportRenderOptions,
 ) {
     for node in node_children(nodes, parent_id) {
-        if format == "markdown" {
-            output.push_str(&format!("\n{} {}\n\n", "#".repeat(level.max(1)), node.title));
+        let include_title = if node.kind == "volume" {
+            options.include_volume_titles
         } else {
-            output.push_str(&format!("\n{}\n{}\n\n", node.title, "=".repeat(node.title.chars().count().max(3))));
+            options.include_chapter_titles
+        };
+        if include_title {
+            if format == "markdown" {
+                output.push_str(&format!("\n{} {}\n\n", "#".repeat(level.max(1)), node.title));
+            } else {
+                output.push_str(&format!("\n{}\n{}\n\n", node.title, "=".repeat(node.title.chars().count().max(3))));
+            }
         }
         if node.kind != "volume" {
             if let Ok(content) = fs::read_to_string(storage::safe_relative(root, &node.file_path).unwrap_or_else(|_| PathBuf::new())) {
@@ -1260,8 +1669,44 @@ fn export_nodes(
                 output.push_str("\n\n");
             }
         }
-        export_nodes(root, nodes, Some(&node.id), level + 1, format, output);
+        export_nodes(root, nodes, Some(&node.id), level + 1, format, output, options);
     }
+}
+
+fn export_scope_nodes(nodes: &[NodeRecord], input: &ExportInput) -> Result<Vec<NodeRecord>, String> {
+    let scope = input.scope.as_deref().unwrap_or("project");
+    let mut selected_ids = HashSet::new();
+    match scope {
+        "project" => {
+            selected_ids.extend(nodes.iter().map(|node| node.id.clone()));
+        }
+        "volume" => {
+            let volume_path = input.volume_path.as_deref().ok_or_else(|| "指定卷导出需要卷路径".to_string())?;
+            let volume = nodes.iter().find(|node| node.kind == "volume" && node.file_path == volume_path)
+                .ok_or_else(|| "指定导出卷不存在".to_string())?;
+            selected_ids.extend(descendant_ids(nodes, &volume.id));
+        }
+        "chapters" => {
+            let ids = input.node_ids.as_deref().ok_or_else(|| "指定章节导出需要章节 ID".to_string())?;
+            for id in ids {
+                let node = nodes.iter().find(|node| node.id == *id)
+                    .ok_or_else(|| format!("指定章节不存在：{}", id))?;
+                selected_ids.extend(descendant_ids(nodes, &node.id));
+            }
+        }
+        _ => return Err(format!("不支持的导出范围：{}", scope)),
+    }
+    let mut filtered: Vec<NodeRecord> = nodes
+        .iter()
+        .filter(|node| selected_ids.contains(&node.id))
+        .cloned()
+        .collect();
+    for node in &mut filtered {
+        if node.parent_id.as_ref().map(|id| !selected_ids.contains(id)).unwrap_or(false) {
+            node.parent_id = None;
+        }
+    }
+    Ok(filtered)
 }
 
 fn xml_escape(value: &str) -> String {
@@ -1331,6 +1776,41 @@ fn epub_bytes(markdown: &str, title: &str, author: &str) -> Result<Vec<u8>, Stri
     zip_document(&files, &["mimetype"])
 }
 
+fn html_bytes(markdown: &str, title: &str, author: &str, include_toc: bool, cover_path: Option<&str>) -> Vec<u8> {
+    let mut body = String::new();
+    let mut toc = String::new();
+    let mut heading_index = 0_usize;
+    for line in markdown.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some(level) = heading_level(trimmed) {
+            heading_index += 1;
+            let id = format!("heading-{}", heading_index);
+            let heading = trimmed[level + 1..].trim();
+            body.push_str(&format!("<h{} id=\"{}\">{}</h{}>", level.min(6), id, xml_escape(heading), level.min(6)));
+            if include_toc {
+                toc.push_str(&format!("<li class=\"toc-level-{}\"><a href=\"#{}\">{}</a></li>", level.min(6), id, xml_escape(heading)));
+            }
+        } else {
+            body.push_str(&format!("<p>{}</p>", xml_escape(trimmed)));
+        }
+    }
+    let cover = cover_path
+        .map(|path| format!("<p class=\"cover\"><img src=\"{}\" alt=\"封面\" /></p>", xml_escape(path)))
+        .unwrap_or_default();
+    let toc_html = if include_toc {
+        format!("<nav class=\"toc\"><h2>目录</h2><ol>{}</ol></nav>", toc)
+    } else {
+        String::new()
+    };
+    format!(
+        "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"author\" content=\"{}\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{}</title><style>body{{font-family:serif;line-height:1.9;max-width:860px;margin:40px auto;padding:0 24px;color:#27211e}}h1{{margin-bottom:4px}}.author{{color:#756b64}}.toc{{padding:16px 20px;background:#f7f3ef;border-radius:8px}}.toc-level-2{{margin-left:16px}}.toc-level-3{{margin-left:32px}}.cover{{text-align:center}}.cover img{{max-width:100%;max-height:520px}}</style></head><body><header><h1>{}</h1><p class=\"author\">作者：{}</p></header>{}{}<main>{}</main></body></html>",
+        xml_escape(author), xml_escape(title), xml_escape(title), xml_escape(author), cover, toc_html, body
+    ).into_bytes()
+}
+
 fn pdf_hex_text(value: &str) -> String {
     value.encode_utf16().map(|unit| format!("{:04X}", unit)).collect()
 }
@@ -1387,27 +1867,64 @@ fn pdf_bytes(text: &str) -> Vec<u8> {
 pub fn export_project(input: ExportInput) -> Result<String, String> {
     let (root, connection) = project_connection(&input.project_path)?;
     let format = match input.format.as_str() {
-        "markdown" | "txt" | "docx" | "epub" | "pdf" => input.format.as_str(),
+        "markdown" | "txt" | "html" | "docx" | "epub" | "pdf" => input.format.as_str(),
         _ => return Err(format!("不支持的导出格式：{}", input.format)),
     };
     let metadata = storage::read_project_json(&root)?;
     let nodes = storage::all_nodes(&connection, false)?;
+    let nodes = export_scope_nodes(&nodes, &input)?;
+    let title = input
+        .title
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(metadata.title.as_str())
+        .to_string();
+    let author = input
+        .author
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(metadata.author.as_str())
+        .to_string();
+    let options = ExportRenderOptions {
+        include_volume_titles: input.include_volume_titles.unwrap_or(true),
+        include_chapter_titles: input.include_chapter_titles.unwrap_or(true),
+    };
+    let cover_path = input.cover_path.as_deref().map(|path| {
+        let absolute = storage::safe_relative(&root, path)?;
+        if !absolute.is_file() {
+            return Err("封面文件不存在".to_string());
+        }
+        Ok(path.replace('\\', "/"))
+    }).transpose()?;
     let mut markdown = String::new();
-    export_nodes(&root, &nodes, None, 1, "markdown", &mut markdown);
-    let mut output = if format == "markdown" {
-        format!("# {}\n\n作者：{}\n\n", metadata.title, metadata.author)
-    } else if format == "txt" {
-        format!("{}\n作者：{}\n\n", metadata.title, metadata.author)
+    export_nodes(&root, &nodes, None, 1, "markdown", &mut markdown, &options);
+    let toc = if input.include_toc.unwrap_or(true) {
+        let entries = nodes
+            .iter()
+            .filter(|node| node.kind != "section" || options.include_chapter_titles)
+            .map(|node| format!("- {}", node.title))
+            .collect::<Vec<_>>();
+        if entries.is_empty() { String::new() } else { format!("## 目录\n\n{}\n\n", entries.join("\n")) }
     } else {
         String::new()
     };
-    if format == "markdown" { output.push_str(&markdown); }
-    if format == "txt" { export_nodes(&root, &nodes, None, 1, "txt", &mut output); }
+    let markdown_document = format!("# {}\n\n作者：{}\n\n{}{}", title, author, toc, markdown);
+    let mut output = if format == "markdown" {
+        markdown_document.clone()
+    } else if format == "txt" {
+        format!("{}\n作者：{}\n\n", title, author)
+    } else {
+        String::new()
+    };
+    if format == "txt" { export_nodes(&root, &nodes, None, 1, "txt", &mut output, &options); }
     let (extension, bytes) = match format {
         "markdown" | "txt" => (format.to_string(), output.into_bytes()),
-        "docx" => ("docx".to_string(), docx_bytes(&format!("# {}\n\n作者：{}\n\n{}", metadata.title, metadata.author, markdown))?),
-        "epub" => ("epub".to_string(), epub_bytes(&format!("# {}\n\n{}", metadata.title, markdown), &metadata.title, &metadata.author)?),
-        "pdf" => ("pdf".to_string(), pdf_bytes(&format!("{}\n作者：{}\n\n{}", metadata.title, metadata.author, markdown))),
+        "html" => ("html".to_string(), html_bytes(&markdown_document, &title, &author, input.include_toc.unwrap_or(true), cover_path.as_deref())),
+        "docx" => ("docx".to_string(), docx_bytes(&markdown_document)?),
+        "epub" => ("epub".to_string(), epub_bytes(&markdown_document, &title, &author)?),
+        "pdf" => ("pdf".to_string(), pdf_bytes(&format!("{}\n作者：{}\n\n{}", title, author, markdown))),
         _ => unreachable!(),
     };
     let filename = format!(

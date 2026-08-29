@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
-import { FolderOpen, Save } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ArrowRightLeft, Copy, FolderOpen, Save } from 'lucide-react'
 import { chooseDirectory, isDesktop } from '../lib/api'
-import type { NodeKind, ProjectInput } from '../lib/types'
+import type { NodeKind, NodeRecord, ProjectData, ProjectInput } from '../lib/types'
 import { Button, Field, Modal, TextInput } from './ui'
 import { useAppStore } from '../stores/app-store'
 
@@ -79,5 +79,54 @@ export function NodeDialog({ kind, parentId, onClose }: { kind: NodeKind | null;
   return <Modal open={kind !== null} title={'新建' + label} onClose={onClose}
     footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button onClick={() => void submit()} disabled={busy || !title.trim()}>{busy ? '创建中…' : '创建'}</Button></>}>
     <Field label={label + '标题'}><TextInput autoFocus value={title} onChange={(event) => setTitle(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void submit() }} placeholder={kind === 'volume' ? '第二卷' : kind === 'chapter' ? '第二章' : '开场' } /></Field>
+  </Modal>
+}
+
+export function NodeTransferDialog({
+  mode, node, data, onClose, onSubmit,
+}: {
+  mode: 'move' | 'copy' | null
+  node: NodeRecord | null
+  data: ProjectData | null
+  onClose: () => void
+  onSubmit: (targetParentId: string | null, title?: string) => Promise<void>
+}) {
+  const [targetParentId, setTargetParentId] = useState('')
+  const [title, setTitle] = useState('')
+  const [busy, setBusy] = useState(false)
+  const targets = useMemo(() => data && node
+    ? data.nodes.filter((candidate) => candidate.kind === (node.kind === 'chapter' ? 'volume' : node.kind === 'section' ? 'chapter' : 'volume'))
+    : [], [data, node])
+
+  useEffect(() => {
+    if (!node || !data) {
+      setTargetParentId('')
+      setTitle('')
+      return
+    }
+    const firstTarget = targets.find((candidate) => candidate.id !== node.parentId)
+    setTargetParentId(firstTarget?.id ?? targets[0]?.id ?? '')
+    setTitle(mode === 'copy' ? node.title + ' 副本' : node.title)
+  }, [data, mode, node, targets])
+
+  async function submit() {
+    if (!node || !mode || (node.kind !== 'volume' && !targetParentId)) return
+    setBusy(true)
+    try {
+      await onSubmit(node.kind === 'volume' ? null : targetParentId, mode === 'copy' ? title.trim() : undefined)
+      onClose()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const targetLabel = node?.kind === 'chapter' ? '目标卷' : node?.kind === 'section' ? '目标章节' : '复制到项目根目录'
+  return <Modal open={Boolean(mode && node)} title={mode === 'move' ? '移动正文节点' : '复制正文节点'} onClose={() => { if (!busy) onClose() }}
+    footer={<><Button variant="ghost" onClick={onClose} disabled={busy}>取消</Button><Button onClick={() => void submit()} disabled={busy || !node || (node.kind !== 'volume' && !targetParentId) || (mode === 'copy' && !title.trim())}>{busy ? '处理中…' : mode === 'move' ? <><ArrowRightLeft size={14} />移动</> : <><Copy size={14} />复制</>}</Button></>}>
+    <div className="dialog-stack">
+      {node ? <div className="field-hint">当前节点：{node.title}</div> : null}
+      {node?.kind === 'volume' ? <div className="field-hint">卷只能位于项目根目录；复制会在现有卷末尾创建一个完整副本。</div> : <Field label={targetLabel}><select className="select-input" value={targetParentId} onChange={(event) => setTargetParentId(event.target.value)}>{targets.map((target) => <option value={target.id} key={target.id}>{target.title}</option>)}</select></Field>}
+      {mode === 'copy' ? <Field label="副本名称"><TextInput autoFocus value={title} onChange={(event) => setTitle(event.target.value)} /></Field> : null}
+    </div>
   </Modal>
 }

@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
-  AiCompletionInput, AiCompletionResult, ConsistencyReport, DocumentData, EntityInput, EntityRecord, ExportInput, HistoryItem, NodeInput, ProjectData,
+  AiCompletionInput, AiCompletionResult, ConsistencyReport, CopyNodeInput, DocumentData, EntityInput, EntityRecord, ExportInput, HistoryItem, MoveNodeInput, NodeInput, ProjectData,
   ProjectInput, RecoveryItem, SaveDocumentInput, SearchInput, SearchResult, Stats, TrashItem,
 } from './types'
 import { fallbackInvoke } from './fallback'
@@ -31,6 +31,8 @@ export const projectApi = {
   renameNode: (input: { projectPath: string; nodeId: string; title: string }) => command<ProjectData>('rename_node', { input }),
   setNodeStatus: (input: { projectPath: string; nodeId: string; status: string }) => command<ProjectData>('set_node_status', { input }),
   reorderNode: (input: { projectPath: string; nodeId: string; direction: string }) => command<ProjectData>('reorder_node', { input }),
+  moveNode: (input: MoveNodeInput) => command<ProjectData>('move_node', { input }),
+  copyNode: (input: CopyNodeInput) => command<ProjectData>('copy_node', { input }),
   deleteNode: (input: { projectPath: string; nodeId: string }) => command<ProjectData>('delete_node', { input }),
   getDocument: (input: { projectPath: string; nodeId: string }) => command<DocumentData>('get_document', { input }),
   saveDocument: (input: SaveDocumentInput) => command<DocumentData>('save_document', { input }),

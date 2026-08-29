@@ -3,6 +3,8 @@ export type EditorFontFamily = 'serif' | 'sans'
 export interface WorkspacePreferences {
   sidebarWidth: number
   inspectorWidth: number
+  sidebarOpen: boolean
+  inspectorOpen: boolean
   editorFontFamily: EditorFontFamily
   editorFontSize: number
   editorLineHeight: number
@@ -14,6 +16,8 @@ export interface WorkspacePreferences {
 export const DEFAULT_WORKSPACE_PREFERENCES: WorkspacePreferences = {
   sidebarWidth: 272,
   inspectorWidth: 278,
+  sidebarOpen: true,
+  inspectorOpen: true,
   editorFontFamily: 'serif',
   editorFontSize: 14,
   editorLineHeight: 1.95,
@@ -36,6 +40,8 @@ export function normalizeWorkspacePreferences(value: unknown): WorkspacePreferen
   return {
     sidebarWidth: finiteNumber(source.sidebarWidth, DEFAULT_WORKSPACE_PREFERENCES.sidebarWidth, 220, 420, true),
     inspectorWidth: finiteNumber(source.inspectorWidth, DEFAULT_WORKSPACE_PREFERENCES.inspectorWidth, 220, 420, true),
+    sidebarOpen: typeof source.sidebarOpen === 'boolean' ? source.sidebarOpen : DEFAULT_WORKSPACE_PREFERENCES.sidebarOpen,
+    inspectorOpen: typeof source.inspectorOpen === 'boolean' ? source.inspectorOpen : DEFAULT_WORKSPACE_PREFERENCES.inspectorOpen,
     editorFontFamily: source.editorFontFamily === 'sans' ? 'sans' : 'serif',
     editorFontSize: finiteNumber(source.editorFontSize, DEFAULT_WORKSPACE_PREFERENCES.editorFontSize, 12, 22, true),
     editorLineHeight: finiteNumber(source.editorLineHeight, DEFAULT_WORKSPACE_PREFERENCES.editorLineHeight, 1.4, 2.6),

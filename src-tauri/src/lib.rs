@@ -14,6 +14,8 @@ pub fn run() {
             commands::rename_node,
             commands::set_node_status,
             commands::reorder_node,
+            commands::move_node,
+            commands::copy_node,
             commands::delete_node,
             commands::get_document,
             commands::save_document,

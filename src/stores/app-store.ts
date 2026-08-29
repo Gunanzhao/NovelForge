@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { projectApi } from '../lib/api'
 import type {
   DocumentData, EntityInput, EntityKind, NodeRecord, ProjectData, ProjectInput,
-  ExportFormat, SaveState, SearchResult, Stats, ThemeMode, TrashItem, ViewId,
+  ExportFormat, ExportInput, SaveState, SearchResult, Stats, ThemeMode, TrashItem, ViewId,
 } from '../lib/types'
 import {
   DEFAULT_WORKSPACE_PREFERENCES, readWorkspacePreferences, writeWorkspacePreferences,
@@ -90,6 +90,8 @@ interface AppState {
   renameNode: (nodeId: string, title: string) => Promise<void>
   setNodeStatus: (nodeId: string, status: string) => Promise<void>
   reorderNode: (nodeId: string, direction: 'up' | 'down') => Promise<void>
+  moveNode: (nodeId: string, targetParentId: string | null, targetOrderIndex?: number) => Promise<void>
+  copyNode: (nodeId: string, targetParentId: string | null, title?: string) => Promise<void>
   deleteNode: (nodeId: string) => Promise<void>
   selectEntity: (kind: EntityKind, entityId?: string | null) => void
   saveEntity: (input: EntityInput) => Promise<void>
@@ -100,7 +102,7 @@ interface AppState {
   emptyTrash: () => Promise<void>
   runSearch: (query: string, options?: Omit<import('../lib/types').SearchInput, 'projectPath' | 'query'>) => Promise<void>
   refreshStats: () => Promise<void>
-  exportProject: (format: ExportFormat) => Promise<string>
+  exportProject: (format: ExportFormat, options?: Omit<ExportInput, 'projectPath' | 'format'>) => Promise<string>
   updateProject: (input: { title: string; author: string; description: string; genre: string; targetWords: number }) => Promise<void>
 }
 
@@ -120,8 +122,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   searchQuery: '',
   recentProjects: [],
   trash: [],
-  sidebarOpen: true,
-  inspectorOpen: true,
+  sidebarOpen: DEFAULT_WORKSPACE_PREFERENCES.sidebarOpen,
+  inspectorOpen: DEFAULT_WORKSPACE_PREFERENCES.inspectorOpen,
   focusMode: false,
   theme: 'system',
   workspacePreferences: { ...DEFAULT_WORKSPACE_PREFERENCES },
@@ -137,8 +139,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     writeWorkspacePreferences(next)
     return { workspacePreferences: next }
   }),
-  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
-  toggleInspector: () => set((state) => ({ inspectorOpen: !state.inspectorOpen })),
+  toggleSidebar: () => set((state) => {
+    const sidebarOpen = !state.sidebarOpen
+    const workspacePreferences = { ...state.workspacePreferences, sidebarOpen }
+    writeWorkspacePreferences(workspacePreferences)
+    return { sidebarOpen, workspacePreferences }
+  }),
+  toggleInspector: () => set((state) => {
+    const inspectorOpen = !state.inspectorOpen
+    const workspacePreferences = { ...state.workspacePreferences, inspectorOpen }
+    writeWorkspacePreferences(workspacePreferences)
+    return { inspectorOpen, workspacePreferences }
+  }),
   toggleFocusMode: () => set((state) => ({ focusMode: !state.focusMode })),
   setEditorMode: (editorMode) => set({ editorMode }),
   clearError: () => set({ error: null }),
@@ -150,7 +162,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       const storedTheme = localStorage.getItem('novelforge:theme') as ThemeMode | null
       if (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system') theme = storedTheme
     } catch { /* use default */ }
-    set({ recentProjects: readRecent(), theme, workspacePreferences: readWorkspacePreferences() })
+    const workspacePreferences = readWorkspacePreferences()
+    set({ recentProjects: readRecent(), theme, workspacePreferences, sidebarOpen: workspacePreferences.sidebarOpen, inspectorOpen: workspacePreferences.inspectorOpen })
   },
 
   createProject: async (input) => {
@@ -316,6 +329,28 @@ export const useAppStore = create<AppState>((set, get) => ({
     catch (error) { get().setError(error) }
   },
 
+  moveNode: async (nodeId, targetParentId, targetOrderIndex) => {
+    const projectPath = get().projectPath
+    if (!projectPath) return
+    try {
+      if (get().document && get().saveState !== 'saved') {
+        const saved = await get().saveCurrentDocument('移动节点前保存')
+        if (!saved) throw new Error('当前正文保存失败，已取消移动')
+      }
+      const data = await projectApi.moveNode({ projectPath, nodeId, targetParentId, targetOrderIndex })
+      await get().refreshData(data, true)
+    } catch (error) { get().setError(error); throw error }
+  },
+
+  copyNode: async (nodeId, targetParentId, title) => {
+    const projectPath = get().projectPath
+    if (!projectPath) return
+    try {
+      const data = await projectApi.copyNode({ projectPath, nodeId, targetParentId, title })
+      await get().refreshData(data, true)
+    } catch (error) { get().setError(error); throw error }
+  },
+
   deleteNode: async (nodeId) => {
     const projectPath = get().projectPath
     if (!projectPath) return
@@ -403,10 +438,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     catch (error) { get().setError(error) }
   },
 
-  exportProject: async (format) => {
+  exportProject: async (format, options = {}) => {
     const projectPath = get().projectPath
     if (!projectPath) throw new Error('请先打开一个项目')
-    return projectApi.exportProject({ projectPath, format })
+    return projectApi.exportProject({ projectPath, format, ...options })
   },
 
   updateProject: async (input) => {

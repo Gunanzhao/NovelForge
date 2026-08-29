@@ -11,13 +11,14 @@ import { Button, IconButton, TextInput } from './ui'
 interface CommandPaletteProps {
   onNewProject: () => void
   onCloseProject: () => void
+  onQuickOpen: () => void
 }
 
 interface RegisteredCommand extends CommandDescriptor {
   run: () => void
 }
 
-export function CommandPalette({ onNewProject, onCloseProject }: CommandPaletteProps) {
+export function CommandPalette({ onNewProject, onCloseProject, onQuickOpen }: CommandPaletteProps) {
   const setView = useAppStore((state) => state.setView)
   const saveCurrentDocument = useAppStore((state) => state.saveCurrentDocument)
   const toggleFocusMode = useAppStore((state) => state.toggleFocusMode)
@@ -36,10 +37,15 @@ export function CommandPalette({ onNewProject, onCloseProject }: CommandPaletteP
     const view = commandView(id)
     if (view) {
       setView(view)
+      if (id === 'open-search' || id === 'open-full-search') {
+        window.dispatchEvent(new CustomEvent('novelforge:search-scope', { detail: id === 'open-search' ? 'current' : 'project' }))
+      }
     } else if (id === 'new-project') {
       onNewProject()
     } else if (id === 'close-project') {
       onCloseProject()
+    } else if (id === 'quick-open') {
+      onQuickOpen()
     } else if (id === 'save-document') {
       void saveCurrentDocument('命令面板保存')
     } else if (id === 'toggle-focus') {
@@ -47,7 +53,7 @@ export function CommandPalette({ onNewProject, onCloseProject }: CommandPaletteP
     }
     setOpen(false)
     setRecording(null)
-  }, [onCloseProject, onNewProject, saveCurrentDocument, setView, toggleFocusMode])
+  }, [onCloseProject, onNewProject, onQuickOpen, saveCurrentDocument, setView, toggleFocusMode])
 
   const commands = useMemo<RegisteredCommand[]>(() => COMMANDS.map((command) => ({ ...command, run: () => runCommand(command.id) })), [runCommand])
   const visibleCommands = useMemo(() => {

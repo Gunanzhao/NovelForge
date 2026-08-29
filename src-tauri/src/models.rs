@@ -213,6 +213,24 @@ pub struct ReorderNodeInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct MoveNodeInput {
+    pub project_path: String,
+    pub node_id: String,
+    pub target_parent_id: Option<String>,
+    pub target_order_index: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyNodeInput {
+    pub project_path: String,
+    pub node_id: String,
+    pub target_parent_id: Option<String>,
+    pub title: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SaveDocumentInput {
     pub project_path: String,
     pub node_id: String,
@@ -259,11 +277,29 @@ pub struct StatisticsInput {
     pub current_node_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportInput {
     pub project_path: String,
     pub format: String,
+    #[serde(default)]
+    pub scope: Option<String>,
+    #[serde(default)]
+    pub volume_path: Option<String>,
+    #[serde(default)]
+    pub node_ids: Option<Vec<String>>,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub author: Option<String>,
+    #[serde(default)]
+    pub include_toc: Option<bool>,
+    #[serde(default)]
+    pub include_volume_titles: Option<bool>,
+    #[serde(default)]
+    pub include_chapter_titles: Option<bool>,
+    #[serde(default)]
+    pub cover_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

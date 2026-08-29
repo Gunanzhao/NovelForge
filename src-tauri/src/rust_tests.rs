@@ -95,6 +95,54 @@ fn real_command_workflow_persists_markdown_and_recoverable_trash() {
 }
 
 #[test]
+fn move_and_copy_nodes_keep_markdown_files_and_tree_paths_in_sync() {
+    let root = test_root("move-copy");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "移动复制测试".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let first_volume = created.nodes.iter().find(|node| node.kind == "volume").expect("first volume").clone();
+    let first_chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("first chapter").clone();
+    let second_volume_data = super::commands::create_node(super::models::NodeInput {
+        project_path: project_path.clone(), kind: "volume".to_string(), title: "第二卷".to_string(), parent_id: None,
+    }).expect("create second volume");
+    let second_volume = second_volume_data.nodes.iter().find(|node| node.title == "第二卷").expect("second volume").clone();
+    let section_data = super::commands::create_node(super::models::NodeInput {
+        project_path: project_path.clone(), kind: "section".to_string(), title: "开场".to_string(), parent_id: Some(first_chapter.id.clone()),
+    }).expect("create section");
+    let section = section_data.nodes.iter().find(|node| node.title == "开场").expect("section").clone();
+    super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(), node_id: first_chapter.id.clone(),
+        content: "# 第一章\n\n移动后仍然可读".to_string(), reason: "移动复制测试".to_string(),
+    }).expect("save chapter");
+    let moved = super::commands::move_node(super::models::MoveNodeInput {
+        project_path: project_path.clone(), node_id: first_chapter.id.clone(),
+        target_parent_id: Some(second_volume.id.clone()), target_order_index: None,
+    }).expect("move chapter");
+    let moved_chapter = moved.nodes.iter().find(|node| node.id == first_chapter.id).expect("moved chapter");
+    assert_eq!(moved_chapter.parent_id.as_deref(), Some(second_volume.id.as_str()));
+    assert!(moved_chapter.file_path.starts_with(&second_volume.file_path));
+    let moved_section = moved.nodes.iter().find(|node| node.id == section.id).expect("moved section");
+    assert!(moved_section.file_path.starts_with(&moved_chapter.file_path.trim_end_matches(".md")));
+    let moved_path = root.join("project").join(&moved_chapter.file_path);
+    assert_eq!(fs::read_to_string(&moved_path).expect("moved file"), "# 第一章\n\n移动后仍然可读");
+    assert!(!root.join("project").join(&first_chapter.file_path).exists());
+
+    let copied = super::commands::copy_node(super::models::CopyNodeInput {
+        project_path: project_path.clone(), node_id: first_chapter.id.clone(),
+        target_parent_id: Some(first_volume.id.clone()), title: Some("第一章副本".to_string()),
+    }).expect("copy chapter");
+    let copied_chapter = copied.nodes.iter().find(|node| node.title == "第一章副本").expect("copied chapter");
+    assert_ne!(copied_chapter.id, first_chapter.id);
+    assert_eq!(copied_chapter.parent_id.as_deref(), Some(first_volume.id.as_str()));
+    assert_eq!(fs::read_to_string(root.join("project").join(&copied_chapter.file_path)).expect("copied file"), "# 第一章\n\n移动后仍然可读");
+    let copied_section_id = copied.nodes.iter().find(|node| node.parent_id.as_deref() == Some(copied_chapter.id.as_str())).expect("copied section").id.clone();
+    assert!(copied.nodes.iter().any(|node| node.id == copied_section_id));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn trash_path_must_stay_inside_project() {
     let root = test_root("trash-boundary");
     storage::create_project_directories(&root).expect("project directories");
@@ -361,12 +409,17 @@ fn export_project_writes_all_supported_formats() {
         project_path: project_path.clone(), node_id: chapter.id, content: "# 第一章\n\n林月走进雾港。".to_string(), reason: "导出测试".to_string(),
     }).expect("save document");
 
-    for format in ["markdown", "txt", "docx", "epub", "pdf"] {
-        let output = super::commands::export_project(super::models::ExportInput { project_path: project_path.clone(), format: format.to_string() }).expect("export format");
+    for format in ["markdown", "txt", "html", "docx", "epub", "pdf"] {
+        let output = super::commands::export_project(super::models::ExportInput { project_path: project_path.clone(), format: format.to_string(), ..Default::default() }).expect("export format");
         let bytes = fs::read(&output).expect("read exported file");
         match format {
             "markdown" => assert!(String::from_utf8_lossy(&bytes).contains("导出测试")),
             "txt" => assert!(String::from_utf8_lossy(&bytes).contains("林月走进雾港")),
+            "html" => {
+                let html = String::from_utf8_lossy(&bytes);
+                assert!(html.contains("<!doctype html>"));
+                assert!(html.contains("导出测试"));
+            }
             "docx" => {
                 let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).expect("read docx zip");
                 assert!(archive.by_name("word/document.xml").is_ok());
@@ -381,7 +434,7 @@ fn export_project_writes_all_supported_formats() {
             _ => unreachable!(),
         }
     }
-    assert!(super::commands::export_project(super::models::ExportInput { project_path, format: "html".to_string() }).is_err());
+    assert!(super::commands::export_project(super::models::ExportInput { project_path, format: "unsupported".to_string(), ..Default::default() }).is_err());
     let _ = fs::remove_dir_all(root);
 }
 

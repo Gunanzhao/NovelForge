@@ -17,6 +17,20 @@ declare module './types' {
     parentId: string | null
   }
 
+  interface MoveNodeInput {
+    projectPath: string
+    nodeId: string
+    targetParentId: string | null
+    targetOrderIndex?: number
+  }
+
+  interface CopyNodeInput {
+    projectPath: string
+    nodeId: string
+    targetParentId: string | null
+    title?: string
+  }
+
   interface SaveDocumentInput {
     projectPath: string
     nodeId: string
@@ -47,5 +61,14 @@ declare module './types' {
   interface ExportInput {
     projectPath: string
     format: ExportFormat
+    scope?: 'project' | 'volume' | 'chapters'
+    volumePath?: string
+    nodeIds?: string[]
+    title?: string
+    author?: string
+    includeToc?: boolean
+    includeVolumeTitles?: boolean
+    includeChapterTitles?: boolean
+    coverPath?: string
   }
 }

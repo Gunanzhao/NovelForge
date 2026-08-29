@@ -1,10 +1,13 @@
 import type { AiCompletionInput, EntityRecord, NodeRecord } from './types'
 
-export type AiAction = 'continue' | 'polish' | 'rewrite' | 'summary'
+export type AiAction = 'continue' | 'polish' | 'rewrite' | 'expand' | 'shrink' | 'summary' | 'chapter-summary' | 'outline' | 'dialogue' | 'setting-advice' | 'name'
 
 export interface AiPreferences {
   endpoint: string
   model: string
+  providerName?: string
+  temperature?: number
+  maxTokens?: number
 }
 
 export interface AiContextItem {
@@ -20,15 +23,25 @@ export const AI_ACTIONS: Array<{ id: AiAction; label: string; description: strin
   { id: 'continue', label: '续写', description: '根据上下文继续写下一段' },
   { id: 'polish', label: '润色', description: '保持原意，改善节奏和表达' },
   { id: 'rewrite', label: '改写', description: '按写作要求重写选中的内容' },
+  { id: 'expand', label: '扩写', description: '扩展细节、氛围和动作层次' },
+  { id: 'shrink', label: '缩写', description: '压缩冗余内容，保留关键情节' },
   { id: 'summary', label: '摘要', description: '提炼情节、人物和关键线索' },
+  { id: 'chapter-summary', label: '章节摘要', description: '生成可回看的章节摘要' },
+  { id: 'outline', label: '生成大纲', description: '根据上下文整理剧情大纲' },
+  { id: 'dialogue', label: '角色对话', description: '生成符合人物设定的对话草稿' },
+  { id: 'setting-advice', label: '设定建议', description: '发现并补充世界观设定空白' },
+  { id: 'name', label: '名字生成', description: '根据上下文提供命名候选' },
 ]
 
 export function readAiPreferences(): AiPreferences {
-  const defaults = { endpoint: '', model: 'local-writer' }
+  const defaults: AiPreferences = { endpoint: '', model: 'local-writer' }
   try {
     const value = JSON.parse(localStorage.getItem(PREFERENCES_KEY) ?? '{}') as Record<string, unknown>
     if (typeof value.endpoint === 'string') defaults.endpoint = value.endpoint
     if (typeof value.model === 'string' && value.model.trim()) defaults.model = value.model
+    if (typeof value.providerName === 'string') defaults.providerName = value.providerName
+    if (typeof value.temperature === 'number' && Number.isFinite(value.temperature)) defaults.temperature = Math.max(0, Math.min(2, value.temperature))
+    if (typeof value.maxTokens === 'number' && Number.isFinite(value.maxTokens)) defaults.maxTokens = Math.max(1, Math.min(32_000, Math.round(value.maxTokens)))
   } catch {
     // 损坏的 Provider 偏好只回退到本地模式。
   }
@@ -64,4 +77,3 @@ export function localAssist(action: AiAction, context: Array<{ title: string; ki
     : `【本地${actionLabel}草稿】\n基于以下已选上下文生成的离线工作稿：\n${body}\n\n写作要求：${instruction.trim() || '请在此基础上继续编辑。'}`
   return { endpoint: '', apiKey: '', model: 'novelforge-local', systemPrompt: '', prompt: '', localContent }
 }
-

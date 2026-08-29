@@ -97,22 +97,82 @@ function entity(store: FallbackStore, id: string) {
   return store.data.entities.find((item) => item.id === id)
 }
 
-function exportText(store: FallbackStore, format: 'markdown' | 'txt') {
-  const output = format === 'markdown'
-    ? '# ' + store.data.project.title + '\n\n作者：' + store.data.project.author + '\n\n'
-    : store.data.project.title + '\n作者：' + store.data.project.author + '\n\n'
-  const volumes = store.data.nodes.filter((item) => item.kind === 'volume').sort((a, b) => a.orderIndex - b.orderIndex)
-  const rendered = volumes.map((volume) => {
-    const chapters = store.data.nodes.filter((item) => item.parentId === volume.id).sort((a, b) => a.orderIndex - b.orderIndex)
-    const volumeTitle = format === 'markdown' ? '\n# ' + volume.title + '\n' : '\n' + volume.title + '\n'
-    const chapterText = chapters.map((chapter) => {
-      const chapterContent = store.documents[chapter.id] ?? ''
-      const heading = format === 'markdown' ? '\n## ' + chapter.title + '\n' : '\n' + chapter.title + '\n'
-      return heading + '\n' + chapterContent.replace(/^# .*\n?/u, '').trim() + '\n'
+function nodeDescendants(store: FallbackStore, rootId: string) {
+  const result: NodeRecord[] = []
+  const queue = [rootId]
+  while (queue.length) {
+    const currentId = queue.shift()
+    if (!currentId) continue
+    const current = node(store, currentId)
+    if (!current) continue
+    result.push(current)
+    queue.push(...store.data.nodes.filter((item) => item.parentId === currentId).map((item) => item.id))
+  }
+  return result
+}
+
+function validateNodeTarget(store: FallbackStore, kind: NodeRecord['kind'], targetParentId: string | null) {
+  const parent = targetParentId ? node(store, targetParentId) : undefined
+  if (kind === 'volume' && parent) throw new Error('卷不能移动到其他节点下面')
+  if (kind === 'chapter' && parent?.kind !== 'volume') throw new Error('章节只能放在卷下面')
+  if (kind === 'section' && parent?.kind !== 'chapter') throw new Error('小节只能放在章节下面')
+  return parent
+}
+
+function fallbackNodePath(store: FallbackStore, kind: NodeRecord['kind'], parent: NodeRecord | undefined, order: number) {
+  const prefix = kind === 'volume'
+    ? 'manuscript/volume_'
+    : kind === 'chapter'
+      ? (parent?.filePath ?? 'manuscript') + '/chapter_'
+      : (parent?.filePath ?? 'manuscript/chapter').replace(/\.md$/u, '') + '/section_'
+  let index = order + 1
+  let candidate = kind === 'volume' ? prefix + String(index).padStart(3, '0') : prefix + String(index).padStart(3, '0') + '.md'
+  while (store.data.nodes.some((item) => item.filePath === candidate)) {
+    index += 1
+    candidate = kind === 'volume' ? prefix + String(index).padStart(3, '0') : prefix + String(index).padStart(3, '0') + '.md'
+  }
+  return candidate
+}
+
+function replaceNodePath(path: string, oldPrefix: string, newPrefix: string) {
+  if (path === oldPrefix) return newPrefix
+  const boundary = oldPrefix.replace(/\/$/u, '') + '/'
+  return path.startsWith(boundary) ? newPrefix.replace(/\/$/u, '') + '/' + path.slice(boundary.length) : path
+}
+
+function exportText(store: FallbackStore, format: 'markdown' | 'txt' | 'html', input: ExportInput) {
+  const title = input.title?.trim() || store.data.project.title
+  const author = input.author?.trim() || store.data.project.author
+  const includeVolumeTitles = input.includeVolumeTitles !== false
+  const includeChapterTitles = input.includeChapterTitles !== false
+  const active = store.data.nodes.filter((item) => {
+    if (input.scope === 'volume') return item.filePath === input.volumePath || Boolean(input.volumePath && item.filePath.startsWith(input.volumePath + '/'))
+    if (input.scope === 'chapters') return Boolean(input.nodeIds?.includes(item.id) || input.nodeIds?.some((id) => item.parentId === id))
+    return true
+  })
+  const volumes = active.filter((item) => item.kind === 'volume').sort((a, b) => a.orderIndex - b.orderIndex)
+  const renderNode = (current: NodeRecord, level: number): string => {
+    const includeTitle = current.kind === 'volume' ? includeVolumeTitles : includeChapterTitles
+    const heading = includeTitle
+      ? format === 'markdown' ? '\n' + '#'.repeat(Math.max(1, level)) + ' ' + current.title + '\n' : '\n' + current.title + '\n'
+      : ''
+    const body = current.kind === 'volume' ? '' : '\n' + (store.documents[current.id] ?? '').replace(/^# .*\n?/u, '').trim() + '\n'
+    const children = active.filter((item) => item.parentId === current.id).sort((a, b) => a.orderIndex - b.orderIndex).map((item) => renderNode(item, level + 1)).join('')
+    return heading + body + children
+  }
+  const rendered = volumes.map((volume) => renderNode(volume, 1)).join('')
+  const toc = input.includeToc === false ? '' : format === 'markdown'
+    ? '\n## 目录\n\n' + active.filter((item) => item.kind !== 'section').map((item) => '- ' + item.title).join('\n') + '\n\n'
+    : ''
+  const markdown = '# ' + title + '\n\n作者：' + author + '\n\n' + toc + rendered
+  if (format === 'html') {
+    const htmlBody = markdown.split('\n').filter(Boolean).map((line) => {
+      const heading = /^(#{1,6}) (.+)$/u.exec(line)
+      return heading ? '<h' + heading[1].length + '>' + heading[2] + '</h' + heading[1].length + '>' : '<p>' + line + '</p>'
     }).join('')
-    return volumeTitle + chapterText
-  }).join('')
-  return output + rendered
+    return '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>' + title + '</title></head><body><h1>' + title + '</h1><p>作者：' + author + '</p>' + htmlBody + '</body></html>'
+  }
+  return format === 'markdown' ? markdown : title + '\n作者：' + author + '\n\n' + rendered
 }
 
 export async function fallbackInvoke<T>(command: string, args: Record<string, unknown>): Promise<T> {
@@ -185,6 +245,65 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
         persist(projectPath, store)
       }
     }
+    return store.data as T
+  }
+  if (command === 'move_node') {
+    const id = input?.nodeId as string
+    const current = node(store, id)
+    if (!current) throw new Error('节点不存在')
+    const targetParentId = (input?.targetParentId as string | null) ?? null
+    const targetParent = validateNodeTarget(store, current.kind, targetParentId)
+    const descendants = nodeDescendants(store, id)
+    if (targetParentId && descendants.some((item) => item.id === targetParentId)) throw new Error('不能将节点移动到自己的后代下面')
+    const siblings = store.data.nodes.filter((item) => item.parentId === targetParentId && item.id !== id)
+    const requested = typeof input?.targetOrderIndex === 'number' ? input.targetOrderIndex : siblings.length
+    const targetOrder = Math.max(0, Math.min(requested, siblings.length))
+    const oldParentId = current.parentId
+    const oldOrder = current.orderIndex
+    const oldPath = current.filePath
+    for (const sibling of store.data.nodes.filter((item) => item.parentId === oldParentId && item.id !== id && item.orderIndex > oldOrder)) sibling.orderIndex -= 1
+    for (const sibling of store.data.nodes.filter((item) => item.parentId === targetParentId && item.id !== id && item.orderIndex >= targetOrder)) sibling.orderIndex += 1
+    const newPath = oldParentId === targetParentId ? oldPath : fallbackNodePath(store, current.kind, targetParent, targetOrder)
+    current.parentId = targetParentId
+    current.orderIndex = targetOrder
+    current.filePath = newPath
+    current.updatedAt = new Date().toISOString()
+    for (const child of descendants.filter((item) => item.id !== id)) child.filePath = replaceNodePath(child.filePath, oldPath, newPath)
+    updateTime(store.data)
+    persist(projectPath, store)
+    return store.data as T
+  }
+  if (command === 'copy_node') {
+    const id = input?.nodeId as string
+    const current = node(store, id)
+    if (!current) throw new Error('节点不存在')
+    const targetParentId = (input?.targetParentId as string | null) ?? null
+    const targetParent = validateNodeTarget(store, current.kind, targetParentId)
+    const descendants = nodeDescendants(store, id)
+    if (targetParentId && descendants.some((item) => item.id === targetParentId)) throw new Error('不能将节点复制到自己的后代下面')
+    const siblings = store.data.nodes.filter((item) => item.parentId === targetParentId)
+    const targetOrder = siblings.length
+    const targetPath = fallbackNodePath(store, current.kind, targetParent, targetOrder)
+    const idMap = new Map(descendants.map((item) => [item.id, uid()]))
+    for (const sibling of siblings) sibling.orderIndex += 1
+    for (const source of descendants) {
+      const copyId = idMap.get(source.id)
+      if (!copyId) continue
+      const copy: NodeRecord = {
+        ...source,
+        id: copyId,
+        parentId: source.id === current.id ? targetParentId : idMap.get(source.parentId ?? '') ?? null,
+        title: source.id === current.id ? ((input?.title as string)?.trim() || source.title + ' 副本') : source.title,
+        orderIndex: source.id === current.id ? targetOrder : source.orderIndex,
+        filePath: replaceNodePath(source.filePath, current.filePath, targetPath),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      store.data.nodes.push(copy)
+      if (source.kind !== 'volume') store.documents[copy.id] = store.documents[source.id] ?? ''
+    }
+    updateTime(store.data)
+    persist(projectPath, store)
     return store.data as T
   }
   if (command === 'save_document') {
@@ -328,12 +447,19 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     const now = new Date()
     const dayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
     const today = dayKey(now)
+    const offsetKey = (offset: number) => {
+      const date = new Date(now)
+      date.setDate(now.getDate() - offset)
+      return dayKey(date)
+    }
     const dailyTotals = new Map<string, number>()
     for (const item of store.activities) {
       const key = dayKey(new Date(item.createdAt))
       dailyTotals.set(key, (dailyTotals.get(key) ?? 0) + Math.max(0, item.deltaWords))
     }
     const todayWords = dailyTotals.get(today) ?? 0
+    const yesterdayWords = dailyTotals.get(offsetKey(1)) ?? 0
+    const sumSince = (days: number) => Array.from({ length: days }, (_, offset) => dailyTotals.get(offsetKey(offset)) ?? 0).reduce((sum, words) => sum + words, 0)
     const daily = Array.from({ length: 30 }, (_, index) => {
       const date = new Date(now)
       date.setDate(now.getDate() - (29 - index))
@@ -383,14 +509,14 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
       return false
     }).reduce((sum, item) => sum + countWords(store.documents[item.id] ?? ''), 0) : 0
     return {
-      totalWords: total, currentVolumeWords, currentChapterWords, todayWords, yesterdayWords: 0, weekWords: todayWords, monthWords: todayWords,
+      totalWords: total, currentVolumeWords, currentChapterWords, todayWords, yesterdayWords, weekWords: sumSince(7), monthWords: sumSince(30),
       chapterCount: store.data.nodes.filter((item) => item.kind === 'chapter').length,
       targetWords: store.data.project.targetWords, writingStreak, averageDailyWords, longestWritingStreak, daily, chapterStats,
     } as T
   }
   if (command === 'export_project') {
     const exportInput = args.input as ExportInput
-    if (exportInput.format === 'markdown' || exportInput.format === 'txt') void exportText(store, exportInput.format)
+    if (exportInput.format === 'markdown' || exportInput.format === 'txt' || exportInput.format === 'html') void exportText(store, exportInput.format, exportInput)
     return ('browser://exports/' + store.data.project.title + '.' + exportInput.format) as T
   }
   if (command === 'update_project') {

@@ -6,6 +6,8 @@ export type CommandId =
   | 'new-project'
   | 'close-project'
   | 'open-search'
+  | 'open-full-search'
+  | 'quick-open'
   | 'toggle-focus'
   | 'open-dashboard'
   | 'open-manuscript'
@@ -31,7 +33,9 @@ export const COMMANDS: CommandDescriptor[] = [
   { id: 'save-document', label: '保存当前正文', description: '立即保存正在编辑的章节', keywords: ['保存', '正文', 'save'], defaultShortcut: 'Ctrl+S' },
   { id: 'new-project', label: '新建小说项目', description: '打开新建项目对话框', keywords: ['新建', '项目', '小说'], defaultShortcut: 'Ctrl+N' },
   { id: 'close-project', label: '关闭当前项目', description: '保存后返回项目欢迎页', keywords: ['关闭', '项目', 'close'], defaultShortcut: 'Ctrl+W' },
-  { id: 'open-search', label: '全文搜索', description: '搜索正文和资料库', keywords: ['搜索', '查找', 'search'], defaultShortcut: 'Ctrl+F' },
+  { id: 'open-search', label: '当前文档搜索', description: '在当前章节中搜索关键词', keywords: ['搜索', '查找', '当前', 'find'], defaultShortcut: 'Ctrl+F' },
+  { id: 'open-full-search', label: '全项目搜索', description: '搜索整部小说正文和资料库', keywords: ['搜索', '全文', '项目', 'search'], defaultShortcut: 'Ctrl+Shift+F' },
+  { id: 'quick-open', label: '快速打开', description: '按名称打开章节、人物、地点或 Wiki 条目', keywords: ['打开', '跳转', 'quick', 'open'], defaultShortcut: 'Ctrl+P' },
   { id: 'toggle-focus', label: '切换专注模式', description: '隐藏侧栏，专心编辑正文', keywords: ['专注', 'focus'], defaultShortcut: 'F11' },
   { id: 'open-dashboard', label: '打开总览', description: '查看项目进度和写作统计', keywords: ['总览', 'dashboard'], defaultShortcut: 'Ctrl+1' },
   { id: 'open-manuscript', label: '打开正文', description: '回到章节编辑器', keywords: ['正文', '编辑', 'manuscript'], defaultShortcut: 'Ctrl+2' },
@@ -105,7 +109,7 @@ export function commandView(commandId: CommandId): ViewId | undefined {
   const views: Partial<Record<CommandId, ViewId>> = {
     'open-dashboard': 'dashboard', 'open-manuscript': 'manuscript', 'open-outline': 'outline',
     'open-timeline': 'timeline', 'open-foreshadowing': 'foreshadowing', 'open-relationship': 'relationship',
-    'open-search': 'search', 'open-attachment': 'attachment', 'open-consistency': 'consistency', 'open-statistics': 'statistics', 'open-ai': 'ai',
+    'open-search': 'search', 'open-full-search': 'search', 'open-attachment': 'attachment', 'open-consistency': 'consistency', 'open-statistics': 'statistics', 'open-ai': 'ai',
   }
   return views[commandId]
 }

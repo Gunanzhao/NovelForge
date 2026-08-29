@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
-  BookOpen, ChevronDown, ChevronRight, CircleUserRound, Clock3, FilePlus2, FolderTree,
+  ArrowRightLeft, BookOpen, ChevronDown, ChevronRight, CircleUserRound, Clock3, Copy, FilePlus2, FolderTree,
   BarChart3, GalleryVerticalEnd, GitBranch, Globe2, LayoutDashboard, MoreHorizontal, Network, Paperclip, Plus, Search,
   ShieldCheck, Sparkles, Trash2, WandSparkles, X,
 } from 'lucide-react'
@@ -9,7 +9,7 @@ import { useAppStore } from '../stores/app-store'
 import type { NodeKind, NodeRecord, ViewId } from '../lib/types'
 
 import { cn } from '../lib/utils'
-import { IconButton } from './ui'
+import { Button, IconButton } from './ui'
 
 const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: 'dashboard', label: '总览', icon: LayoutDashboard },
@@ -31,21 +31,26 @@ function nodeChildren(nodes: NodeRecord[], parentId: string) {
   return nodes.filter((node) => node.parentId === parentId).sort((a, b) => a.orderIndex - b.orderIndex)
 }
 
-function NodeRow({ node, level, open, onToggle, onSelect, onAdd, onRename, onDelete }: {
+function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectToggle, onAdd, onRename, onMove, onCopy, onDelete }: {
   node: NodeRecord
   level: number
   open: boolean
+  selected: boolean
   onToggle: () => void
   onSelect: () => void
+  onSelectToggle: () => void
   onAdd: () => void
   onRename: () => void
+  onMove: () => void
+  onCopy: () => void
   onDelete: () => void
 }) {
   const isContainer = node.kind !== 'section'
   const hasChildren = isContainer
   return <div className="tree-row-wrap">
-    <div className={cn('tree-row', node.kind !== 'volume' && 'tree-document-row')} style={{ paddingLeft: 5 + level * 13 }} onDoubleClick={onRename}>
+    <div className={cn('tree-row', node.kind !== 'volume' && 'tree-document-row', selected && 'selected')} style={{ paddingLeft: 5 + level * 13 }} onDoubleClick={onRename}>
       {hasChildren ? <IconButton icon={open ? ChevronDown : ChevronRight} label={open ? '收起' : '展开'} onClick={onToggle} className="tree-toggle" /> : <span style={{ width: 30 }} />}
+      <input type="checkbox" className="tree-checkbox" checked={selected} onChange={onSelectToggle} onClick={(event) => event.stopPropagation()} aria-label={'选择' + node.title} />
       <button className="tree-main-button" onClick={onSelect}>
         <span className="tree-icon">{node.kind === 'volume' ? <FolderTree size={15} /> : <BookOpen size={14} />}</span>
         <span className="tree-label">{node.title}</span>
@@ -53,6 +58,8 @@ function NodeRow({ node, level, open, onToggle, onSelect, onAdd, onRename, onDel
       </button>
       <span className="tree-row-actions">
         {node.kind !== 'section' ? <IconButton icon={Plus} label={'在此新建' + (node.kind === 'volume' ? '章' : '节')} onClick={onAdd} /> : null}
+        {node.kind !== 'volume' ? <IconButton icon={ArrowRightLeft} label="移动节点" onClick={onMove} /> : null}
+        <IconButton icon={Copy} label="复制节点" onClick={onCopy} />
         <IconButton icon={MoreHorizontal} label="更多操作" onClick={onRename} />
         <IconButton icon={X} label="移入回收站" onClick={onDelete} />
       </span>
@@ -60,7 +67,13 @@ function NodeRow({ node, level, open, onToggle, onSelect, onAdd, onRename, onDel
   </div>
 }
 
-export function Sidebar({ onAddNode }: { onAddNode: (kind: NodeKind, parentId: string | null) => void }) {
+export function Sidebar({
+  onAddNode, onMoveNode, onCopyNode,
+}: {
+  onAddNode: (kind: NodeKind, parentId: string | null) => void
+  onMoveNode: (node: NodeRecord) => void
+  onCopyNode: (node: NodeRecord) => void
+}) {
   const data = useAppStore((state) => state.data)
   const activeView = useAppStore((state) => state.activeView)
 
@@ -69,9 +82,11 @@ export function Sidebar({ onAddNode }: { onAddNode: (kind: NodeKind, parentId: s
 
   const renameNode = useAppStore((state) => state.renameNode)
   const deleteNode = useAppStore((state) => state.deleteNode)
+  const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set())
   const [openNodes, setOpenNodes] = useState<Set<string>>(new Set())
 
   if (!data) return null
+  const currentData = data
   const volumes = data.nodes.filter((node) => node.kind === 'volume').sort((a, b) => a.orderIndex - b.orderIndex)
   const toggle = (id: string) => setOpenNodes((current) => {
     const next = new Set(current)
@@ -85,10 +100,26 @@ export function Sidebar({ onAddNode }: { onAddNode: (kind: NodeKind, parentId: s
   const handleDelete = (node: NodeRecord) => {
     if (window.confirm('将“' + node.title + '”移入回收站？正文文件可在回收站恢复。')) void deleteNode(node.id)
   }
+  const toggleSelection = (id: string) => setSelectedNodeIds((current) => {
+    const next = new Set(current)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
+  async function deleteSelected() {
+    const selected = currentData.nodes.filter((node) => selectedNodeIds.has(node.id))
+    const roots = selected.filter((node) => !selected.some((candidate) => candidate.id === node.parentId))
+    if (!roots.length || !window.confirm('将选中的 ' + String(roots.length) + ' 个节点移入回收站？')) return
+    try {
+      for (const node of roots) await deleteNode(node.id)
+      setSelectedNodeIds(new Set())
+    } catch {
+      // Store 已经显示具体错误，保留剩余选择方便继续处理。
+    }
+  }
   const renderChildren = (parent: NodeRecord, level: number) => {
     if (!openNodes.has(parent.id)) return null
     return <div className="tree-children">{nodeChildren(data.nodes, parent.id).map((child) => <div key={child.id}>
-      <NodeRow node={child} level={level} open={openNodes.has(child.id)} onToggle={() => toggle(child.id)} onSelect={() => void selectNode(child.id)} onAdd={() => onAddNode(child.kind === 'volume' ? 'chapter' : 'section', child.id)} onRename={() => handleRename(child)} onDelete={() => handleDelete(child)} />
+      <NodeRow node={child} level={level} open={openNodes.has(child.id)} selected={selectedNodeIds.has(child.id)} onToggle={() => toggle(child.id)} onSelect={() => void selectNode(child.id)} onSelectToggle={() => toggleSelection(child.id)} onAdd={() => onAddNode(child.kind === 'volume' ? 'chapter' : 'section', child.id)} onRename={() => handleRename(child)} onMove={() => onMoveNode(child)} onCopy={() => onCopyNode(child)} onDelete={() => handleDelete(child)} />
       {renderChildren(child, level + 1)}
     </div>)}</div>
   }
@@ -104,10 +135,11 @@ export function Sidebar({ onAddNode }: { onAddNode: (kind: NodeKind, parentId: s
       <div className="sidebar-section-label"><span>正文结构</span><span>{data.nodes.filter((node) => node.kind === 'chapter').length} 章</span></div>
       <div className="tree">
         {volumes.length === 0 ? <div className="tree-muted">还没有卷，点击右上角创建第一卷。</div> : volumes.map((volume) => <div className="tree-volume" key={volume.id}>
-          <NodeRow node={volume} level={0} open={openNodes.has(volume.id)} onToggle={() => toggle(volume.id)} onSelect={() => toggle(volume.id)} onAdd={() => onAddNode('chapter', volume.id)} onRename={() => handleRename(volume)} onDelete={() => handleDelete(volume)} />
-          {renderChildren(volume, 1)}
-        </div>)}
+           <NodeRow node={volume} level={0} open={openNodes.has(volume.id)} selected={selectedNodeIds.has(volume.id)} onToggle={() => toggle(volume.id)} onSelect={() => toggle(volume.id)} onSelectToggle={() => toggleSelection(volume.id)} onAdd={() => onAddNode('chapter', volume.id)} onRename={() => handleRename(volume)} onMove={() => onMoveNode(volume)} onCopy={() => onCopyNode(volume)} onDelete={() => handleDelete(volume)} />
+           {renderChildren(volume, 1)}
+         </div>)}
       </div>
+      {selectedNodeIds.size ? <div className="tree-batch-actions"><span>已选 {selectedNodeIds.size} 项</span><Button variant="danger" onClick={() => void deleteSelected()}><Trash2 size={12} />批量移入回收站</Button><Button variant="ghost" onClick={() => setSelectedNodeIds(new Set())}>清除选择</Button></div> : null}
       <div className="sidebar-section-label"><span>工具</span></div>
       <div className="nav-list">
         <button className={cn('nav-item', activeView === 'trash' && 'active')} onClick={() => setView('trash')}><Trash2 size={15} strokeWidth={1.8} /><span>回收站</span></button>

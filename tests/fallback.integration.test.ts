@@ -43,7 +43,7 @@ describe('browser fallback project workflow', () => {
     expect(consistency.issueCount).toBe(0)
     const exportPath = await fallbackInvoke<string>('export_project', { input: { projectPath: input.path, format: 'markdown' } })
     expect(exportPath).toContain('browser://exports')
-    for (const format of ['txt', 'docx', 'epub', 'pdf'] as const) {
+    for (const format of ['txt', 'html', 'docx', 'epub', 'pdf'] as const) {
       const path = await fallbackInvoke<string>('export_project', { input: { projectPath: input.path, format } })
       expect(path.endsWith('.' + format)).toBe(true)
     }
@@ -75,5 +75,22 @@ describe('browser fallback project workflow', () => {
     expect(tagged.some((item) => item.title === '林月')).toBe(true)
     const volumeResults = await fallbackInvoke<SearchResult[]>('search_project', { input: { projectPath: path, query: '秘密', volumePath: volume.filePath } })
     expect(volumeResults.some((item) => item.id === chapter.id)).toBe(true)
+  })
+
+  it('moves and copies a chapter in the browser fallback tree', async () => {
+    const path = 'move-copy-fallback-project'
+    const created = await fallbackInvoke<ProjectData>('create_project', { input: { ...input, path } })
+    const firstVolume = created.nodes.find((node) => node.kind === 'volume')
+    const firstChapter = created.nodes.find((node) => node.kind === 'chapter')
+    expect(firstVolume && firstChapter).toBeTruthy()
+    if (!firstVolume || !firstChapter) return
+    const secondVolumeData = await fallbackInvoke<ProjectData>('create_node', { input: { projectPath: path, kind: 'volume', title: '第二卷', parentId: null } })
+    const secondVolume = secondVolumeData.nodes.find((node) => node.title === '第二卷')
+    expect(secondVolume).toBeDefined()
+    if (!secondVolume) return
+    const moved = await fallbackInvoke<ProjectData>('move_node', { input: { projectPath: path, nodeId: firstChapter.id, targetParentId: secondVolume.id } })
+    expect(moved.nodes.find((node) => node.id === firstChapter.id)?.parentId).toBe(secondVolume.id)
+    const copied = await fallbackInvoke<ProjectData>('copy_node', { input: { projectPath: path, nodeId: firstChapter.id, targetParentId: firstVolume.id, title: '第一章副本' } })
+    expect(copied.nodes.some((node) => node.title === '第一章副本')).toBe(true)
   })
 })
