@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   ArrowRightLeft, BookOpen, ChevronDown, ChevronRight, CircleUserRound, Clock3, Copy, FilePlus2, FolderTree,
@@ -29,6 +29,16 @@ const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
 
 function nodeChildren(nodes: NodeRecord[], parentId: string) {
   return nodes.filter((node) => node.parentId === parentId).sort((a, b) => a.orderIndex - b.orderIndex)
+}
+
+function flattenTree(nodes: NodeRecord[], volumes: NodeRecord[], openNodes: Set<string>) {
+  const rows: Array<{ node: NodeRecord; level: number }> = []
+  const visit = (node: NodeRecord, level: number) => {
+    rows.push({ node, level })
+    if (openNodes.has(node.id)) nodeChildren(nodes, node.id).forEach((child) => visit(child, level + 1))
+  }
+  volumes.forEach((volume) => visit(volume, 0))
+  return rows
 }
 
 function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectToggle, onAdd, onRename, onMove, onCopy, onDelete, onDragStart, onDrop }: {
@@ -89,10 +99,30 @@ export function Sidebar({
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set())
   const [openNodes, setOpenNodes] = useState<Set<string>>(new Set())
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null)
+  const treeRef = useRef<HTMLDivElement>(null)
+  const [treeScrollTop, setTreeScrollTop] = useState(0)
+  const [treeViewportHeight, setTreeViewportHeight] = useState(480)
+
+  const volumes = useMemo(() => (data?.nodes ?? []).filter((node) => node.kind === 'volume').sort((a, b) => a.orderIndex - b.orderIndex), [data?.nodes])
+  const flatTree = useMemo(() => flattenTree(data?.nodes ?? [], volumes, openNodes), [data?.nodes, openNodes, volumes])
+  const treeRowHeight = 38
+  const treeOverscan = 10
+  const visibleStart = Math.max(0, Math.floor(treeScrollTop / treeRowHeight) - treeOverscan)
+  const visibleEnd = Math.min(flatTree.length, Math.ceil((treeScrollTop + treeViewportHeight) / treeRowHeight) + treeOverscan)
+  const visibleTree = flatTree.slice(visibleStart, visibleEnd)
+
+  useEffect(() => {
+    const element = treeRef.current
+    if (!element) return
+    const updateHeight = () => setTreeViewportHeight(element.clientHeight || 480)
+    updateHeight()
+    window.addEventListener('resize', updateHeight)
+    return () => window.removeEventListener('resize', updateHeight)
+  }, [])
 
   if (!data) return null
   const currentData = data
-  const volumes = data.nodes.filter((node) => node.kind === 'volume').sort((a, b) => a.orderIndex - b.orderIndex)
+
   const toggle = (id: string) => setOpenNodes((current) => {
     const next = new Set(current)
     if (next.has(id)) next.delete(id); else next.add(id)
@@ -133,14 +163,6 @@ export function Sidebar({
       void moveNode(source.id, target.id)
     }
   }
-  const renderChildren = (parent: NodeRecord, level: number) => {
-    if (!openNodes.has(parent.id)) return null
-    return <div className="tree-children">{nodeChildren(data.nodes, parent.id).map((child) => <div key={child.id}>
-      <NodeRow node={child} level={level} open={openNodes.has(child.id)} selected={selectedNodeIds.has(child.id)} onToggle={() => toggle(child.id)} onSelect={() => void selectNode(child.id)} onSelectToggle={() => toggleSelection(child.id)} onAdd={() => onAddNode(child.kind === 'volume' ? 'chapter' : 'section', child.id)} onRename={() => handleRename(child)} onMove={() => onMoveNode(child)} onCopy={() => onCopyNode(child)} onDelete={() => handleDelete(child)} onDragStart={() => setDraggedNodeId(child.id)} onDrop={() => handleDrop(child)} />
-      {renderChildren(child, level + 1)}
-    </div>)}</div>
-  }
-
   return <aside className="sidebar">
     <div className="sidebar-inner">
       <div className="sidebar-head"><div><h2>项目导航</h2><small>{data.project.title}</small></div><IconButton icon={Plus} label="新建卷" onClick={() => onAddNode('volume', null)} /></div>
@@ -150,11 +172,8 @@ export function Sidebar({
         <button className={cn('nav-item', activeView === 'search' && 'active')} onClick={() => setView('search')}><Search size={15} strokeWidth={1.8} /><span>全文搜索</span><span className="count">⌘</span></button>
       </div>
       <div className="sidebar-section-label"><span>正文结构</span><span>{data.nodes.filter((node) => node.kind === 'chapter').length} 章</span></div>
-      <div className="tree">
-        {volumes.length === 0 ? <div className="tree-muted">还没有卷，点击右上角创建第一卷。</div> : volumes.map((volume) => <div className="tree-volume" key={volume.id}>
-           <NodeRow node={volume} level={0} open={openNodes.has(volume.id)} selected={selectedNodeIds.has(volume.id)} onToggle={() => toggle(volume.id)} onSelect={() => toggle(volume.id)} onSelectToggle={() => toggleSelection(volume.id)} onAdd={() => onAddNode('chapter', volume.id)} onRename={() => handleRename(volume)} onMove={() => onMoveNode(volume)} onCopy={() => onCopyNode(volume)} onDelete={() => handleDelete(volume)} onDragStart={() => setDraggedNodeId(volume.id)} onDrop={() => handleDrop(volume)} />
-           {renderChildren(volume, 1)}
-         </div>)}
+      <div className="tree" ref={treeRef} onScroll={(event) => setTreeScrollTop(event.currentTarget.scrollTop)}>
+        {volumes.length === 0 ? <div className="tree-muted">还没有卷，点击右上角创建第一卷。</div> : <div className="tree-virtual-content" style={{ height: flatTree.length * treeRowHeight }}><div className="tree-virtual-rows" style={{ top: visibleStart * treeRowHeight }}>{visibleTree.map(({ node, level }) => <NodeRow key={node.id} node={node} level={level} open={openNodes.has(node.id)} selected={selectedNodeIds.has(node.id)} onToggle={() => toggle(node.id)} onSelect={() => node.kind === 'volume' ? toggle(node.id) : void selectNode(node.id)} onSelectToggle={() => toggleSelection(node.id)} onAdd={() => onAddNode(node.kind === 'volume' ? 'chapter' : 'section', node.id)} onRename={() => handleRename(node)} onMove={() => onMoveNode(node)} onCopy={() => onCopyNode(node)} onDelete={() => handleDelete(node)} onDragStart={() => setDraggedNodeId(node.id)} onDrop={() => handleDrop(node)} />)}</div></div>}
       </div>
       {selectedNodeIds.size ? <div className="tree-batch-actions"><span>已选 {selectedNodeIds.size} 项</span><Button variant="danger" onClick={() => void deleteSelected()}><Trash2 size={12} />批量移入回收站</Button><Button variant="ghost" onClick={() => setSelectedNodeIds(new Set())}>清除选择</Button></div> : null}
       <div className="sidebar-section-label"><span>工具</span></div>

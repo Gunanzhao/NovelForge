@@ -107,8 +107,11 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .nav-item:hover { background: var(--surface-2); color: var(--text); }
 .nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .nav-item .count { margin-left: auto; color: var(--faint); font-size: 10px; }
-.tree { padding: 4px 8px 24px; }
+.tree { max-height: min(48vh, 620px); overflow: auto; padding: 4px 8px 24px; }
 .tree-volume { margin-bottom: 5px; }
+.tree-virtual-content { position: relative; min-height: 1px; }
+.tree-virtual-rows { position: absolute; right: 0; left: 0; }
+.tree-row-wrap { height: 38px; }
 .tree-row { display: flex; align-items: center; gap: 4px; min-height: 32px; border-radius: 6px; color: var(--muted); }
 .tree-row:hover { background: var(--surface-2); color: var(--text); }
 .tree-row.selected { background: var(--accent-soft); color: var(--accent); }
