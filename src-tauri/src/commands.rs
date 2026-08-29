@@ -149,10 +149,73 @@ fn rebuild_nodes_from_markdown(root: &Path, connection: &Connection) -> Result<(
     Ok(())
 }
 
+fn parse_entity_mirror(path: &Path, fallback_title: &str) -> Option<(String, Vec<String>, serde_json::Value)> {
+    let raw = fs::read_to_string(path).ok()?;
+    let mut title = fallback_title.to_string();
+    let mut tags = Vec::new();
+    let mut fields = serde_json::Map::new();
+    let mut section_key: Option<String> = None;
+    let mut section_lines: Vec<String> = Vec::new();
+    let mut trailing_lines = Vec::new();
+    let mut flush_section = |key: &mut Option<String>, lines: &mut Vec<String>| {
+        if let Some(name) = key.take() {
+            let value = lines.join("\n").trim().to_string();
+            if !value.is_empty() { fields.insert(name, serde_json::Value::String(value)); }
+        }
+        lines.clear();
+    };
+    for line in raw.lines() {
+        if let Some(value) = line.strip_prefix("# ").map(str::trim).filter(|value| !value.is_empty()) {
+            title = value.to_string();
+        } else if let Some(value) = line.strip_prefix("标签：") {
+            tags = value.split(['、', ',', '，']).map(str::trim).filter(|value| !value.is_empty()).map(str::to_string).collect();
+        } else if let Some(value) = line.strip_prefix("## ").map(str::trim).filter(|value| !value.is_empty()) {
+            flush_section(&mut section_key, &mut section_lines);
+            section_key = Some(value.to_string());
+        } else if line.trim().is_empty() && section_key.is_some() && section_lines.iter().any(|value| !value.trim().is_empty()) {
+            flush_section(&mut section_key, &mut section_lines);
+        } else if section_key.is_some() {
+            section_lines.push(line.to_string());
+        } else if !line.trim().is_empty() {
+            trailing_lines.push(line.to_string());
+        }
+    }
+    flush_section(&mut section_key, &mut section_lines);
+    if !trailing_lines.is_empty() && !fields.contains_key("description") {
+        fields.insert("description".to_string(), serde_json::Value::String(trailing_lines.join("\n").trim().to_string()));
+    }
+    Some((title, tags, serde_json::Value::Object(fields)))
+}
+
+fn rebuild_entities_from_markdown(root: &Path, connection: &Connection) -> Result<(), String> {
+    for (kind, directory) in [
+        ("character", "characters"), ("location", "locations"), ("world", "world"),
+        ("timeline", "timeline"), ("outline", "outlines"), ("scene", "scenes"),
+        ("foreshadowing", "foreshadowing"), ("relationship", "relationships"), ("note", "notes"),
+    ] {
+        let directory_path = storage::safe_relative(root, directory)?;
+        if !directory_path.is_dir() { continue; }
+        for path in directory_entries(&directory_path)?.into_iter().filter(|path| path.is_file() && path.extension().and_then(|value| value.to_str()) == Some("md")) {
+            let fallback = path.file_stem().and_then(|name| name.to_str()).unwrap_or("Recovered Entry");
+            let Some((title, tags, content)) = parse_entity_mirror(&path, fallback) else { continue };
+            let id = storage::new_id();
+            let relative = relative_path(root, &path)?;
+            let timestamp = storage::now();
+            connection.execute(
+                "INSERT INTO entities (id, kind, title, content_json, tags_json, file_path, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                rusqlite::params![id, kind, title, content.to_string(), serde_json::to_string(&tags).map_err(|error| format!("恢复资料标签失败：{}", error))?, relative, timestamp.clone(), timestamp],
+            ).map_err(|error| format!("恢复资料条目失败：{}", error))?;
+            storage::index_record(connection, &id, kind, &title, &content.to_string(), &relative)?;
+        }
+    }
+    Ok(())
+}
+
 fn recovered_project_connection(root: &Path) -> Result<Connection, String> {
     let backup = storage::quarantine_database(root)?;
     let connection = storage::open_db(root)?;
     rebuild_nodes_from_markdown(root, &connection)?;
+    rebuild_entities_from_markdown(root, &connection)?;
     if backup.is_some() { let _ = storage::append_log(root, "WARN", "database_recovered"); }
     Ok(connection)
 }
@@ -393,6 +456,9 @@ pub fn open_project(path: String) -> Result<ProjectData, String> {
     };
     if storage::all_nodes(&connection, false)?.is_empty() {
         rebuild_nodes_from_markdown(&root, &connection)?;
+    }
+    if storage::all_entities(&connection, false)?.is_empty() {
+        rebuild_entities_from_markdown(&root, &connection)?;
     }
     storage::refresh_search_index(&root, &connection)?;
     let _ = storage::append_log(&root, "INFO", "project_opened");

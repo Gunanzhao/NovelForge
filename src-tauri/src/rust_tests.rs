@@ -64,7 +64,7 @@ fn real_command_workflow_persists_markdown_and_recoverable_trash() {
     let saved = super::commands::save_document(super::models::SaveDocumentInput {
         project_path: project_path.clone(),
         node_id: chapter.id.clone(),
-        content: "# 第一章\n\n林月走进雾港。".to_string(),
+        content: "# 第一章\n\n林月走进雾港，[[林月]]留下线索。".to_string(),
         reason: "集成测试".to_string(),
     }).expect("save document");
     assert!(saved.content.contains("雾港"));
@@ -72,6 +72,11 @@ fn real_command_workflow_persists_markdown_and_recoverable_trash() {
         project_path: project_path.clone(), kind: "character".to_string(), id: None,
         title: "林月".to_string(), content: serde_json::json!({"status": "活动"}), tags: vec!["主角".to_string()],
     }).expect("save entity");
+    let wiki_results = super::commands::search_project(super::models::SearchInput {
+        project_path: project_path.clone(), query: "[[林月]]".to_string(), kind: Some("manuscript".to_string()),
+        scope: None, node_id: None, volume_path: None, tag: None, case_sensitive: None,
+    }).expect("search wiki reference");
+    assert!(wiki_results.iter().any(|result| result.id == chapter.id));
     let results = super::commands::search_project(super::models::SearchInput {
         project_path: project_path.clone(), query: "雾港".to_string(), kind: None,
         scope: None, node_id: None, volume_path: None, tag: None, case_sensitive: None,
@@ -124,6 +129,10 @@ fn opening_corrupt_database_rebuilds_markdown_tree() {
     super::commands::save_document(super::models::SaveDocumentInput {
         project_path: project_path.clone(), node_id: chapter.id, content: "# 第一章\n\n数据库损坏后仍应可读。".to_string(), reason: "恢复前".to_string(),
     }).expect("save document");
+    super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(), kind: "character".to_string(), id: None, title: "林月".to_string(),
+        content: serde_json::json!({"identity": "灯塔守夜人", "description": "数据库损坏后资料镜像仍应可恢复。"}), tags: vec!["主角".to_string()],
+    }).expect("save character mirror");
     fs::write(root.join("project/.novelforge/database.sqlite"), b"not a sqlite database").expect("corrupt database");
 
     let reopened = super::commands::open_project(project_path.clone()).expect("open recovered project");
@@ -132,6 +141,9 @@ fn opening_corrupt_database_rebuilds_markdown_tree() {
         project_path: project_path.clone(), node_id: recovered.id,
     }).expect("read recovered markdown");
     assert!(document.content.contains("数据库损坏后仍应可读"));
+    let recovered_entity = reopened.entities.iter().find(|entity| entity.title == "林月").expect("recovered character");
+    assert!(recovered_entity.tags.iter().any(|tag| tag == "主角"));
+    assert_eq!(recovered_entity.content.get("identity").and_then(|value| value.as_str()), Some("灯塔守夜人"));
     let backups = fs::read_dir(root.join("project/.novelforge")).expect("read database directory")
         .flatten().filter(|entry| entry.file_name().to_string_lossy().starts_with("database.sqlite.corrupt-")).count();
     assert_eq!(backups, 1);
