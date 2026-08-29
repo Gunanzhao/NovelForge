@@ -222,5 +222,20 @@ describe('browser fallback project workflow', () => {
     await expect(fallbackInvoke<ProjectData>('move_node', {
       input: { projectPath: path, nodeId: chapter.id, targetParentId: chapter.parentId, targetOrderIndex: 1.25 },
     })).rejects.toThrow('目标顺序无效')
+    await expect(fallbackInvoke<ProjectData>('move_node', {
+      input: { projectPath: path, nodeId: chapter.id, targetParentId: 123 },
+    })).rejects.toThrow('目标父节点无效')
+    await expect(fallbackInvoke<ProjectData>('create_node', {
+      input: { projectPath: path, kind: 'chapter', title: '无效父级', parentId: 123 },
+    })).rejects.toThrow('父节点无效')
+  })
+
+  it('rejects malformed fallback search and entity payloads', async () => {
+    const path = 'fallback-payload-boundaries-project'
+    await fallbackInvoke<ProjectData>('create_project', { input: { ...input, path } })
+    await expect(fallbackInvoke<SearchResult[]>('search_project', { input: { projectPath: path, query: 123 } })).rejects.toThrow('搜索内容无效')
+    await expect(fallbackInvoke<ProjectData>('upsert_entity', {
+      input: { projectPath: path, kind: 'character', id: null, title: '林月', tags: [] },
+    })).rejects.toThrow('资料内容格式无效')
   })
 })

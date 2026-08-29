@@ -197,3 +197,8 @@
 - fallback 创建项目、复制/移动节点和资料写入的无效数值、标题、标签输入均被拒绝。
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：全部通过，12 个测试文件 / 48 个测试。
 - cargo check、cargo test：通过，25 项 Rust 常规测试，1 项大型基准按设计忽略。
+
+## fallback 运行时载荷验证（2026-08-30）
+
+- 父节点、目标顺序、搜索参数、正文原因和资料内容的错误类型均返回明确错误，不写入非法 fallback 数据。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：全部通过，12 个测试文件 / 49 个测试。

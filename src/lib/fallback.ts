@@ -257,6 +257,7 @@ function restoreTrashSnapshot(store: FallbackStore, trash: TrashItem) {
 export async function fallbackInvoke<T>(command: string, args: Record<string, unknown>): Promise<T> {
   if (command === 'create_project') {
     const input = args.input as ProjectInput
+    if (!input || typeof input !== 'object') throw new Error('项目输入无效')
     if (typeof input?.path !== 'string' || !input.path.trim()) throw new Error('项目路径不能为空')
     if (typeof input?.title !== 'string' || !input.title.trim()) throw new Error('作品名不能为空')
     if (!Number.isSafeInteger(input?.targetWords) || input.targetWords < 0) throw new Error('目标字数无效')
@@ -282,6 +283,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   }
   if (command === 'create_node') {
     const kind = input?.kind as NodeRecord['kind']
+    if (input?.parentId !== undefined && input.parentId !== null && typeof input.parentId !== 'string') throw new Error('父节点无效')
     const parentId = (input?.parentId as string | null) ?? null
     const title = (input?.title as string | undefined)?.trim() ?? ''
     if (!['volume', 'chapter', 'section'].includes(kind)) throw new Error('不支持的正文节点类型')
@@ -342,6 +344,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     const id = input?.nodeId as string
     const current = node(store, id)
     if (!current) throw new Error('节点不存在')
+    if (input?.targetParentId !== undefined && input.targetParentId !== null && typeof input.targetParentId !== 'string') throw new Error('目标父节点无效')
     const targetParentId = (input?.targetParentId as string | null) ?? null
     const targetParent = validateNodeTarget(store, current.kind, targetParentId)
     const descendants = nodeDescendants(store, id)
@@ -369,6 +372,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     const id = input?.nodeId as string
     const current = node(store, id)
     if (!current) throw new Error('节点不存在')
+    if (input?.targetParentId !== undefined && input.targetParentId !== null && typeof input.targetParentId !== 'string') throw new Error('目标父节点无效')
     const targetParentId = (input?.targetParentId as string | null) ?? null
     const targetParent = validateNodeTarget(store, current.kind, targetParentId)
     const descendants = nodeDescendants(store, id)
@@ -407,8 +411,9 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     const content = input.content
     const old = store.documents[id] ?? ''
     const now = new Date().toISOString()
+    const reason = typeof input?.reason === 'string' && input.reason.trim() ? input.reason : '自动保存'
     const revision: StoredHistory = {
-      id: uid(), nodeId: id, nodeTitle: current.title, reason: (input?.reason as string) || '自动保存',
+      id: uid(), nodeId: id, nodeTitle: current.title, reason,
       wordCount: countWords(content), createdAt: now, path: 'fallback://history/' + id, content,
     }
     store.history.unshift(revision)
@@ -453,6 +458,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     if (!title) throw new Error('条目名称不能为空')
     if (!ENTITY_KINDS.has(entityInput.kind)) throw new Error('资料类型无效')
     if (!Array.isArray(entityInput.tags) || entityInput.tags.some((tag) => typeof tag !== 'string')) throw new Error('标签格式无效')
+    if (entityInput.content === undefined) throw new Error('资料内容格式无效')
     const existing = entityInput.id ? entity(store, entityInput.id) : undefined
     if (!existing && entityInput.id && Object.values(store.trashSnapshots).some((snapshot) => snapshot.entities.some((item) => item.id === entityInput.id))) {
       throw new Error('回收站中的资料不能直接编辑，请先恢复')
@@ -527,6 +533,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   }
   if (command === 'search_project') {
     const search = args.input as SearchInput
+    if (!search || typeof search.query !== 'string') throw new Error('搜索内容无效')
     const query = search.query.trim()
     const normalizedQuery = query.toLocaleLowerCase()
     const volumeMatches = (path: string) => !search.volumePath || path.startsWith(search.volumePath.replace(/\\/gu, '/') + '/')
