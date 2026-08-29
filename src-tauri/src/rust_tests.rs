@@ -121,6 +121,84 @@ fn get_document_surfaces_missing_file_instead_of_returning_empty_content() {
 }
 
 #[test]
+fn create_and_rename_nodes_roll_back_files_on_database_failure() {
+    let root = test_root("node-write-rollback");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "节点回滚测试".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let volume = created.nodes.iter().find(|node| node.kind == "volume").expect("volume").clone();
+    let _chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
+    {
+        let connection = storage::open_db(&root.join("project")).expect("database");
+        connection.execute_batch("CREATE TRIGGER fail_node_insert BEFORE INSERT ON nodes WHEN NEW.kind = 'chapter' BEGIN SELECT RAISE(ABORT, 'test failure'); END;").expect("insert trigger");
+    }
+    let create_error = super::commands::create_node(super::models::NodeInput {
+        project_path: project_path.clone(), kind: "chapter".to_string(), title: "失败章节".to_string(), parent_id: Some(volume.id.clone()),
+    }).expect_err("failed node insert");
+    assert!(create_error.contains("写入项目树") || create_error.contains("创建节点"));
+    assert!(!root.join("project/manuscript/volume_001/chapter_002.md").exists());
+    let _ = fs::remove_file(root.join("project/.novelforge/database.sqlite"));
+    let _ = fs::remove_dir_all(root);
+
+    let root = test_root("node-rename-rollback");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "重命名回滚测试".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
+    let renamed = super::commands::rename_node(super::models::RenameNodeInput {
+        project_path: project_path.clone(), node_id: chapter.id.clone(), title: "新标题".to_string(),
+    }).expect("rename node");
+    assert_eq!(renamed.nodes.iter().find(|node| node.id == chapter.id).expect("renamed chapter").title, "新标题");
+    let chapter_path = root.join("project").join(&chapter.file_path);
+    assert!(fs::read_to_string(&chapter_path).expect("renamed content").starts_with("# 新标题"));
+    {
+        let connection = storage::open_db(&root.join("project")).expect("database");
+        connection.execute_batch("CREATE TRIGGER fail_node_title BEFORE UPDATE OF title ON nodes BEGIN SELECT RAISE(ABORT, 'test failure'); END;").expect("rename trigger");
+    }
+    assert!(super::commands::rename_node(super::models::RenameNodeInput {
+        project_path: project_path.clone(), node_id: chapter.id.clone(), title: "失败标题".to_string(),
+    }).is_err());
+    assert!(fs::read_to_string(&chapter_path).expect("rolled back content").starts_with("# 新标题"));
+    let reopened = super::commands::open_project(project_path).expect("reopen renamed project");
+    assert_eq!(reopened.nodes.iter().find(|node| node.id == chapter.id).expect("reopened chapter").title, "新标题");
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn entity_upsert_rolls_back_markdown_mirror_on_database_failure() {
+    let root = test_root("entity-write-rollback");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "资料写入回滚测试".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let created = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(), kind: "character".to_string(), id: None, title: "林月".to_string(),
+        content: serde_json::json!({"identity": "旧身份"}), tags: vec!["主角".to_string()],
+    }).expect("create entity");
+    let entity = created.entities.iter().find(|item| item.title == "林月").expect("entity").clone();
+    let mirror = root.join("project").join(&entity.file_path);
+    let original = fs::read_to_string(&mirror).expect("original mirror");
+    {
+        let connection = storage::open_db(&root.join("project")).expect("database");
+        connection.execute_batch("CREATE TRIGGER fail_entity_update BEFORE UPDATE ON entities BEGIN SELECT RAISE(ABORT, 'test failure'); END;").expect("entity trigger");
+    }
+    assert!(super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(), kind: "character".to_string(), id: Some(entity.id.clone()), title: "林月".to_string(),
+        content: serde_json::json!({"identity": "不应写入"}), tags: vec!["回滚".to_string()],
+    }).is_err());
+    assert_eq!(fs::read_to_string(&mirror).expect("rolled back mirror"), original);
+    let reopened = super::commands::open_project(project_path).expect("reopen entity project");
+    let restored = reopened.entities.iter().find(|item| item.id == entity.id).expect("restored entity");
+    assert_eq!(restored.content.get("identity").and_then(serde_json::Value::as_str), Some("旧身份"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn application_logs_are_levelled_and_redacted() {
     let root = test_root("logs");
     storage::create_project_directories(&root).expect("project directories");

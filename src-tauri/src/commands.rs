@@ -377,6 +377,20 @@ fn default_status() -> &'static str {
     "not-started"
 }
 
+fn touch_project_best_effort(root: &Path, event: &str) {
+    if storage::touch_project(root).is_err() {
+        let _ = storage::append_log(root, "WARN", event);
+    }
+}
+
+fn replace_markdown_title(content: &str, title: &str) -> String {
+    if content.starts_with("# ") {
+        let end = content.find('\n').unwrap_or(content.len());
+        return format!("# {}{}", title, &content[end..]);
+    }
+    format!("# {}\n\n{}", title, content)
+}
+
 #[tauri::command]
 pub fn create_project(input: ProjectInput) -> Result<ProjectData, String> {
     if input.title.trim().is_empty() {
@@ -485,7 +499,7 @@ pub fn create_node(input: NodeInput) -> Result<ProjectData, String> {
     if input.kind != "volume" && input.parent_id.is_none() {
         return Err("章节和小节需要选择父节点".to_string());
     }
-    let (root, connection) = project_connection(&input.project_path)?;
+    let (root, mut connection) = project_connection(&input.project_path)?;
     let parent = match input.parent_id.as_deref() {
         Some(parent_id) => storage::node_from_id(&connection, parent_id)?
             .ok_or_else(|| "父节点不存在".to_string())?,
@@ -552,12 +566,23 @@ pub fn create_node(input: NodeInput) -> Result<ProjectData, String> {
         deleted_at: None,
         deleted_path: None,
     };
-    insert_node(&connection, &node)?;
-    if node.kind != "volume" {
-        let content = fs::read_to_string(&absolute_path).unwrap_or_default();
-        storage::index_record(&connection, &node.id, &node.kind, &node.title, &content, &node.file_path)?;
+    let database_result = (|| -> Result<(), String> {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("无法开始创建节点事务：{}", error))?;
+        insert_node(&transaction, &node)?;
+        if node.kind != "volume" {
+            let content = fs::read_to_string(&absolute_path)
+                .map_err(|error| format!("读取新建正文失败：{}", error))?;
+            storage::index_record(&transaction, &node.id, &node.kind, &node.title, &content, &node.file_path)?;
+        }
+        transaction.commit().map_err(|error| format!("提交创建节点失败：{}", error))
+    })();
+    if let Err(error) = database_result {
+        let _ = remove_path_if_exists(&absolute_path);
+        return Err(error);
     }
-    storage::touch_project(&root)?;
+    touch_project_best_effort(&root, "project_metadata_touch_failed");
     project_data(&root, &connection)
 }
 
@@ -566,24 +591,53 @@ pub fn rename_node(input: crate::models::RenameNodeInput) -> Result<ProjectData,
     if input.title.trim().is_empty() {
         return Err("名称不能为空".to_string());
     }
-    let (root, connection) = project_connection(&input.project_path)?;
-    let timestamp = storage::now();
-    let changed = connection
-        .execute(
-            "UPDATE nodes SET title = ?1, updated_at = ?2 WHERE id = ?3 AND deleted_at IS NULL",
-            params![input.title.trim(), timestamp, input.node_id],
-        )
-        .map_err(|error| format!("重命名节点失败：{}", error))?;
-    if changed == 0 {
+    let (root, mut connection) = project_connection(&input.project_path)?;
+    let current = storage::node_from_id(&connection, &input.node_id)?
+        .ok_or_else(|| "节点不存在".to_string())?;
+    if current.deleted_at.is_some() {
         return Err("节点不存在或已在回收站".to_string());
     }
-    if let Some(node) = storage::node_from_id(&connection, &input.node_id)? {
-        if node.kind != "volume" {
-            let content = fs::read_to_string(storage::safe_relative(&root, &node.file_path)?).unwrap_or_default();
-            storage::index_record(&connection, &node.id, &node.kind, &node.title, &content, &node.file_path)?;
+    let next_title = input.title.trim().to_string();
+    let old_content = if current.kind == "volume" {
+        None
+    } else {
+        Some(fs::read_to_string(storage::safe_relative(&root, &current.file_path)?)
+            .map_err(|error| format!("读取正文失败：{}", error))?)
+    };
+    let next_content = old_content.as_deref().map(|content| replace_markdown_title(content, &next_title));
+    if let Some(content) = next_content.as_deref() {
+        if old_content.as_deref() != Some(content) {
+            storage::atomic_write(&storage::safe_relative(&root, &current.file_path)?, content.as_bytes())?;
         }
     }
-    storage::touch_project(&root)?;
+    let database_result = (|| -> Result<(), String> {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("无法开始重命名事务：{}", error))?;
+        let changed = transaction
+            .execute(
+                "UPDATE nodes SET title = ?1, updated_at = ?2 WHERE id = ?3 AND deleted_at IS NULL",
+                params![next_title, storage::now(), input.node_id],
+            )
+            .map_err(|error| format!("重命名节点失败：{}", error))?;
+        if changed == 0 {
+            return Err("节点不存在或已在回收站".to_string());
+        }
+        if let Some(content) = next_content.as_deref() {
+            storage::index_record(&transaction, &current.id, &current.kind, &next_title, content, &current.file_path)?;
+        }
+        transaction.commit().map_err(|error| format!("提交重命名事务失败：{}", error))
+    })();
+    if let Err(error) = database_result {
+        if let Some(content) = old_content.as_deref() {
+            let target = storage::safe_relative(&root, &current.file_path)?;
+            if let Err(rollback_error) = restore_document_after_save_failure(&target, true, content) {
+                return Err(format!("{}；正文回滚失败：{}", error, rollback_error));
+            }
+        }
+        return Err(error);
+    }
+    touch_project_best_effort(&root, "project_metadata_touch_failed");
     project_data(&root, &connection)
 }
 
@@ -1180,10 +1234,18 @@ pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
     if input.title.trim().is_empty() {
         return Err("条目名称不能为空".to_string());
     }
-    let (root, connection) = project_connection(&input.project_path)?;
+    let (root, mut connection) = project_connection(&input.project_path)?;
     let timestamp = storage::now();
     let entity_id = input.id.clone().unwrap_or_else(storage::new_id);
     let existing = storage::entity_from_id(&connection, &entity_id)?;
+    if let Some(entity) = existing.as_ref() {
+        if entity.deleted_at.is_some() {
+            return Err("回收站中的资料不能直接编辑，请先恢复".to_string());
+        }
+        if entity.kind != input.kind {
+            return Err("资料类型不能在编辑时修改".to_string());
+        }
+    }
     let file_path = if let Some(entity) = existing.as_ref() {
         entity.file_path.clone()
     } else {
@@ -1192,19 +1254,46 @@ pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
     };
     let content_json = serde_json::to_string(&input.content).map_err(|error| format!("资料内容序列化失败：{}", error))?;
     let tags_json = serde_json::to_string(&input.tags).map_err(|error| format!("标签序列化失败：{}", error))?;
-    if input.kind != "attachment" {
+    let target = if input.kind == "attachment" {
+        None
+    } else {
+        Some(storage::safe_relative(&root, &file_path)?)
+    };
+    let old_existed = target.as_ref().is_some_and(|path| path.is_file());
+    let old_content = if let Some(target) = target.as_ref().filter(|path| path.is_file()) {
+        Some(fs::read_to_string(target)
+            .map_err(|error| format!("读取原资料镜像失败：{}", error))?)
+    } else {
+        None
+    };
+    if let Some(target) = target.as_ref() {
         let markdown = storage::markdown_entity(&input.title, &input.content, &input.tags);
-        storage::atomic_write(&storage::safe_relative(&root, &file_path)?, markdown.as_bytes())?;
+        storage::atomic_write(target, markdown.as_bytes())?;
     }
-    connection
-        .execute(
-            "INSERT INTO entities (id, kind, title, content_json, tags_json, file_path, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, title = excluded.title, content_json = excluded.content_json, tags_json = excluded.tags_json, file_path = excluded.file_path, updated_at = excluded.updated_at, deleted_at = NULL, deleted_path = NULL",
-            params![entity_id, input.kind, input.title.trim(), content_json, tags_json, file_path, existing.as_ref().map(|value| value.created_at.clone()).unwrap_or(timestamp.clone()), timestamp],
-        )
-        .map_err(|error| format!("保存资料条目失败：{}", error))?;
     let index_content = if input.kind == "attachment" { input.content.to_string() } else { storage::markdown_entity(&input.title, &input.content, &input.tags) };
-    storage::index_record(&connection, &entity_id, &input.kind, input.title.trim(), &index_content, &file_path)?;
-    storage::touch_project(&root)?;
+    let database_result = (|| -> Result<(), String> {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("无法开始保存资料事务：{}", error))?;
+        transaction
+            .execute(
+                "INSERT INTO entities (id, kind, title, content_json, tags_json, file_path, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, title = excluded.title, content_json = excluded.content_json, tags_json = excluded.tags_json, file_path = excluded.file_path, updated_at = excluded.updated_at, deleted_at = NULL, deleted_path = NULL",
+                params![entity_id, input.kind, input.title.trim(), content_json, tags_json, file_path, existing.as_ref().map(|value| value.created_at.clone()).unwrap_or(timestamp.clone()), timestamp],
+            )
+            .map_err(|error| format!("保存资料条目失败：{}", error))?;
+        storage::index_record(&transaction, &entity_id, &input.kind, input.title.trim(), &index_content, &file_path)?;
+        transaction.commit().map_err(|error| format!("提交资料保存事务失败：{}", error))
+    })();
+    if let Err(error) = database_result {
+        if let Some(target) = target.as_ref() {
+            let previous = old_content.as_deref().unwrap_or("");
+            if let Err(rollback_error) = restore_document_after_save_failure(target, old_existed, previous) {
+                return Err(format!("{}；资料镜像回滚失败：{}", error, rollback_error));
+            }
+        }
+        return Err(error);
+    }
+    touch_project_best_effort(&root, "project_metadata_touch_failed");
     let _ = storage::append_log(&root, "INFO", "entity_saved");
     project_data(&root, &connection)
 }
