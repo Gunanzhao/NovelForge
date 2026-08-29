@@ -1799,13 +1799,39 @@ fn export_nodes(
         }
         if node.kind != "volume" {
             if let Ok(content) = fs::read_to_string(storage::safe_relative(root, &node.file_path).unwrap_or_else(|_| PathBuf::new())) {
-                let clean = content.lines().filter(|line| !line.trim_start().starts_with("# ")).collect::<Vec<_>>().join("\n");
+                let clean = if format == "txt" {
+                    content.lines().map(plain_text_line).filter(|line| !line.is_empty()).collect::<Vec<_>>().join("\n")
+                } else {
+                    content.lines().filter(|line| !line.trim_start().starts_with("# ")).collect::<Vec<_>>().join("\n")
+                };
                 output.push_str(clean.trim());
                 output.push_str("\n\n");
             }
         }
         export_nodes(root, nodes, Some(&node.id), level + 1, format, output, options);
     }
+}
+
+fn plain_text_line(line: &str) -> String {
+    let mut value = line.trim().to_string();
+    if let Some(level) = heading_level(&value) {
+        value = value[level + 1..].trim().to_string();
+    } else {
+        for prefix in ["- ", "* ", "+ ", "> "] {
+            if let Some(rest) = value.strip_prefix(prefix) {
+                value = rest.trim().to_string();
+                break;
+            }
+        }
+    }
+    value = value.replace("**", "").replace("__", "").replace("~~", "").replace(char::from(96), "");
+    while let Some(start) = value.find("[[") {
+        let Some(end_offset) = value[start + 2..].find("]]") else { break };
+        let end = start + 2 + end_offset;
+        let target = value[start + 2..end].to_string();
+        value.replace_range(start..end + 2, &target);
+    }
+    value
 }
 
 fn export_scope_nodes(nodes: &[NodeRecord], input: &ExportInput) -> Result<Vec<NodeRecord>, String> {

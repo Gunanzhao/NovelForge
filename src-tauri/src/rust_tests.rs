@@ -482,7 +482,7 @@ fn export_project_writes_all_supported_formats() {
     }).expect("create project");
     let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
     super::commands::save_document(super::models::SaveDocumentInput {
-        project_path: project_path.clone(), node_id: chapter.id, content: "# 第一章\n\n林月走进雾港。".to_string(), reason: "导出测试".to_string(),
+        project_path: project_path.clone(), node_id: chapter.id, content: "# 第一章\n\n## 小节\n\n- **林月**走进[[雾港]]。".to_string(), reason: "导出测试".to_string(),
     }).expect("save document");
 
     for format in ["markdown", "txt", "html", "docx", "epub", "pdf"] {
@@ -490,7 +490,13 @@ fn export_project_writes_all_supported_formats() {
         let bytes = fs::read(&output).expect("read exported file");
         match format {
             "markdown" => assert!(String::from_utf8_lossy(&bytes).contains("导出测试")),
-            "txt" => assert!(String::from_utf8_lossy(&bytes).contains("林月走进雾港")),
+            "txt" => {
+                let text = String::from_utf8_lossy(&bytes);
+                assert!(text.contains("林月走进雾港"));
+                assert!(!text.contains("##"));
+                assert!(!text.contains("**"));
+                assert!(!text.contains("[["));
+            }
             "html" => {
                 let html = String::from_utf8_lossy(&bytes);
                 assert!(html.contains("<!doctype html>"));
