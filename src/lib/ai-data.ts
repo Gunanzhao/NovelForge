@@ -1,4 +1,5 @@
 import type { AiCompletionInput, EntityRecord, NodeRecord } from './types'
+import { sortManuscriptNodes } from './planning-data'
 
 export type AiAction = 'continue' | 'polish' | 'rewrite' | 'expand' | 'shrink' | 'summary' | 'chapter-summary' | 'outline' | 'dialogue' | 'setting-advice' | 'name'
 
@@ -53,7 +54,7 @@ export function writeAiPreferences(preferences: AiPreferences) {
 }
 
 export function contextItems(nodes: NodeRecord[], entities: EntityRecord[], currentNodeId?: string): AiContextItem[] {
-  const nodeItems = nodes.filter((node) => node.kind !== 'volume').sort((left, right) => left.orderIndex - right.orderIndex).map((node) => ({
+  const nodeItems = sortManuscriptNodes(nodes).map((node) => ({
     id: node.id, kind: 'node' as const, title: node.title, detail: node.id === currentNodeId ? '当前编辑章节' : node.kind === 'chapter' ? '正文 · 章节' : '正文 · 节',
   }))
   const entityItems = entities.filter((entity) => entity.kind !== 'attachment').sort((left, right) => left.kind.localeCompare(right.kind) || left.title.localeCompare(right.title, 'zh-CN')).map((entity) => ({

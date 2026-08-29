@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   contentNumber, filterTimelineEntities, findChapterByReference, isOpenForeshadowingStatus, normalizeForeshadowingStatus, reorderItems,
-  sortChapterNodes,
+  sortChapterNodes, sortManuscriptNodes,
   sortPlanningEntities, sortTimelineEntities,
 } from '../src/lib/planning-data'
 import type { EntityRecord, NodeRecord } from '../src/lib/types'
@@ -73,6 +73,18 @@ describe('timeline and foreshadowing planning helpers', () => {
     expect(sortChapterNodes(nodes).map((chapter) => chapter.id)).toEqual(['chapter-1', 'chapter-2', 'chapter-3'])
     expect(findChapterByReference(nodes, '第3章')?.id).toBe('chapter-3')
     expect(findChapterByReference(nodes, '卷二开端')?.id).toBe('chapter-3')
+  })
+
+  it('keeps sections immediately after their globally ordered chapter', () => {
+    const nodes: NodeRecord[] = [
+      { id: 'volume-2', kind: 'volume', parentId: null, title: '第二卷', orderIndex: 1, status: 'not-started', filePath: 'volume-2', createdAt: '2026-01-01', updatedAt: '2026-01-01' },
+      { id: 'chapter-2', kind: 'chapter', parentId: 'volume-2', title: '第二卷第一章', orderIndex: 0, status: 'draft', filePath: 'chapter-2.md', createdAt: '2026-01-02', updatedAt: '2026-01-02' },
+      { id: 'section-2', kind: 'section', parentId: 'chapter-2', title: '第二卷第一章·节', orderIndex: 0, status: 'draft', filePath: 'section-2.md', createdAt: '2026-01-02', updatedAt: '2026-01-02' },
+      { id: 'volume-1', kind: 'volume', parentId: null, title: '第一卷', orderIndex: 0, status: 'not-started', filePath: 'volume-1', createdAt: '2026-01-01', updatedAt: '2026-01-01' },
+      { id: 'chapter-1', kind: 'chapter', parentId: 'volume-1', title: '第一卷第一章', orderIndex: 0, status: 'draft', filePath: 'chapter-1.md', createdAt: '2026-01-01', updatedAt: '2026-01-01' },
+      { id: 'section-1', kind: 'section', parentId: 'chapter-1', title: '第一卷第一章·节', orderIndex: 0, status: 'draft', filePath: 'section-1.md', createdAt: '2026-01-01', updatedAt: '2026-01-01' },
+    ]
+    expect(sortManuscriptNodes(nodes).map((node) => node.id)).toEqual(['chapter-1', 'section-1', 'chapter-2', 'section-2'])
   })
 
   it('normalizes legacy foreshadowing status labels', () => {

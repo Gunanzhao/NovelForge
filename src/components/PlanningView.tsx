@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { BookOpen, GalleryVerticalEnd, LayoutDashboard } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import '../planning.css'
+import { sortChapterNodes } from '../lib/planning-data'
 import { useAppStore } from '../stores/app-store'
 import { KanbanView } from './KanbanView'
 import { OutlineView } from './OutlineView'
@@ -12,7 +13,7 @@ type PlanningTab = 'outline' | 'scene' | 'board'
 export function PlanningView() {
   const data = useAppStore((state) => state.data)
   const [tab, setTab] = useState<PlanningTab>('outline')
-  const firstChapter = data?.nodes.find((node) => node.kind === 'chapter')?.id ?? ''
+  const firstChapter = sortChapterNodes(data?.nodes ?? [])[0]?.id ?? ''
   const [chapterId, setChapterId] = useState(firstChapter)
   const tabs: Array<{ id: PlanningTab; label: string; icon: LucideIcon }> = [
     { id: 'outline', label: '章节大纲', icon: BookOpen },

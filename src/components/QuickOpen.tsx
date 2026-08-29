@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BookOpen, CircleUserRound, FileSearch, Globe2, MapPin, Search, X } from 'lucide-react'
 import type { EntityKind } from '../lib/types'
 import { ENTITY_LABELS } from '../lib/types'
+import { sortManuscriptNodes } from '../lib/planning-data'
 import { useAppStore } from '../stores/app-store'
 import { IconButton, TextInput } from './ui'
 
@@ -31,9 +32,7 @@ export function QuickOpen() {
 
   const items = useMemo<QuickOpenItem[]>(() => {
     if (!data) return []
-    const nodes = data.nodes
-      .filter((node) => node.kind !== 'volume')
-      .sort((left, right) => left.orderIndex - right.orderIndex)
+    const nodes = sortManuscriptNodes(data.nodes)
       .map((node) => ({ id: node.id, kind: 'node' as const, title: node.title, detail: node.kind === 'chapter' ? '正文 · 章节' : '正文 · 小节' }))
     const entities = data.entities
       .filter((entity) => entity.kind !== 'attachment')

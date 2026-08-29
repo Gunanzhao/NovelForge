@@ -118,6 +118,25 @@ export function sortChapterNodes(nodes: NodeRecord[]) {
     })
 }
 
+export function sortManuscriptNodes(nodes: NodeRecord[]) {
+  const chapters = sortChapterNodes(nodes)
+  const sectionsByChapter = new Map<string, NodeRecord[]>()
+  for (const section of nodes.filter((node) => node.kind === 'section')) {
+    const siblings = sectionsByChapter.get(section.parentId ?? '') ?? []
+    siblings.push(section)
+    sectionsByChapter.set(section.parentId ?? '', siblings)
+  }
+  for (const siblings of sectionsByChapter.values()) {
+    siblings.sort((left, right) => left.orderIndex - right.orderIndex || left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id))
+  }
+  const ordered = chapters.flatMap((chapter) => [chapter, ...(sectionsByChapter.get(chapter.id) ?? [])])
+  const chapterIds = new Set(chapters.map((chapter) => chapter.id))
+  const orphanSections = [...sectionsByChapter.entries()]
+    .filter(([parentId]) => !chapterIds.has(parentId))
+    .flatMap(([, siblings]) => siblings)
+  return [...ordered, ...orphanSections]
+}
+
 export function findChapterByReference(nodes: NodeRecord[], reference: string) {
   const normalized = reference.trim()
   if (!normalized) return undefined
