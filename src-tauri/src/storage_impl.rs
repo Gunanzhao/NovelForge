@@ -437,7 +437,7 @@ pub fn trash_items(connection: &Connection) -> Result<Vec<TrashItem>, String> {
 pub fn kind_directory(kind: &str) -> Result<&'static str, String> {
     match kind {
         "character" => Ok("characters"), "location" => Ok("locations"), "world" => Ok("world"),
-        "timeline" => Ok("timeline"), "foreshadowing" => Ok("foreshadowing"), "relationship" => Ok("relationships"),
+        "timeline" => Ok("timeline"), "foreshadowing" => Ok("foreshadowing"), "relationship" => Ok("relationships"), "attachment" => Ok("attachments"),
         "outline" => Ok("outlines"), "scene" => Ok("scenes"), "note" => Ok("notes"),
         _ => Err(format!("不支持的资料类型：{}", kind)),
     }

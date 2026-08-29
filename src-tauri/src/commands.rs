@@ -585,16 +585,78 @@ pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
     };
     let content_json = serde_json::to_string(&input.content).map_err(|error| format!("资料内容序列化失败：{}", error))?;
     let tags_json = serde_json::to_string(&input.tags).map_err(|error| format!("标签序列化失败：{}", error))?;
-    let markdown = storage::markdown_entity(&input.title, &input.content, &input.tags);
-    storage::atomic_write(&storage::safe_relative(&root, &file_path)?, markdown.as_bytes())?;
+    if input.kind != "attachment" {
+        let markdown = storage::markdown_entity(&input.title, &input.content, &input.tags);
+        storage::atomic_write(&storage::safe_relative(&root, &file_path)?, markdown.as_bytes())?;
+    }
     connection
         .execute(
             "INSERT INTO entities (id, kind, title, content_json, tags_json, file_path, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, title = excluded.title, content_json = excluded.content_json, tags_json = excluded.tags_json, file_path = excluded.file_path, updated_at = excluded.updated_at, deleted_at = NULL, deleted_path = NULL",
             params![entity_id, input.kind, input.title.trim(), content_json, tags_json, file_path, existing.as_ref().map(|value| value.created_at.clone()).unwrap_or(timestamp.clone()), timestamp],
         )
         .map_err(|error| format!("保存资料条目失败：{}", error))?;
-    storage::index_record(&connection, &entity_id, &input.kind, input.title.trim(), &markdown, &file_path)?;
+    let index_content = if input.kind == "attachment" { input.content.to_string() } else { storage::markdown_entity(&input.title, &input.content, &input.tags) };
+    storage::index_record(&connection, &entity_id, &input.kind, input.title.trim(), &index_content, &file_path)?;
     storage::touch_project(&root)?;
+    project_data(&root, &connection)
+}
+
+fn attachment_extension(name: &str) -> String {
+    Path::new(name).extension().and_then(|extension| extension.to_str()).unwrap_or("")
+        .chars().filter(|character| character.is_ascii_alphanumeric()).take(12).collect()
+}
+
+fn attachment_filename(name: &str, id: &str) -> String {
+    let stem = Path::new(name).file_stem().and_then(|value| value.to_str()).unwrap_or("attachment");
+    let stem = safe_filename(stem);
+    let extension = attachment_extension(name);
+    if extension.is_empty() { format!("{}-{}", stem, id) } else { format!("{}-{}.{}", stem, id, extension) }
+}
+
+fn attachment_mime(name: &str) -> &'static str {
+    match attachment_extension(name).to_lowercase().as_str() {
+        "md" | "markdown" => "text/markdown", "txt" => "text/plain", "json" => "application/json",
+        "pdf" => "application/pdf", "doc" => "application/msword", "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "epub" => "application/epub+zip", "png" => "image/png", "jpg" | "jpeg" => "image/jpeg", "gif" => "image/gif",
+        "webp" => "image/webp", "mp3" => "audio/mpeg", "wav" => "audio/wav", "mp4" => "video/mp4", _ => "application/octet-stream",
+    }
+}
+
+#[tauri::command]
+pub fn import_attachment(input: crate::models::AttachmentInput) -> Result<ProjectData, String> {
+    if input.source_path.trim().is_empty() { return Err("附件路径不能为空".to_string()); }
+    let source = PathBuf::from(&input.source_path);
+    let source_metadata = fs::metadata(&source).map_err(|error| format!("无法读取附件：{}", error))?;
+    if !source_metadata.is_file() { return Err("只能导入文件，不能导入文件夹".to_string()); }
+    let (root, connection) = project_connection(&input.project_path)?;
+    let id = storage::new_id();
+    let original_name = source.file_name().and_then(|value| value.to_str()).unwrap_or("附件").to_string();
+    let relative_path = format!("attachments/{}", attachment_filename(&original_name, &id));
+    let destination = storage::safe_relative(&root, &relative_path)?;
+    fs::copy(&source, &destination).map_err(|error| format!("复制附件失败：{}", error))?;
+    let timestamp = storage::now();
+    let content = serde_json::json!({
+        "originalName": original_name,
+        "mimeType": attachment_mime(&original_name),
+        "sizeBytes": source_metadata.len(),
+        "description": input.description.trim(),
+    });
+    let content_json = serde_json::to_string(&content).map_err(|error| format!("附件信息序列化失败：{}", error))?;
+    let database_result = (|| -> Result<(), String> {
+        connection.execute(
+            "INSERT INTO entities (id, kind, title, content_json, tags_json, file_path, created_at, updated_at) VALUES (?1, 'attachment', ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![id, original_name, content_json, serde_json::json!(["附件"]).to_string(), relative_path, timestamp, timestamp],
+        ).map_err(|error| format!("保存附件资料失败：{}", error))?;
+        storage::index_record(&connection, &id, "attachment", &original_name, &content.to_string(), &relative_path)?;
+        storage::touch_project(&root)?;
+        Ok(())
+    })();
+    if let Err(error) = database_result {
+        let _ = fs::remove_file(&destination);
+        let _ = connection.execute("DELETE FROM entities WHERE id = ?1", params![id]);
+        let _ = connection.execute("DELETE FROM search_index WHERE ref_id = ?1", params![id]);
+        return Err(error);
+    }
     project_data(&root, &connection)
 }
 
@@ -831,16 +893,143 @@ pub fn search_project(input: SearchInput) -> Result<Vec<SearchResult>, String> {
     Ok(results)
 }
 
+fn json_text(value: &serde_json::Value, key: &str) -> String {
+    match value.get(key) {
+        Some(serde_json::Value::String(text)) => text.clone(),
+        Some(serde_json::Value::Number(number)) => number.to_string(),
+        Some(serde_json::Value::Bool(flag)) => flag.to_string(),
+        _ => String::new(),
+    }
+}
+
+fn wiki_targets(content: &str) -> Vec<String> {
+    let mut targets = Vec::new();
+    let mut rest = content;
+    while let Some(start) = rest.find("[[") {
+        let after_start = &rest[start + 2..];
+        let Some(end) = after_start.find("]]" ) else { break };
+        let target = after_start[..end].trim();
+        if !target.is_empty() { targets.push(target.to_string()); }
+        rest = &after_start[end + 2..];
+    }
+    targets
+}
+
+fn chapter_reference_tokens(value: &str) -> Vec<String> {
+    value.split(|character: char| ",，、;；\t\r\n ".contains(character))
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn chapter_reference_exists(chapters: &[NodeRecord], reference: &str) -> bool {
+    let normalized = reference.trim();
+    if normalized.is_empty() { return false; }
+    if chapters.iter().any(|chapter| chapter.title.trim() == normalized) { return true; }
+    let digits: String = normalized.chars().filter(|character| character.is_ascii_digit()).collect();
+    let Ok(number) = digits.parse::<usize>() else { return false };
+    number > 0 && chapters.iter().min_by_key(|chapter| chapter.order_index)
+        .map(|first| first.order_index).is_some_and(|_| {
+            let mut ordered = chapters.to_vec();
+            ordered.sort_by_key(|chapter| chapter.order_index);
+            ordered.get(number - 1).is_some()
+        })
+}
+
+fn consistency_issue(
+    severity: &str, code: &str, title: &str, detail: String,
+    ref_id: &str, ref_kind: &str, path: &str,
+) -> crate::models::ConsistencyIssue {
+    crate::models::ConsistencyIssue {
+        id: format!("{}:{}:{}", code, ref_id, title), severity: severity.to_string(), code: code.to_string(),
+        title: title.to_string(), detail, ref_id: ref_id.to_string(), ref_kind: ref_kind.to_string(), path: path.to_string(),
+    }
+}
+
+#[tauri::command]
+pub fn check_consistency(path: String) -> Result<crate::models::ConsistencyReport, String> {
+    let (root, connection) = project_connection(&path)?;
+    let nodes = storage::all_nodes(&connection, false)?;
+    let entities = storage::all_entities(&connection, false)?;
+    let chapters: Vec<NodeRecord> = nodes.iter().filter(|node| node.kind == "chapter").cloned().collect();
+    let mut issues = Vec::new();
+    let mut known_titles = std::collections::HashSet::new();
+    let mut duplicate_titles = std::collections::HashSet::new();
+    for entity in &entities {
+        let title = entity.title.trim();
+        if title.is_empty() {
+            issues.push(consistency_issue("error", "empty-title", "资料条目没有名称", "请为资料条目补充名称，避免 Wiki 链接和搜索结果无法定位。".to_string(), &entity.id, "entity", &entity.file_path));
+            continue;
+        }
+        let duplicate_key = format!("{}:{}", entity.kind, title.to_lowercase());
+        if !duplicate_titles.insert(duplicate_key) {
+            issues.push(consistency_issue("warning", "duplicate-title", "资料条目名称重复", format!("“{}”在同一资料类型中出现多次，Wiki 链接可能指向不明确。", title), &entity.id, "entity", &entity.file_path));
+        }
+        known_titles.insert(title.to_string());
+    }
+    for node in nodes.iter().filter(|node| node.kind != "volume") {
+        let file = storage::safe_relative(&root, &node.file_path)?;
+        let content = fs::read_to_string(file).unwrap_or_default();
+        for target in wiki_targets(&content) {
+            if !known_titles.contains(&target) {
+                issues.push(consistency_issue("warning", "missing-wiki", "Wiki 链接没有对应资料", format!("正文引用了“{}”，但资料库中没有同名条目。", target), &node.id, &node.kind, &node.file_path));
+            }
+        }
+    }
+    let character_ids: std::collections::HashSet<String> = entities.iter().filter(|entity| entity.kind == "character").map(|entity| entity.id.clone()).collect();
+    for entity in entities.iter().filter(|entity| entity.kind == "relationship") {
+        let from_id = json_text(&entity.content, "fromId");
+        let to_id = json_text(&entity.content, "toId");
+        if !character_ids.contains(&from_id) || !character_ids.contains(&to_id) {
+            issues.push(consistency_issue("error", "broken-relationship", "人物关系引用失效", "关系两端必须指向仍存在的人物资料。".to_string(), &entity.id, "relationship", &entity.file_path));
+        }
+        if !from_id.is_empty() && from_id == to_id {
+            issues.push(consistency_issue("warning", "self-relationship", "人物关系连接到自身", "请确认这是否是有意记录的自我关系。".to_string(), &entity.id, "relationship", &entity.file_path));
+        }
+    }
+    for entity in &entities {
+        let fields: &[(&str, &str)] = match entity.kind.as_str() {
+            "timeline" => &[("chapters", "关联章节")],
+            "foreshadowing" => &[("plantedIn", "首次埋设章节"), ("plannedPayoff", "计划回收章节"), ("actualPayoff", "实际回收章节")],
+            _ => &[],
+        };
+        for (key, label) in fields {
+            for reference in chapter_reference_tokens(&json_text(&entity.content, key)) {
+                if !chapter_reference_exists(&chapters, &reference) {
+                    issues.push(consistency_issue("warning", "missing-chapter-reference", &format!("{}不存在", label), format!("“{}”无法匹配当前正文中的章节。", reference), &entity.id, &entity.kind, &entity.file_path));
+                }
+            }
+        }
+        if entity.kind == "foreshadowing" {
+            let status = json_text(&entity.content, "status").trim().to_lowercase();
+            if !json_text(&entity.content, "actualPayoff").trim().is_empty() && status != "paid-off" && status != "已回收" {
+                issues.push(consistency_issue("warning", "foreshadowing-status", "伏笔状态未标记为已回收", "已经填写实际回收章节，但当前状态仍未标记为“已回收”。".to_string(), &entity.id, &entity.kind, &entity.file_path));
+            }
+        }
+    }
+    let errors = issues.iter().filter(|issue| issue.severity == "error").count() as u64;
+    let warnings = issues.iter().filter(|issue| issue.severity == "warning").count() as u64;
+    Ok(crate::models::ConsistencyReport { checked_at: storage::now(), issue_count: issues.len() as u64, errors, warnings, issues })
+}
+
 #[tauri::command]
 pub fn get_statistics(path: String) -> Result<Stats, String> {
     let (root, connection) = project_connection(&path)?;
     let nodes = storage::all_nodes(&connection, false)?;
     let mut total_words = 0;
     let mut chapter_count = 0;
+    let mut chapter_stats = Vec::new();
     for node in nodes.iter().filter(|node| node.kind != "volume") {
         if node.kind == "chapter" { chapter_count += 1; }
         if let Ok(content) = fs::read_to_string(storage::safe_relative(&root, &node.file_path)?) {
-            total_words += storage::word_count(&content);
+            let words = storage::word_count(&content);
+            total_words += words;
+            if node.kind == "chapter" {
+                chapter_stats.push(crate::models::ChapterStats {
+                    id: node.id.clone(), title: node.title.clone(), words, updated_at: node.updated_at.clone(),
+                });
+            }
         }
     }
     let now = Utc::now();
@@ -853,6 +1042,7 @@ pub fn get_statistics(path: String) -> Result<Stats, String> {
     let mut week_words = 0_u64;
     let mut month_words = 0_u64;
     let mut dates = std::collections::BTreeSet::new();
+    let mut daily_totals = std::collections::BTreeMap::<String, u64>::new();
     let mut statement = connection.prepare("SELECT created_at, delta_words FROM activity")
         .map_err(|error| format!("读取写作统计失败：{}", error))?;
     let rows = statement.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
@@ -863,6 +1053,7 @@ pub fn get_statistics(path: String) -> Result<Stats, String> {
         if let Some(date) = storage::parse_timestamp(&created_at) {
             let date_key = date.format("%Y-%m-%d").to_string();
             if positive > 0 { dates.insert(date_key.clone()); }
+            *daily_totals.entry(date_key.clone()).or_default() += positive;
             if date_key == today { today_words += positive; }
             if date_key == yesterday { yesterday_words += positive; }
             if date.date_naive() >= week_start { week_words += positive; }
@@ -881,9 +1072,15 @@ pub fn get_statistics(path: String) -> Result<Stats, String> {
         }
     }
     let metadata = storage::read_project_json(&root)?;
+    let daily = (0..30).rev().map(|offset| {
+        let date = (now - Duration::days(offset)).format("%Y-%m-%d").to_string();
+        let words = daily_totals.get(&date).copied().unwrap_or(0);
+        crate::models::DailyStats { date, words }
+    }).collect();
+    chapter_stats.sort_by(|left, right| right.words.cmp(&left.words).then_with(|| left.title.cmp(&right.title)));
     Ok(Stats {
         total_words, today_words, yesterday_words, week_words, month_words,
-        chapter_count, target_words: metadata.target_words, writing_streak: streak,
+        chapter_count, target_words: metadata.target_words, writing_streak: streak, daily, chapter_stats,
     })
 }
 

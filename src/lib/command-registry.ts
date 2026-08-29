@@ -12,6 +12,9 @@ export type CommandId =
   | 'open-timeline'
   | 'open-foreshadowing'
   | 'open-relationship'
+  | 'open-attachment'
+  | 'open-consistency'
+  | 'open-statistics'
 
 export interface CommandDescriptor {
   id: CommandId
@@ -33,6 +36,9 @@ export const COMMANDS: CommandDescriptor[] = [
   { id: 'open-timeline', label: '打开时间线', description: '查看故事事件时间线', keywords: ['时间线', '事件', 'timeline'], defaultShortcut: 'Ctrl+4' },
   { id: 'open-foreshadowing', label: '打开伏笔', description: '查看和跟踪伏笔状态', keywords: ['伏笔', '回收', 'foreshadowing'], defaultShortcut: 'Ctrl+5' },
   { id: 'open-relationship', label: '打开人物关系图', description: '查看人物关系网络', keywords: ['人物', '关系', 'graph', 'relationship'], defaultShortcut: 'Ctrl+6' },
+  { id: 'open-attachment', label: '打开资料附件', description: '管理项目内的研究资料和附件', keywords: ['资料', '附件', 'research', 'attachment'], defaultShortcut: 'Ctrl+7' },
+  { id: 'open-consistency', label: '打开一致性检查', description: '扫描断开的 Wiki 和章节引用', keywords: ['一致性', '检查', 'consistency'], defaultShortcut: 'Ctrl+8' },
+  { id: 'open-statistics', label: '打开详细统计', description: '查看写作趋势和章节排行', keywords: ['统计', '趋势', 'statistics'], defaultShortcut: 'Ctrl+9' },
 ]
 
 export type ShortcutMap = Record<CommandId, string>
@@ -95,7 +101,7 @@ export function commandView(commandId: CommandId): ViewId | undefined {
   const views: Partial<Record<CommandId, ViewId>> = {
     'open-dashboard': 'dashboard', 'open-manuscript': 'manuscript', 'open-outline': 'outline',
     'open-timeline': 'timeline', 'open-foreshadowing': 'foreshadowing', 'open-relationship': 'relationship',
-    'open-search': 'search',
+    'open-search': 'search', 'open-attachment': 'attachment', 'open-consistency': 'consistency', 'open-statistics': 'statistics',
   }
   return views[commandId]
 }

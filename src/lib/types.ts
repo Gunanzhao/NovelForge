@@ -1,6 +1,6 @@
 export type NodeKind = 'volume' | 'chapter' | 'section'
-export type EntityKind = 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note' | 'relationship'
-export type ViewId = 'dashboard' | 'manuscript' | EntityKind | 'search' | 'trash' | 'settings'
+export type EntityKind = 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note' | 'relationship' | 'attachment'
+export type ViewId = 'dashboard' | 'manuscript' | EntityKind | 'consistency' | 'statistics' | 'search' | 'trash' | 'settings'
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type ThemeMode = 'light' | 'dark' | 'system'
 
@@ -88,6 +88,8 @@ export interface Stats {
   chapterCount: number
   targetWords: number
   writingStreak: number
+  daily: DailyStats[]
+  chapterStats: ChapterStats[]
 }
 
 export interface SearchResult {
@@ -114,6 +116,7 @@ export const ENTITY_LABELS: Record<EntityKind, string> = {
   scene: '场景',
   note: '笔记',
   relationship: '人物关系',
+  attachment: '附件',
 }
 
 export const NODE_STATUS_LABELS: Record<string, string> = {
@@ -166,4 +169,39 @@ export const ENTITY_FIELDS: Record<EntityKind, Array<{ key: string; label: strin
     { key: 'fromId', label: '人物 A' }, { key: 'toId', label: '人物 B' }, { key: 'label', label: '关系类型' },
     { key: 'strength', label: '关系强度' }, { key: 'notes', label: '备注', multiline: true },
   ],
+  attachment: [
+    { key: 'originalName', label: '原始文件名' }, { key: 'mimeType', label: '类型' }, { key: 'sizeBytes', label: '文件大小' },
+    { key: 'description', label: '说明', multiline: true },
+  ],
+}
+
+export interface DailyStats {
+  date: string
+  words: number
+}
+
+export interface ChapterStats {
+  id: string
+  title: string
+  words: number
+  updatedAt: string
+}
+
+export interface ConsistencyIssue {
+  id: string
+  severity: 'error' | 'warning' | 'info'
+  code: string
+  title: string
+  detail: string
+  refId: string
+  refKind: string
+  path: string
+}
+
+export interface ConsistencyReport {
+  checkedAt: string
+  issueCount: number
+  errors: number
+  warnings: number
+  issues: ConsistencyIssue[]
 }

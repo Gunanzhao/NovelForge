@@ -2,6 +2,7 @@ import type {
   EntityInput, EntityRecord, ExportInput, HistoryItem, NodeRecord, ProjectData,
   ProjectInput, SearchInput, SearchResult, TrashItem,
 } from './types'
+import { analyzeConsistency } from './consistency-data'
 import { countWords } from './utils'
 
 interface StoredHistory extends HistoryItem {
@@ -296,15 +297,32 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     }
     return results.slice(0, 100) as T
   }
+  if (command === 'check_consistency') return analyzeConsistency(store.data, store.documents) as T
   if (command === 'get_statistics') {
     let total = 0
     for (const content of Object.values(store.documents)) total += countWords(content)
-    const today = new Date().toDateString()
-    const todayWords = store.activities.filter((item) => new Date(item.createdAt).toDateString() === today).reduce((sum, item) => sum + Math.max(0, item.deltaWords), 0)
+    const now = new Date()
+    const dayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    const today = dayKey(now)
+    const dailyTotals = new Map<string, number>()
+    for (const item of store.activities) {
+      const key = dayKey(new Date(item.createdAt))
+      dailyTotals.set(key, (dailyTotals.get(key) ?? 0) + Math.max(0, item.deltaWords))
+    }
+    const todayWords = dailyTotals.get(today) ?? 0
+    const daily = Array.from({ length: 30 }, (_, index) => {
+      const date = new Date(now)
+      date.setDate(now.getDate() - (29 - index))
+      const key = dayKey(date)
+      return { date: key, words: dailyTotals.get(key) ?? 0 }
+    })
+    const chapterStats = store.data.nodes.filter((item) => item.kind === 'chapter').map((item) => ({
+      id: item.id, title: item.title, words: countWords(store.documents[item.id] ?? ''), updatedAt: item.updatedAt,
+    })).sort((left, right) => right.words - left.words || left.title.localeCompare(right.title, 'zh-CN'))
     return {
       totalWords: total, todayWords, yesterdayWords: 0, weekWords: todayWords, monthWords: todayWords,
       chapterCount: store.data.nodes.filter((item) => item.kind === 'chapter').length,
-      targetWords: store.data.project.targetWords, writingStreak: todayWords > 0 ? 1 : 0,
+      targetWords: store.data.project.targetWords, writingStreak: todayWords > 0 ? 1 : 0, daily, chapterStats,
     } as T
   }
   if (command === 'export_project') {

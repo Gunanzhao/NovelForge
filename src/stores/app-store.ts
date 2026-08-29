@@ -42,7 +42,7 @@ function firstChapter(data: ProjectData) {
 
 const emptyStats: Stats = {
   totalWords: 0, todayWords: 0, yesterdayWords: 0, weekWords: 0, monthWords: 0,
-  chapterCount: 0, targetWords: 0, writingStreak: 0,
+  chapterCount: 0, targetWords: 0, writingStreak: 0, daily: [], chapterStats: [],
 }
 
 interface AppState {

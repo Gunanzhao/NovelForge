@@ -265,6 +265,76 @@ fn entity_delete_restores_file_when_database_transaction_fails() {
 }
 
 #[test]
+fn attachment_import_copies_binary_and_metadata_updates_keep_bytes() {
+    let root = test_root("attachment-import");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let source = root.join("reference.pdf");
+    let bytes = b"not-a-real-pdf-but-binary-safe";
+    fs::write(&source, bytes).expect("source file");
+    super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "附件测试".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let imported = super::commands::import_attachment(super::models::AttachmentInput {
+        project_path: project_path.clone(), source_path: source.to_string_lossy().to_string(), description: "初始参考资料".to_string(),
+    }).expect("import attachment");
+    let attachment = imported.entities.iter().find(|item| item.kind == "attachment").expect("attachment entity").clone();
+    let destination = root.join("project").join(&attachment.file_path);
+    assert_eq!(fs::read(&destination).expect("copied bytes"), bytes);
+    let updated = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(), kind: "attachment".to_string(), id: Some(attachment.id.clone()), title: attachment.title.clone(),
+        content: serde_json::json!({"originalName": "reference.pdf", "mimeType": "application/pdf", "sizeBytes": bytes.len(), "description": "已补充说明"}), tags: vec!["附件".to_string()],
+    }).expect("update attachment metadata");
+    assert!(updated.entities.iter().any(|item| item.id == attachment.id));
+    assert_eq!(fs::read(&destination).expect("bytes after metadata update"), bytes);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn consistency_check_reports_missing_wiki_and_broken_relationship() {
+    let root = test_root("consistency");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "一致性测试".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
+    super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(), node_id: chapter.id, content: "正文引用[[不存在的人物]]".to_string(), reason: "一致性测试".to_string(),
+    }).expect("save document");
+    super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(), kind: "relationship".to_string(), id: None, title: "坏关系".to_string(),
+        content: serde_json::json!({"fromId": "missing-a", "toId": "missing-b", "label": "敌对"}), tags: vec!["人物关系".to_string()],
+    }).expect("save relationship");
+    let report = super::commands::check_consistency(project_path).expect("consistency report");
+    assert!(report.issues.iter().any(|issue| issue.code == "missing-wiki"));
+    assert!(report.issues.iter().any(|issue| issue.code == "broken-relationship"));
+    assert!(report.warnings > 0);
+    assert!(report.errors > 0);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn statistics_include_daily_series_and_chapter_breakdown() {
+    let root = test_root("statistics");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "统计测试".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
+    super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(), node_id: chapter.id.clone(), content: "# 第一章\n\n一段统计正文".to_string(), reason: "统计测试".to_string(),
+    }).expect("save document");
+    let stats = super::commands::get_statistics(project_path).expect("statistics");
+    assert_eq!(stats.daily.len(), 30);
+    assert_eq!(stats.chapter_stats.len(), 1);
+    assert_eq!(stats.chapter_stats[0].id, chapter.id);
+    assert!(stats.chapter_stats[0].words > 0);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn restore_trash_keeps_quarantined_entity_when_destination_exists() {
     let root = test_root("entity-restore-collision");
     let project_path = root.join("project").to_string_lossy().to_string();

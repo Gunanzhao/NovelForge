@@ -111,6 +111,47 @@ pub struct Stats {
     pub chapter_count: u64,
     pub target_words: u64,
     pub writing_streak: u64,
+    pub daily: Vec<DailyStats>,
+    pub chapter_stats: Vec<ChapterStats>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DailyStats {
+    pub date: String,
+    pub words: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChapterStats {
+    pub id: String,
+    pub title: String,
+    pub words: u64,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsistencyIssue {
+    pub id: String,
+    pub severity: String,
+    pub code: String,
+    pub title: String,
+    pub detail: String,
+    pub ref_id: String,
+    pub ref_kind: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsistencyReport {
+    pub checked_at: String,
+    pub issue_count: u64,
+    pub errors: u64,
+    pub warnings: u64,
+    pub issues: Vec<ConsistencyIssue>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -184,6 +225,14 @@ pub struct EntityInput {
     pub title: String,
     pub content: Value,
     pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentInput {
+    pub project_path: String,
+    pub source_path: String,
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

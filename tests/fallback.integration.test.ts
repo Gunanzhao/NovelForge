@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fallbackInvoke } from '../src/lib/fallback'
-import type { DocumentData, EntityRecord, ProjectData, ProjectInput, SearchResult, Stats, TrashItem } from '../src/lib/types'
+import type { ConsistencyReport, DocumentData, EntityRecord, ProjectData, ProjectInput, SearchResult, Stats, TrashItem } from '../src/lib/types'
 
 const input: ProjectInput = {
   path: 'browser-test-project',
@@ -37,6 +37,10 @@ describe('browser fallback project workflow', () => {
 
     const stats = await fallbackInvoke<Stats>('get_statistics', { path: input.path })
     expect(stats.totalWords).toBeGreaterThan(0)
+    expect(stats.daily).toHaveLength(30)
+    expect(stats.chapterStats).toHaveLength(1)
+    const consistency = await fallbackInvoke<ConsistencyReport>('check_consistency', { path: input.path })
+    expect(consistency.issueCount).toBe(0)
     const exportPath = await fallbackInvoke<string>('export_project', { input: { projectPath: input.path, format: 'markdown' } })
     expect(exportPath).toContain('browser://exports')
   })

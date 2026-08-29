@@ -2,8 +2,8 @@ import { useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   BookOpen, ChevronDown, ChevronRight, CircleUserRound, Clock3, FilePlus2, FolderTree,
-  GalleryVerticalEnd, GitBranch, Globe2, LayoutDashboard, MoreHorizontal, Network, Plus, Search,
-  Trash2, WandSparkles, X,
+  BarChart3, GalleryVerticalEnd, GitBranch, Globe2, LayoutDashboard, MoreHorizontal, Network, Paperclip, Plus, Search,
+  ShieldCheck, Trash2, WandSparkles, X,
 } from 'lucide-react'
 import { useAppStore } from '../stores/app-store'
 import type { NodeKind, NodeRecord, ViewId } from '../lib/types'
@@ -21,6 +21,9 @@ const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: 'timeline', label: '时间线', icon: Clock3 },
   { id: 'foreshadowing', label: '伏笔', icon: GitBranch },
   { id: 'relationship', label: '人物关系图', icon: Network },
+  { id: 'attachment', label: '资料附件', icon: Paperclip },
+  { id: 'consistency', label: '一致性检查', icon: ShieldCheck },
+  { id: 'statistics', label: '详细统计', icon: BarChart3 },
 ]
 
 function nodeChildren(nodes: NodeRecord[], parentId: string) {

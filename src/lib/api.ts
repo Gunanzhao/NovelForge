@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
-  DocumentData, EntityInput, EntityRecord, ExportInput, HistoryItem, NodeInput, ProjectData,
+  ConsistencyReport, DocumentData, EntityInput, EntityRecord, ExportInput, HistoryItem, NodeInput, ProjectData,
   ProjectInput, RecoveryItem, SaveDocumentInput, SearchInput, SearchResult, Stats, TrashItem,
 } from './types'
 import { fallbackInvoke } from './fallback'
@@ -17,6 +17,11 @@ async function command<T>(name: string, args: Record<string, unknown>, fallback 
 export function chooseDirectory() {
   if (!isDesktop) return Promise.resolve<string | null>(null)
   return open({ directory: true, multiple: false, title: '选择项目文件夹' }) as Promise<string | null>
+}
+
+export function chooseFile() {
+  if (!isDesktop) return Promise.resolve<string | null>(null)
+  return open({ directory: false, multiple: false, title: '选择要导入的附件' }) as Promise<string | null>
 }
 
 export const projectApi = {
@@ -43,6 +48,8 @@ export const projectApi = {
   restoreTrash: (input: { projectPath: string; nodeId: string }) => command<ProjectData>('restore_trash', { input }),
   permanentDelete: (input: { projectPath: string; nodeId: string }) => command<ProjectData>('permanent_delete', { input }),
   search: (input: SearchInput) => command<SearchResult[]>('search_project', { input }),
+  consistency: (path: string) => command<ConsistencyReport>('check_consistency', { path }),
+  importAttachment: (input: { projectPath: string; sourcePath: string; description: string }) => command<ProjectData>('import_attachment', { input }),
   stats: (path: string) => command<Stats>('get_statistics', { path }),
   exportProject: (input: ExportInput) => command<string>('export_project', { input }),
   updateProject: (input: { projectPath: string; title: string; author: string; description: string; genre: string; targetWords: number }) => command<ProjectData>('update_project', { input }),
