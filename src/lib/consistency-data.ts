@@ -1,5 +1,5 @@
 import { wikiTargets } from './markdown'
-import { chapterReferenceTokens, findChapterByReference } from './planning-data'
+import { chapterReferenceTokens, findChapterByReference, normalizeForeshadowingStatus } from './planning-data'
 import type { ConsistencyIssue, ConsistencyReport, EntityRecord, NodeRecord, ProjectData } from './types'
 
 function entityValue(entity: EntityRecord, key: string) {
@@ -75,9 +75,9 @@ export function analyzeConsistency(data: ProjectData, documents: Record<string, 
       }
     }
     if (entity.kind === 'foreshadowing') {
-      const status = entityValue(entity, 'status').trim().toLocaleLowerCase()
+      const status = normalizeForeshadowingStatus(entityValue(entity, 'status'))
       const actualPayoff = entityValue(entity, 'actualPayoff').trim()
-      if (actualPayoff && status !== 'paid-off' && status !== '已回收') {
+      if (actualPayoff && status !== 'paid-off') {
         issues.push(issue('warning', 'foreshadowing-status', '伏笔状态未标记为已回收', '已经填写实际回收章节，但当前状态仍未标记为“已回收”。', entity.id, entity.kind, entity.filePath))
       }
     }

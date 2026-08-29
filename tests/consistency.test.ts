@@ -58,4 +58,10 @@ describe('consistency analyzer', () => {
     const report = analyzeConsistency(data, {})
     expect(report.issueCount).toBe(0)
   })
+
+  it('accepts legacy aliases for a paid-off foreshadowing status', () => {
+    const thread = entity('thread-resolved', 'foreshadowing', '已回收旧伏笔', { actualPayoff: '第一章', status: 'resolved' })
+    const report = analyzeConsistency(project([thread]), {})
+    expect(report.issues.some((item) => item.code === 'foreshadowing-status')).toBe(false)
+  })
 })

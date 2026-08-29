@@ -235,3 +235,9 @@
 - pnpm.cmd tauri:build：通过；release EXE 15,193,600 bytes，NSIS 安装包 4,279,554 bytes。
 - 通过真实 WebView2/Tauri 命令桥接创建“第二章 - CDP”并写入时间线引用；一致性检查返回 0 个问题。
 - release 重新打开项目后仍可读出章节与时间线数据，临时 E2E 项目已清理。
+
+## 伏笔旧状态兼容验证（2026-08-30）
+
+- 前后端一致性检查均按规范化状态识别 resolved、paid_off 等历史“已回收”别名。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：全部通过，12 个测试文件 / 54 个测试。
+- cargo check、cargo test：通过，26 项 Rust 常规测试，1 项大型基准按设计忽略。

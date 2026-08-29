@@ -1750,6 +1750,13 @@ fn chapter_reference_exists(nodes: &[NodeRecord], reference: &str) -> bool {
     number > 0 && chapters.get(number - 1).is_some()
 }
 
+fn is_paid_off_foreshadowing_status(value: &str) -> bool {
+    matches!(
+        value.trim().to_lowercase().as_str(),
+        "paid-off" | "paid_off" | "paidoff" | "resolved" | "已回收" | "已解决" | "回收"
+    )
+}
+
 fn consistency_issue(
     severity: &str, code: &str, title: &str, detail: String,
     ref_id: &str, ref_kind: &str, path: &str,
@@ -1856,8 +1863,9 @@ pub fn check_consistency(path: String) -> Result<crate::models::ConsistencyRepor
             }
         }
         if entity.kind == "foreshadowing" {
-            let status = json_text(&entity.content, "status").trim().to_lowercase();
-            if !json_text(&entity.content, "actualPayoff").trim().is_empty() && status != "paid-off" && status != "已回收" {
+            if !json_text(&entity.content, "actualPayoff").trim().is_empty()
+                && !is_paid_off_foreshadowing_status(&json_text(&entity.content, "status"))
+            {
                 issues.push(consistency_issue("warning", "foreshadowing-status", "伏笔状态未标记为已回收", "已经填写实际回收章节，但当前状态仍未标记为“已回收”。".to_string(), &entity.id, &entity.kind, &entity.file_path));
             }
         }

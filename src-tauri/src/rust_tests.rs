@@ -586,6 +586,24 @@ fn consistency_check_accepts_global_chapter_numbers_across_volumes() {
 }
 
 #[test]
+fn consistency_check_accepts_legacy_paid_off_foreshadowing_status() {
+    let root = test_root("consistency-legacy-status");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "旧状态一致性测试".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
+    super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(), kind: "foreshadowing".to_string(), id: None, title: "旧伏笔".to_string(),
+        content: serde_json::json!({"actualPayoff": chapter.title, "status": "resolved"}), tags: vec!["伏笔".to_string()],
+    }).expect("save foreshadowing");
+    let report = super::commands::check_consistency(project_path).expect("consistency report");
+    assert!(!report.issues.iter().any(|issue| issue.code == "foreshadowing-status"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn node_status_rejects_missing_nodes() {
     let root = test_root("status-boundaries");
     let project_path = root.join("project").to_string_lossy().to_string();
