@@ -154,17 +154,41 @@ function replaceNodePath(path: string, oldPrefix: string, newPrefix: string) {
   return path.startsWith(boundary) ? newPrefix.replace(/\/$/u, '') + '/' + path.slice(boundary.length) : path
 }
 
-function exportText(store: FallbackStore, format: 'markdown' | 'txt' | 'html', input: ExportInput) {
+function nodeVolumeOrder(store: FallbackStore, current: NodeRecord) {
+  if (current.kind === 'volume') return current.orderIndex
+  let parentId = current.parentId
+  while (parentId) {
+    const parent = node(store, parentId)
+    if (!parent) return Number.MAX_SAFE_INTEGER
+    if (parent.kind === 'volume') return parent.orderIndex
+    parentId = parent.parentId
+  }
+  return Number.MAX_SAFE_INTEGER
+}
+
+export function exportText(store: FallbackStore, format: 'markdown' | 'txt' | 'html', input: ExportInput) {
   const title = input.title?.trim() || store.data.project.title
   const author = input.author?.trim() || store.data.project.author
   const includeVolumeTitles = input.includeVolumeTitles !== false
   const includeChapterTitles = input.includeChapterTitles !== false
+  const selectedIds = new Set<string>()
+  if (input.scope === 'volume' && !input.volumePath) throw new Error('指定卷导出需要卷路径')
+  if (input.scope === 'chapters') {
+    if (!input.nodeIds?.length) throw new Error('指定章节导出需要章节 ID')
+    for (const id of input.nodeIds) {
+      const descendants = nodeDescendants(store, id)
+      if (!descendants.length) throw new Error('指定章节不存在：' + id)
+      descendants.forEach((item) => selectedIds.add(item.id))
+    }
+  }
   const active = store.data.nodes.filter((item) => {
     if (input.scope === 'volume') return item.filePath === input.volumePath || Boolean(input.volumePath && item.filePath.startsWith(input.volumePath + '/'))
-    if (input.scope === 'chapters') return Boolean(input.nodeIds?.includes(item.id) || input.nodeIds?.some((id) => item.parentId === id))
+    if (input.scope === 'chapters') return selectedIds.has(item.id)
     return true
   })
-  const volumes = active.filter((item) => item.kind === 'volume').sort((a, b) => a.orderIndex - b.orderIndex)
+  const roots = active
+    .filter((item) => !active.some((candidate) => candidate.id === item.parentId))
+    .sort((left, right) => nodeVolumeOrder(store, left) - nodeVolumeOrder(store, right) || left.orderIndex - right.orderIndex || left.id.localeCompare(right.id))
   const renderNode = (current: NodeRecord, level: number): string => {
     const includeTitle = current.kind === 'volume' ? includeVolumeTitles : includeChapterTitles
     const heading = includeTitle
@@ -174,7 +198,7 @@ function exportText(store: FallbackStore, format: 'markdown' | 'txt' | 'html', i
     const children = active.filter((item) => item.parentId === current.id).sort((a, b) => a.orderIndex - b.orderIndex).map((item) => renderNode(item, level + 1)).join('')
     return heading + body + children
   }
-  const rendered = volumes.map((volume) => renderNode(volume, 1)).join('')
+  const rendered = roots.map((root) => renderNode(root, 1)).join('')
   const toc = input.includeToc === false ? '' : format === 'markdown'
     ? '\n## 目录\n\n' + active.filter((item) => item.kind !== 'section').map((item) => '- ' + item.title).join('\n') + '\n\n'
     : ''

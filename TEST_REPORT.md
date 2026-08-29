@@ -171,3 +171,9 @@
 
 - pnpm.cmd tauri:build：通过；release EXE 15,192,576 bytes，NSIS 安装包 4,280,566 bytes。
 - 独立 release EXE 启动 4 秒后仍存活且 Responding 为 True，测试后按 PID 正常退出。
+
+## fallback 指定章节导出验证（2026-08-30）
+
+- 浏览器 fallback 指定章节导出覆盖选中章节正文和递归小节，不再因缺少卷根节点而生成空正文。
+- 缺少章节 ID、卷路径或不存在目标均返回明确错误；正文内容回归已加入 fallback 集成测试。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：全部通过，12 个测试文件 / 44 个测试。

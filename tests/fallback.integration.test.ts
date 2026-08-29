@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fallbackInvoke } from '../src/lib/fallback'
+import { exportText, fallbackInvoke } from '../src/lib/fallback'
 import type { ConsistencyReport, DocumentData, EntityRecord, ProjectData, ProjectInput, SearchResult, Stats, TrashItem } from '../src/lib/types'
 
 const input: ProjectInput = {
@@ -19,8 +19,9 @@ describe('browser fallback project workflow', () => {
     expect(chapter).toBeDefined()
     if (!chapter) return
 
+    const chapterContent = '# 第一章' + '\n\n' + '林月走进雾港。'
     const saved = await fallbackInvoke<DocumentData>('save_document', {
-      input: { projectPath: input.path, nodeId: chapter.id, content: '# 第一章\\n\\n林月走进雾港。', reason: '测试保存' },
+      input: { projectPath: input.path, nodeId: chapter.id, content: chapterContent, reason: '测试保存' },
     })
     expect(saved.content).toContain('雾港')
 
@@ -43,6 +44,10 @@ describe('browser fallback project workflow', () => {
     expect(consistency.issueCount).toBe(0)
     const exportPath = await fallbackInvoke<string>('export_project', { input: { projectPath: input.path, format: 'markdown' } })
     expect(exportPath).toContain('browser://exports')
+    const stored = JSON.parse(localStorage.getItem('novelforge-fallback:' + encodeURIComponent(input.path)) ?? '{}')
+    const chapterExport = exportText(stored, 'markdown', { projectPath: input.path, format: 'markdown', scope: 'chapters', nodeIds: [chapter.id] })
+    expect(chapterExport).toContain('第一章')
+    expect(chapterExport).toContain('林月走进雾港')
     for (const format of ['txt', 'html'] as const) {
       const path = await fallbackInvoke<string>('export_project', { input: { projectPath: input.path, format } })
       expect(path.endsWith('.' + format)).toBe(true)
