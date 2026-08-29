@@ -2187,6 +2187,10 @@ fn pdf_hex_text(value: &str) -> String {
     value.encode_utf16().map(|unit| format!("{:04X}", unit)).collect()
 }
 
+fn pdf_plain_text(markdown: &str) -> String {
+    markdown.lines().map(plain_text_line).collect::<Vec<_>>().join("\n")
+}
+
 fn pdf_bytes(text: &str) -> Vec<u8> {
     let mut lines = Vec::new();
     for source in text.lines() {
@@ -2296,7 +2300,7 @@ pub fn export_project(input: ExportInput) -> Result<String, String> {
         "html" => ("html".to_string(), html_bytes(&markdown_document, &title, &author, input.include_toc.unwrap_or(true), cover_path.as_deref())),
         "docx" => ("docx".to_string(), docx_bytes(&markdown_document)?),
         "epub" => ("epub".to_string(), epub_bytes(&markdown_document, &title, &author)?),
-        "pdf" => ("pdf".to_string(), pdf_bytes(&format!("{}\n作者：{}\n\n{}", title, author, markdown))),
+        "pdf" => ("pdf".to_string(), pdf_bytes(&pdf_plain_text(&format!("{}\n作者：{}\n\n{}", title, author, markdown)))),
         _ => unreachable!(),
     };
     let filename = format!(

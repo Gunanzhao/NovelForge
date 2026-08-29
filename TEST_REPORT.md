@@ -246,3 +246,8 @@
 
 - pnpm.cmd tauri:build：通过；release EXE 15,196,672 bytes，NSIS 安装包 4,277,716 bytes。
 - 独立启动 release EXE 4 秒后仍存活且 Responding 为 True，验证后正常退出。
+
+## PDF 导出标题验证（2026-08-30）
+
+- PDF 页面文本先经过 Markdown 纯文本清理，标题不再显示 #、## 等语法标记。
+- Rust 导出全格式回归通过，PDF 字节断言确认没有暴露 Markdown 标题标记。

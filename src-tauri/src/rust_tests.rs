@@ -682,7 +682,10 @@ fn export_project_writes_all_supported_formats() {
                 assert!(archive.by_name("OEBPS/content.xhtml").is_ok());
                 assert!(archive.by_name("OEBPS/nav.xhtml").is_ok());
             }
-            "pdf" => assert!(bytes.starts_with(b"%PDF-1.4")),
+            "pdf" => {
+                assert!(bytes.starts_with(b"%PDF-1.4"));
+                assert!(!bytes.windows(4).any(|window| window == b"0023"), "PDF must not expose Markdown heading markers");
+            }
             _ => unreachable!(),
         }
     }
