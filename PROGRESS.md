@@ -286,4 +286,11 @@
 ### 当前剩余
 
 - 仅剩真实桌面鼠标级 E2E：需要用户在 Windows + WebView2 中按 DESKTOP_E2E_CHECKLIST.md 逐项点击确认；当前环境没有 tauri-driver 等驱动。
-- Rust 的 3 个 dead-code 警告和 Vite 主 bundle 体积提示属于非阻塞质量优化。
+- PDF 标准 STSong-Light 字体的跨阅读器视觉一致性属于非阻塞质量优化。
+
+## 2026-08-30：质量收尾
+
+- 清理 Rust 非阻塞 dead-code 警告，提交 82fd0d6。
+- 配置 React、CodeMirror、Markdown 和图标依赖的生产分包，最大 chunk 约 364 kB，构建体积警告消失。
+- 质量阶段验证：cargo check 无代码警告，pnpm.cmd build 通过。
+- 当前功能侧仍只剩带 WebView2 的 Windows 桌面鼠标级 E2E，需要用户手动执行。

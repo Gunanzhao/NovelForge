@@ -139,4 +139,10 @@
 ### 当前未覆盖
 
 - 真实桌面鼠标级 E2E 仍需用户在带 WebView2 的 Windows 桌面按 DESKTOP_E2E_CHECKLIST.md 手动完成。
-- Rust 3 个 dead-code 警告与 Vite 主 bundle 体积提示不影响功能和发布构建。
+- PDF 当前使用标准 STSong-Light CID 字体，跨阅读器视觉一致性仍可作为后续质量优化。
+
+## 质量收尾验证（2026-08-30）
+
+- Rust cargo check：通过，已无 dead-code 警告；cargo test 通过 20 项（1 项大型基准 ignored）。
+- pnpm.cmd build：通过；React、CodeMirror、Markdown 和图标依赖已分包，最大 chunk 约 364 kB，未出现体积警告。
+- 当前仍需人工的唯一功能验收门槛是带 WebView2 的 Windows 桌面鼠标级 E2E。

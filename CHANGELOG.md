@@ -36,3 +36,8 @@
 - 强化保存事务：数据库或索引失败时恢复原正文并保留恢复文件；损坏 SQLite 可逆隔离并从 Markdown 镜像重建正文和资料索引。
 - 增加 DEBUG/INFO/WARN/ERROR 项目日志、脱敏读取和设置页日志查看；TXT 导出移除 Markdown 标记。
 - 最终自动化验证：前端 40/40、Rust 20 passed、1000 章 / 100 万字基准 30.83 秒、release EXE/NSIS 构建和独立启动冒烟通过。
+
+## 未发布 - 2026-08-30
+
+- 清理 Rust 非阻塞 dead-code 警告，保留回收站数据库字段的明确模型语义。
+- 为 React、CodeMirror、Markdown 和图标依赖增加生产分包；最大输出 chunk 降至约 364 kB，构建不再出现体积警告。
