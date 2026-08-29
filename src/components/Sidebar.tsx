@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   BookOpen, ChevronDown, ChevronRight, CircleUserRound, Clock3, FilePlus2, FolderTree,
-  GalleryVerticalEnd, GitBranch, Globe2, LayoutDashboard, MoreHorizontal, Plus, Search,
+  GalleryVerticalEnd, GitBranch, Globe2, LayoutDashboard, MoreHorizontal, Network, Plus, Search,
   Trash2, WandSparkles, X,
 } from 'lucide-react'
 import { useAppStore } from '../stores/app-store'
@@ -20,6 +20,7 @@ const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: 'world', label: '世界观 Wiki', icon: Globe2 },
   { id: 'timeline', label: '时间线', icon: Clock3 },
   { id: 'foreshadowing', label: '伏笔', icon: GitBranch },
+  { id: 'relationship', label: '人物关系图', icon: Network },
 ]
 
 function nodeChildren(nodes: NodeRecord[], parentId: string) {

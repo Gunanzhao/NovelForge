@@ -1,5 +1,5 @@
 export type NodeKind = 'volume' | 'chapter' | 'section'
-export type EntityKind = 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note'
+export type EntityKind = 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note' | 'relationship'
 export type ViewId = 'dashboard' | 'manuscript' | EntityKind | 'search' | 'trash' | 'settings'
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type ThemeMode = 'light' | 'dark' | 'system'
@@ -113,6 +113,7 @@ export const ENTITY_LABELS: Record<EntityKind, string> = {
   outline: '大纲',
   scene: '场景',
   note: '笔记',
+  relationship: '人物关系',
 }
 
 export const NODE_STATUS_LABELS: Record<string, string> = {
@@ -160,5 +161,9 @@ export const ENTITY_FIELDS: Record<EntityKind, Array<{ key: string; label: strin
   ],
   note: [
     { key: 'summary', label: '摘要', multiline: true }, { key: 'description', label: '内容', multiline: true },
+  ],
+  relationship: [
+    { key: 'fromId', label: '人物 A' }, { key: 'toId', label: '人物 B' }, { key: 'label', label: '关系类型' },
+    { key: 'strength', label: '关系强度' }, { key: 'notes', label: '备注', multiline: true },
   ],
 }

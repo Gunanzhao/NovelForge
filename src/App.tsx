@@ -7,6 +7,7 @@ import { isDesktop } from './lib/api'
 import type { NodeKind } from './lib/types'
 import { useAppStore } from './stores/app-store'
 import { Dashboard } from './components/Dashboard'
+import { CommandPalette } from './components/CommandPalette'
 import { EditorPane } from './components/EditorPane'
 import { PlanningView } from './components/PlanningView'
 import { TimelineView } from './components/TimelineView'
@@ -16,6 +17,7 @@ import { Inspector } from './components/Inspector'
 import { ProjectDialog, NodeDialog } from './components/ProjectDialogs'
 import { SearchView } from './components/SearchView'
 import { SettingsView } from './components/SettingsView'
+import { RelationshipsView } from './components/RelationshipsView'
 import { Sidebar } from './components/Sidebar'
 import { TrashView } from './components/TrashView'
 import { Button, IconButton } from './components/ui'
@@ -66,7 +68,6 @@ export default function App() {
   const loadRecent = useAppStore((state) => state.loadRecent)
   const saveCurrentDocument = useAppStore((state) => state.saveCurrentDocument)
   const clearError = useAppStore((state) => state.clearError)
-  const setView = useAppStore((state) => state.setView)
   const refreshStats = useAppStore((state) => state.refreshStats)
   const [projectDialog, setProjectDialog] = useState<'new' | 'open' | null>(null)
   const [nodeDialog, setNodeDialog] = useState<{ kind: NodeKind; parentId: string | null } | null>(null)
@@ -80,18 +81,6 @@ export default function App() {
     }
     applyTheme()
   }, [theme])
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const modifier = event.ctrlKey || event.metaKey
-      if (modifier && event.key.toLowerCase() === 's') { event.preventDefault(); void saveCurrentDocument('快捷键保存') }
-      else if (modifier && event.key.toLowerCase() === 'f') { event.preventDefault(); setView('search') }
-      else if (modifier && event.key.toLowerCase() === 'n') { event.preventDefault(); setProjectDialog('new') }
-      else if (event.key === 'F11') { event.preventDefault(); useAppStore.getState().toggleFocusMode() }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [saveCurrentDocument, setView])
 
   useEffect(() => {
     if (saveState !== 'idle' || !document || !projectPath) return
@@ -114,12 +103,13 @@ export default function App() {
     if (activeView === 'outline') return <PlanningView />
     if (activeView === 'timeline') return <TimelineView />
     if (activeView === 'foreshadowing') return <ForeshadowingView />
+    if (activeView === 'relationship') return <RelationshipsView />
     if (activeView === 'search') return <SearchView />
     if (activeView === 'trash') return <TrashView />
     if (activeView === 'settings') return <SettingsView />
     return <EntityView kind={activeView} />
   }
 
-  if (!data) return <><Welcome onProject={setProjectDialog} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} />{error ? <div className="toast-error"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</>
-  return <div className={'app-shell' + (focusMode ? ' focus-mode' : '')}>{focusMode ? null : <TopBar onProject={setProjectDialog} onExport={exportProject} />}<div className={'main-layout' + (focusMode ? ' sidebar-closed inspector-closed' : '') + (sidebarOpen ? '' : ' sidebar-closed') + (inspectorOpen ? '' : ' inspector-closed')}><Sidebar onAddNode={(kind, parentId) => setNodeDialog({ kind, parentId })} /><main className="workspace">{viewContent()}</main><Inspector /></div>{focusMode ? null : <StatusBar />}<ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} /><NodeDialog kind={nodeDialog?.kind ?? null} parentId={nodeDialog?.parentId ?? null} onClose={() => setNodeDialog(null)} />{error ? <div className="toast-error"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</div>
+  if (!data) return <><Welcome onProject={setProjectDialog} /><CommandPalette onNewProject={() => setProjectDialog('new')} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} />{error ? <div className="toast-error"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</>
+  return <div className={'app-shell' + (focusMode ? ' focus-mode' : '')}>{focusMode ? null : <TopBar onProject={setProjectDialog} onExport={exportProject} />}<div className={'main-layout' + (focusMode ? ' sidebar-closed inspector-closed' : '') + (sidebarOpen ? '' : ' sidebar-closed') + (inspectorOpen ? '' : ' inspector-closed')}><Sidebar onAddNode={(kind, parentId) => setNodeDialog({ kind, parentId })} /><main className="workspace">{viewContent()}</main><Inspector /></div>{focusMode ? null : <StatusBar />}<CommandPalette onNewProject={() => setProjectDialog('new')} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} /><NodeDialog kind={nodeDialog?.kind ?? null} parentId={nodeDialog?.parentId ?? null} onClose={() => setNodeDialog(null)} />{error ? <div className="toast-error"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</div>
 }

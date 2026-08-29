@@ -57,4 +57,29 @@ describe('planning fallback workflow', () => {
     expect(timeline[0]?.content).toMatchObject({ date: '2026-08-29', time: '晚上 21:30', chapters: chapter.title })
     expect(foreshadowing[0]?.content).toMatchObject({ status: 'planted', plantedIn: chapter.title })
   })
+
+  it('persists character relationships for the graph workspace', async () => {
+    const projectInput: ProjectInput = { ...input, path: 'browser-relationship-project' }
+    const created = await fallbackInvoke<ProjectData>('create_project', { input: projectInput })
+    const characterA = await fallbackInvoke<ProjectData>('upsert_entity', { input: {
+      projectPath: projectInput.path, kind: 'character', id: null, title: '林月', content: { identity: '记者' }, tags: ['主角'],
+    } })
+    const characterB = await fallbackInvoke<ProjectData>('upsert_entity', { input: {
+      projectPath: projectInput.path, kind: 'character', id: null, title: '沈砚', content: { identity: '守门人' }, tags: [],
+    } })
+    const savedA = characterA.entities.find((entity) => entity.title === '林月')
+    const savedB = characterB.entities.find((entity) => entity.title === '沈砚')
+    expect(savedA).toBeDefined()
+    expect(savedB).toBeDefined()
+    if (!savedA || !savedB) return
+
+    await fallbackInvoke<ProjectData>('upsert_entity', { input: {
+      projectPath: projectInput.path, kind: 'relationship', id: null, title: '林月 · 盟友 · 沈砚',
+      content: { fromId: savedA.id, toId: savedB.id, label: '盟友', strength: '强', notes: '共同调查雾港停电' }, tags: ['人物关系', '盟友'],
+    } })
+    const relationships = await fallbackInvoke<EntityRecord[]>('list_entities', { path: projectInput.path, kind: 'relationship' })
+    expect(relationships).toHaveLength(1)
+    expect(relationships[0]?.content).toMatchObject({ fromId: savedA.id, toId: savedB.id, label: '盟友', strength: '强' })
+    expect(created.nodes.some((node) => node.kind === 'chapter')).toBe(true)
+  })
 })
