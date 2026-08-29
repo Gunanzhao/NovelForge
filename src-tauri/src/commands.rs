@@ -428,6 +428,42 @@ fn save_document_internal(
     Ok(DocumentData { node: updated, content: content.to_string() })
 }
 
+fn preserve_current_revision(
+    root: &Path,
+    connection: &Connection,
+    node_id: &str,
+    reason: &str,
+) -> Result<(), String> {
+    let node = storage::node_from_id(connection, node_id)?
+        .ok_or_else(|| "章节不存在".to_string())?;
+    if node.deleted_at.is_some() || node.kind == "volume" {
+        return Err("只有未删除的章节或小节可以创建历史快照".to_string());
+    }
+    let target = storage::safe_relative(root, &node.file_path)?;
+    let current_content = fs::read_to_string(&target)
+        .map_err(|error| format!("无法读取恢复前的正文：{}", error))?;
+    let revision_id = storage::new_id();
+    let revision_path = storage::copy_history(root, node_id, &revision_id, &current_content)?;
+    let created_at = storage::now();
+    let insert_result = connection.execute(
+        "INSERT INTO revisions (id, node_id, node_title, reason, word_count, created_at, file_path) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            revision_id,
+            node.id,
+            node.title,
+            reason,
+            storage::word_count(&current_content) as i64,
+            created_at,
+            revision_path
+        ],
+    );
+    if let Err(error) = insert_result {
+        storage::remove_file_if_exists(&storage::safe_relative(root, &revision_path)?)?;
+        return Err(format!("记录恢复前历史快照失败：{}", error));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_document(input: crate::models::NodeActionInput) -> Result<DocumentData, String> {
     let (root, connection) = project_connection(&input.project_path)?;
@@ -480,9 +516,12 @@ pub fn restore_recovery(input: RecoveryActionInput) -> Result<ProjectData, Strin
     if node_id.is_empty() {
         return Err("恢复文件关联的章节无效".to_string());
     }
-    let content = fs::read_to_string(recovery_path(&root, &input.recovery_id)?)
+    let recovery_file = recovery_path(&root, &input.recovery_id)?;
+    let content = fs::read_to_string(&recovery_file)
         .map_err(|error| format!("无法读取恢复内容：{}", error))?;
+    preserve_current_revision(&root, &connection, &node_id, "恢复前自动快照")?;
     save_document_internal(&root, &connection, &node_id, &content, "崩溃恢复")?;
+    storage::remove_file_if_exists(&recovery_file)?;
     project_data(&root, &connection)
 }
 
@@ -524,6 +563,7 @@ pub fn restore_history(input: RevisionActionInput) -> Result<ProjectData, String
         .map_err(|error| format!("版本不存在：{}", error))?;
     let content = fs::read_to_string(storage::safe_relative(&root, &path)?)
         .map_err(|error| format!("无法读取历史内容：{}", error))?;
+    preserve_current_revision(&root, &connection, &node_id, "恢复前自动快照")?;
     save_document_internal(&root, &connection, &node_id, &content, "恢复历史版本")?;
     project_data(&root, &connection)
 }
