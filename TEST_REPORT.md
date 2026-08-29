@@ -241,3 +241,8 @@
 - 前后端一致性检查均按规范化状态识别 resolved、paid_off 等历史“已回收”别名。
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：全部通过，12 个测试文件 / 54 个测试。
 - cargo check、cargo test：通过，26 项 Rust 常规测试，1 项大型基准按设计忽略。
+
+## 最新伏笔兼容 release（2026-08-30）
+
+- pnpm.cmd tauri:build：通过；release EXE 15,196,672 bytes，NSIS 安装包 4,277,716 bytes。
+- 独立启动 release EXE 4 秒后仍存活且 Responding 为 True，验证后正常退出。
