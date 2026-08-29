@@ -31,7 +31,7 @@ function nodeChildren(nodes: NodeRecord[], parentId: string) {
   return nodes.filter((node) => node.parentId === parentId).sort((a, b) => a.orderIndex - b.orderIndex)
 }
 
-function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectToggle, onAdd, onRename, onMove, onCopy, onDelete }: {
+function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectToggle, onAdd, onRename, onMove, onCopy, onDelete, onDragStart, onDrop }: {
   node: NodeRecord
   level: number
   open: boolean
@@ -44,11 +44,13 @@ function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectTogg
   onMove: () => void
   onCopy: () => void
   onDelete: () => void
+  onDragStart: () => void
+  onDrop: () => void
 }) {
   const isContainer = node.kind !== 'section'
   const hasChildren = isContainer
   return <div className="tree-row-wrap">
-    <div className={cn('tree-row', node.kind !== 'volume' && 'tree-document-row', selected && 'selected')} style={{ paddingLeft: 5 + level * 13 }} onDoubleClick={onRename}>
+    <div className={cn('tree-row', node.kind !== 'volume' && 'tree-document-row', selected && 'selected')} style={{ paddingLeft: 5 + level * 13 }} draggable onDragStart={onDragStart} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); onDrop() }} onDoubleClick={onRename}>
       {hasChildren ? <IconButton icon={open ? ChevronDown : ChevronRight} label={open ? '收起' : '展开'} onClick={onToggle} className="tree-toggle" /> : <span style={{ width: 30 }} />}
       <input type="checkbox" className="tree-checkbox" checked={selected} onChange={onSelectToggle} onClick={(event) => event.stopPropagation()} aria-label={'选择' + node.title} />
       <button className="tree-main-button" onClick={onSelect}>
@@ -82,8 +84,11 @@ export function Sidebar({
 
   const renameNode = useAppStore((state) => state.renameNode)
   const deleteNode = useAppStore((state) => state.deleteNode)
+  const reorderNode = useAppStore((state) => state.reorderNode)
+  const moveNode = useAppStore((state) => state.moveNode)
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set())
   const [openNodes, setOpenNodes] = useState<Set<string>>(new Set())
+  const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null)
 
   if (!data) return null
   const currentData = data
@@ -116,10 +121,22 @@ export function Sidebar({
       // Store 已经显示具体错误，保留剩余选择方便继续处理。
     }
   }
+  function handleDrop(target: NodeRecord) {
+    const source = draggedNodeId ? currentData.nodes.find((node) => node.id === draggedNodeId) : undefined
+    setDraggedNodeId(null)
+    if (!source || source.id === target.id) return
+    if (source.parentId === target.parentId) {
+      void reorderNode(source.id, source.orderIndex < target.orderIndex ? 'down' : 'up')
+      return
+    }
+    if ((source.kind === 'chapter' && target.kind === 'volume') || (source.kind === 'section' && target.kind === 'chapter')) {
+      void moveNode(source.id, target.id)
+    }
+  }
   const renderChildren = (parent: NodeRecord, level: number) => {
     if (!openNodes.has(parent.id)) return null
     return <div className="tree-children">{nodeChildren(data.nodes, parent.id).map((child) => <div key={child.id}>
-      <NodeRow node={child} level={level} open={openNodes.has(child.id)} selected={selectedNodeIds.has(child.id)} onToggle={() => toggle(child.id)} onSelect={() => void selectNode(child.id)} onSelectToggle={() => toggleSelection(child.id)} onAdd={() => onAddNode(child.kind === 'volume' ? 'chapter' : 'section', child.id)} onRename={() => handleRename(child)} onMove={() => onMoveNode(child)} onCopy={() => onCopyNode(child)} onDelete={() => handleDelete(child)} />
+      <NodeRow node={child} level={level} open={openNodes.has(child.id)} selected={selectedNodeIds.has(child.id)} onToggle={() => toggle(child.id)} onSelect={() => void selectNode(child.id)} onSelectToggle={() => toggleSelection(child.id)} onAdd={() => onAddNode(child.kind === 'volume' ? 'chapter' : 'section', child.id)} onRename={() => handleRename(child)} onMove={() => onMoveNode(child)} onCopy={() => onCopyNode(child)} onDelete={() => handleDelete(child)} onDragStart={() => setDraggedNodeId(child.id)} onDrop={() => handleDrop(child)} />
       {renderChildren(child, level + 1)}
     </div>)}</div>
   }
@@ -135,7 +152,7 @@ export function Sidebar({
       <div className="sidebar-section-label"><span>正文结构</span><span>{data.nodes.filter((node) => node.kind === 'chapter').length} 章</span></div>
       <div className="tree">
         {volumes.length === 0 ? <div className="tree-muted">还没有卷，点击右上角创建第一卷。</div> : volumes.map((volume) => <div className="tree-volume" key={volume.id}>
-           <NodeRow node={volume} level={0} open={openNodes.has(volume.id)} selected={selectedNodeIds.has(volume.id)} onToggle={() => toggle(volume.id)} onSelect={() => toggle(volume.id)} onSelectToggle={() => toggleSelection(volume.id)} onAdd={() => onAddNode('chapter', volume.id)} onRename={() => handleRename(volume)} onMove={() => onMoveNode(volume)} onCopy={() => onCopyNode(volume)} onDelete={() => handleDelete(volume)} />
+           <NodeRow node={volume} level={0} open={openNodes.has(volume.id)} selected={selectedNodeIds.has(volume.id)} onToggle={() => toggle(volume.id)} onSelect={() => toggle(volume.id)} onSelectToggle={() => toggleSelection(volume.id)} onAdd={() => onAddNode('chapter', volume.id)} onRename={() => handleRename(volume)} onMove={() => onMoveNode(volume)} onCopy={() => onCopyNode(volume)} onDelete={() => handleDelete(volume)} onDragStart={() => setDraggedNodeId(volume.id)} onDrop={() => handleDrop(volume)} />
            {renderChildren(volume, 1)}
          </div>)}
       </div>
