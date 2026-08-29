@@ -104,4 +104,17 @@ describe('document save coordination', () => {
     expect(useAppStore.getState().saveState).toBe('error')
     expect(useAppStore.getState().error).toContain('磁盘被占用')
   })
+
+  it('closes a project and clears transient document state after saving', async () => {
+    api.saveDocument.mockResolvedValueOnce(savedDocument(chapterA, '旧内容'))
+    useAppStore.getState().updateContent('待保存后关闭')
+
+    await expect(useAppStore.getState().closeProject()).resolves.toBe(true)
+
+    expect(api.saveDocument).toHaveBeenCalledTimes(1)
+    expect(useAppStore.getState().projectPath).toBeNull()
+    expect(useAppStore.getState().data).toBeNull()
+    expect(useAppStore.getState().document).toBeNull()
+    expect(useAppStore.getState().searchResults).toEqual([])
+  })
 })

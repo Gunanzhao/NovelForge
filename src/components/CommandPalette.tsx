@@ -10,13 +10,14 @@ import { Button, IconButton, TextInput } from './ui'
 
 interface CommandPaletteProps {
   onNewProject: () => void
+  onCloseProject: () => void
 }
 
 interface RegisteredCommand extends CommandDescriptor {
   run: () => void
 }
 
-export function CommandPalette({ onNewProject }: CommandPaletteProps) {
+export function CommandPalette({ onNewProject, onCloseProject }: CommandPaletteProps) {
   const setView = useAppStore((state) => state.setView)
   const saveCurrentDocument = useAppStore((state) => state.saveCurrentDocument)
   const toggleFocusMode = useAppStore((state) => state.toggleFocusMode)
@@ -37,6 +38,8 @@ export function CommandPalette({ onNewProject }: CommandPaletteProps) {
       setView(view)
     } else if (id === 'new-project') {
       onNewProject()
+    } else if (id === 'close-project') {
+      onCloseProject()
     } else if (id === 'save-document') {
       void saveCurrentDocument('命令面板保存')
     } else if (id === 'toggle-focus') {
@@ -44,7 +47,7 @@ export function CommandPalette({ onNewProject }: CommandPaletteProps) {
     }
     setOpen(false)
     setRecording(null)
-  }, [onNewProject, saveCurrentDocument, setView, toggleFocusMode])
+  }, [onCloseProject, onNewProject, saveCurrentDocument, setView, toggleFocusMode])
 
   const commands = useMemo<RegisteredCommand[]>(() => COMMANDS.map((command) => ({ ...command, run: () => runCommand(command.id) })), [runCommand])
   const visibleCommands = useMemo(() => {
@@ -98,7 +101,7 @@ export function CommandPalette({ onNewProject }: CommandPaletteProps) {
         return
       }
       const shortcut = shortcutFromKeyboardEvent(event)
-      if (shortcut && shortcut === shortcuts['open-palette']) {
+      if (shortcut && (shortcut === shortcuts['open-palette'] || (shortcut === 'Ctrl+K' && shortcuts['open-palette'] === 'Ctrl+Shift+P'))) {
         event.preventDefault()
         setOpen((current) => !current)
         return

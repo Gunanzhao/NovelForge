@@ -41,3 +41,35 @@ export function convertPunctuation(markdown: string, direction: 'full' | 'half')
   }
   return markdown.replace(/，/g, ',').replace(/。/g, '.').replace(/？/g, '?').replace(/！/g, '!').replace(/：/g, ':').replace(/；/g, ';')
 }
+
+export function cleanWritingWhitespace(markdown: string) {
+  return markdown
+    .split(/\r?\n/u)
+    .map((line) => line.replace(/[ \t]+$/u, ''))
+    .join('\n')
+    .replace(/\n{3,}/gu, '\n\n')
+}
+
+export function indentParagraphs(markdown: string) {
+  const lines = markdown.split(/\r?\n/u)
+  let inFence = false
+  let paragraphStart = true
+  return lines.map((line) => {
+    const trimmed = line.trim()
+    if (/^\x60{3}/u.test(trimmed)) {
+      inFence = !inFence
+      paragraphStart = false
+      return line
+    }
+    if (!trimmed) {
+      paragraphStart = true
+      return line
+    }
+    const markdownBlock = /^(?:#{1,6}\s|>\s|[-*+]\s|\d+[.)]\s|\|)/u.test(trimmed)
+    const next = !inFence && paragraphStart && !markdownBlock && !line.startsWith('　　')
+      ? '　　' + line
+      : line
+    paragraphStart = false
+    return next
+  }).join('\n')
+}

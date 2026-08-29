@@ -4,6 +4,10 @@ import type {
   DocumentData, EntityInput, EntityKind, NodeRecord, ProjectData, ProjectInput,
   ExportFormat, SaveState, SearchResult, Stats, ThemeMode, TrashItem, ViewId,
 } from '../lib/types'
+import {
+  DEFAULT_WORKSPACE_PREFERENCES, readWorkspacePreferences, writeWorkspacePreferences,
+} from '../lib/workspace-preferences'
+import type { WorkspacePreferences } from '../lib/workspace-preferences'
 
 export interface RecentProject {
   path: string
@@ -63,9 +67,11 @@ interface AppState {
   inspectorOpen: boolean
   focusMode: boolean
   theme: ThemeMode
+  workspacePreferences: WorkspacePreferences
   editorMode: 'markdown' | 'preview' | 'split'
   setView: (view: ViewId) => void
   setTheme: (theme: ThemeMode) => void
+  setWorkspacePreferences: (patch: Partial<WorkspacePreferences>) => void
   toggleSidebar: () => void
   toggleInspector: () => void
   toggleFocusMode: () => void
@@ -74,6 +80,7 @@ interface AppState {
   setError: (error: unknown) => void
   createProject: (input: ProjectInput) => Promise<void>
   openProject: (path: string) => Promise<void>
+  closeProject: () => Promise<boolean>
   loadRecent: () => void
   selectNode: (nodeId: string) => Promise<void>
   updateContent: (content: string) => void
@@ -116,6 +123,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   inspectorOpen: true,
   focusMode: false,
   theme: 'system',
+  workspacePreferences: { ...DEFAULT_WORKSPACE_PREFERENCES },
   editorMode: 'split',
 
   setView: (view) => set({ activeView: view }),
@@ -123,6 +131,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ theme })
     try { localStorage.setItem('novelforge:theme', theme) } catch { /* optional preference */ }
   },
+  setWorkspacePreferences: (patch) => set((state) => {
+    const next = { ...state.workspacePreferences, ...patch }
+    writeWorkspacePreferences(next)
+    return { workspacePreferences: next }
+  }),
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   toggleInspector: () => set((state) => ({ inspectorOpen: !state.inspectorOpen })),
   toggleFocusMode: () => set((state) => ({ focusMode: !state.focusMode })),
@@ -136,7 +149,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const storedTheme = localStorage.getItem('novelforge:theme') as ThemeMode | null
       if (storedTheme === 'light' || storedTheme === 'dark' || storedTheme === 'system') theme = storedTheme
     } catch { /* use default */ }
-    set({ recentProjects: readRecent(), theme })
+    set({ recentProjects: readRecent(), theme, workspacePreferences: readWorkspacePreferences() })
   },
 
   createProject: async (input) => {
@@ -173,6 +186,28 @@ export const useAppStore = create<AppState>((set, get) => ({
       get().setError(error)
       throw error
     }
+  },
+
+  closeProject: async () => {
+    if (get().document && get().saveState !== 'saved') {
+      const saved = await get().saveCurrentDocument('关闭项目前保存')
+      if (!saved) return false
+    }
+    set((state) => ({
+      projectPath: null,
+      data: null,
+      document: null,
+      documentVersion: state.documentVersion + 1,
+      activeView: 'dashboard',
+      selectedEntityId: null,
+      searchResults: [],
+      searchQuery: '',
+      trash: [],
+      stats: emptyStats,
+      error: null,
+      saveState: 'idle',
+    }))
+    return true
   },
 
   selectNode: async (nodeId) => {

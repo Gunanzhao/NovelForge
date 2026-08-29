@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ChevronDown, ChevronUp, Copy, History, Lightbulb, RotateCcw, Sparkles, Wand2 } from 'lucide-react'
 import { projectApi } from '../lib/api'
-import { convertPunctuation, wikiTargets, writingHints } from '../lib/markdown'
+import { cleanWritingWhitespace, convertPunctuation, indentParagraphs, wikiTargets, writingHints } from '../lib/markdown'
 import { generateNames } from '../lib/name-generator'
 import { ENTITY_LABELS, NODE_STATUS_LABELS } from '../lib/types'
 import type { EntityKind } from '../lib/types'
@@ -41,6 +41,11 @@ export function Inspector() {
     updateContent(convertPunctuation(document!.content, direction))
   }
 
+  function transformContent(transform: (content: string) => string, message: string) {
+    if (!window.confirm(message)) return
+    updateContent(transform(document!.content))
+  }
+
   async function readRevision(id: string) {
     try { setHistoryPreview(await projectApi.readHistory({ projectPath: currentProjectPath, revisionId: id })) } catch (error) { setError(error) }
   }
@@ -65,7 +70,7 @@ export function Inspector() {
       <div className="inspector-head"><div><h2>辅助栏</h2><small>当前章节</small></div><span className="tag">{formatNumber(wordCount)} 字</span></div>
       <div className="inspector-section"><h3>章节信息</h3><div className="inspector-meta"><div className="meta-row"><span>标题</span><strong>{document.node.title}</strong></div><div className="meta-row"><span>状态</span><strong>{NODE_STATUS_LABELS[document.node.status] ?? document.node.status}</strong></div><div className="meta-row"><span>文件</span><strong className="path-text" title={document.node.filePath}>{document.node.filePath}</strong></div><div className="meta-row"><span>更新时间</span><strong>{formatDate(document.node.updatedAt)}</strong></div></div></div>
       <div className="inspector-section"><div className="panel-title"><h3>设定链接</h3><span>{targets.length} 个</span></div>{targets.length ? <div className="wiki-list">{targets.map((target) => { const entity = foundEntity(target); return <button key={target} className={'wiki-chip' + (entity ? '' : ' missing')} onClick={() => entity ? selectEntity(entity.kind, entity.id) : selectEntity('world')}>{entity ? target : target + '（未建档）'}</button> })}</div> : <span className="field-hint">在正文中输入 [[人物名]]、[[地点名]] 或 [[世界观条目]]，这里会自动列出链接。</span>}</div>
-      <div className="inspector-section"><div className="panel-title"><h3>写作提示</h3><span>{hints.length ? hints.length + ' 项待确认' : '干净'}</span></div>{hints.length ? <div className="hint-list">{hints.slice(0, 4).map((hint, index) => <div className="hint-item" key={index}>第 {hint.line} 行：{hint.message}<small>{hint.sample || '空行'}</small></div>)}</div> : <div className="field-hint"><Lightbulb size={12} /> 暂未发现明显的标点或空白问题。</div>}<div className="inspector-actions" style={{ marginTop: 10 }}><Button variant="outline" onClick={() => punctuation('full')}>转全角</Button><Button variant="outline" onClick={() => punctuation('half')}>转半角</Button></div></div>
+      <div className="inspector-section"><div className="panel-title"><h3>写作提示</h3><span>{hints.length ? hints.length + ' 项待确认' : '干净'}</span></div>{hints.length ? <div className="hint-list">{hints.slice(0, 4).map((hint, index) => <div className="hint-item" key={index}>第 {hint.line} 行：{hint.message}<small>{hint.sample || '空行'}</small></div>)}</div> : <div className="field-hint"><Lightbulb size={12} /> 暂未发现明显的标点或空白问题。</div>}<div className="inspector-actions" style={{ marginTop: 10 }}><Button variant="outline" onClick={() => punctuation('full')}>转全角</Button><Button variant="outline" onClick={() => punctuation('half')}>转半角</Button><Button variant="outline" onClick={() => transformContent(cleanWritingWhitespace, '清理行尾空格并合并连续空行？')}>清理空格/空行</Button><Button variant="outline" onClick={() => transformContent(indentParagraphs, '为普通段落添加全角空格首行缩进？')}>首行缩进</Button></div></div>
       <div className="inspector-section"><div className="panel-title"><h3>名字生成器</h3><Wand2 size={14} color="var(--accent)" /></div><div className="input-with-action"><select className="select-input" value={nameKind} onChange={(event) => setNameKind(event.target.value as EntityKind)}>{(['character', 'location', 'world', 'foreshadowing'] as EntityKind[]).map((kind) => <option key={kind} value={kind}>{ENTITY_LABELS[kind]}</option>)}</select><Button variant="outline" onClick={() => setNames(generateNames(nameKind))}><Sparkles size={13} />生成</Button></div>{names.length ? <div className="name-suggestions">{names.map((name) => <div className="name-suggestion" key={name}><span>{name}</span><span><IconButton icon={Copy} label={'复制' + name} onClick={() => void navigator.clipboard?.writeText(name)} /><button className="name-create" onClick={() => void createName(name)}>建档</button></span></div>)}</div> : <span className="field-hint" style={{ display: 'block', marginTop: 8 }}>本地规则生成，不需要 API Key。</span>}</div>
       <div className="inspector-section"><button className="inspector-collapse" onClick={() => setHistoryOpen(!historyOpen)}><span><History size={14} />版本历史</span>{historyOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>{historyOpen ? <div className="history-list" style={{ marginTop: 11 }}>{history.length ? history.map((item) => <div className="history-item" key={item.id}><div><strong>{item.reason}</strong><small>{formatDate(item.createdAt)} · {formatNumber(item.wordCount)} 字</small></div><span><Button variant="ghost" onClick={() => void readRevision(item.id)}>查看</Button><Button variant="ghost" onClick={() => void restoreRevision(item.id)}><RotateCcw size={12} />恢复</Button></span></div>) : <span className="field-hint">保存一次后会在这里留下快照。</span>}{historyPreview !== null ? <pre className="history-preview">{historyPreview}</pre> : null}</div> : null}</div>
     </div>

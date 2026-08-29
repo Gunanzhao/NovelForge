@@ -4,6 +4,7 @@ export type CommandId =
   | 'open-palette'
   | 'save-document'
   | 'new-project'
+  | 'close-project'
   | 'open-search'
   | 'toggle-focus'
   | 'open-dashboard'
@@ -26,9 +27,10 @@ export interface CommandDescriptor {
 }
 
 export const COMMANDS: CommandDescriptor[] = [
-  { id: 'open-palette', label: '打开命令面板', description: '搜索并执行工作台命令', keywords: ['命令', 'command', 'palette'], defaultShortcut: 'Ctrl+K' },
+  { id: 'open-palette', label: '打开命令面板', description: '搜索并执行工作台命令', keywords: ['命令', 'command', 'palette'], defaultShortcut: 'Ctrl+Shift+P' },
   { id: 'save-document', label: '保存当前正文', description: '立即保存正在编辑的章节', keywords: ['保存', '正文', 'save'], defaultShortcut: 'Ctrl+S' },
   { id: 'new-project', label: '新建小说项目', description: '打开新建项目对话框', keywords: ['新建', '项目', '小说'], defaultShortcut: 'Ctrl+N' },
+  { id: 'close-project', label: '关闭当前项目', description: '保存后返回项目欢迎页', keywords: ['关闭', '项目', 'close'], defaultShortcut: 'Ctrl+W' },
   { id: 'open-search', label: '全文搜索', description: '搜索正文和资料库', keywords: ['搜索', '查找', 'search'], defaultShortcut: 'Ctrl+F' },
   { id: 'toggle-focus', label: '切换专注模式', description: '隐藏侧栏，专心编辑正文', keywords: ['专注', 'focus'], defaultShortcut: 'F11' },
   { id: 'open-dashboard', label: '打开总览', description: '查看项目进度和写作统计', keywords: ['总览', 'dashboard'], defaultShortcut: 'Ctrl+1' },
