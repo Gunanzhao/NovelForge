@@ -256,3 +256,8 @@
 
 - HTML 页面只保留一份作品标题和一份目录，正文树标题仍按层级输出。
 - Rust 导出全格式回归通过，新增标题/目录去重断言。
+
+## 导出结构与视觉复核（2026-08-30）
+
+- 最新 release 实际生成 HTML/PDF 后，HTML 标题/目录计数均为 1，PDF 渲染页无 Markdown 标题标记。
+- DOCX ZIP、word/document.xml、Heading 样式和中文文本结构校验通过；render_docx.py 因本机缺少 LibreOffice 未能生成 PNG，未将此环境限制误判为导出失败。
