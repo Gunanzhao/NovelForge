@@ -8,6 +8,7 @@ import {
   DEFAULT_WORKSPACE_PREFERENCES, readWorkspacePreferences, writeWorkspacePreferences,
 } from '../lib/workspace-preferences'
 import type { WorkspacePreferences } from '../lib/workspace-preferences'
+import { sortChapterNodes } from '../lib/planning-data'
 
 export interface RecentProject {
   path: string
@@ -41,7 +42,7 @@ function rememberProject(path: string, data: ProjectData) {
 }
 
 function firstChapter(data: ProjectData) {
-  return data.nodes.find((node) => node.kind !== 'volume')
+  return sortChapterNodes(data.nodes)[0]
 }
 
 const emptyStats: Stats = {

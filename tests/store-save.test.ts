@@ -4,6 +4,7 @@ import type { DocumentData, NodeRecord, ProjectData, Stats } from '../src/lib/ty
 const api = vi.hoisted(() => ({
   saveDocument: vi.fn(),
   getDocument: vi.fn(),
+  deleteNode: vi.fn(),
   stats: vi.fn(),
 }))
 
@@ -116,5 +117,21 @@ describe('document save coordination', () => {
     expect(useAppStore.getState().data).toBeNull()
     expect(useAppStore.getState().document).toBeNull()
     expect(useAppStore.getState().searchResults).toEqual([])
+  })
+
+  it('selects a chapter rather than a section after deleting a node', async () => {
+    const section: NodeRecord = {
+      id: 'section-a', kind: 'section', parentId: 'chapter-a', title: '小节', orderIndex: 0,
+      status: 'draft', filePath: 'manuscript/section-a.md', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+    }
+    const nextData = { ...projectData, nodes: [section, chapterA] }
+    api.deleteNode.mockResolvedValueOnce(nextData)
+    api.getDocument.mockResolvedValueOnce(savedDocument(chapterA, '首章内容'))
+    useAppStore.setState({ document: null, saveState: 'saved' })
+
+    await useAppStore.getState().deleteNode('deleted-node')
+
+    expect(api.getDocument).toHaveBeenCalledWith({ projectPath: 'project', nodeId: chapterA.id })
+    expect(useAppStore.getState().document?.node.id).toBe(chapterA.id)
   })
 })

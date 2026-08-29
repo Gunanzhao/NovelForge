@@ -213,3 +213,8 @@
 - 大型验收基准再次通过：1 passed、0 failed；10 卷、1000 章、100 万字和资料数据命令链耗时 51.08 秒。
 - 最新 release 产物：E:\\NOVELFORGE\\src-tauri\\target\\release\\novelforge.exe（15,193,600 bytes）和 E:\\NOVELFORGE\\src-tauri\\target\\release\\bundle\\nsis\\NovelForge_0.1.0_x64-setup.exe（4,284,094 bytes）。
 - 当前唯一未完成的是桌面人工鼠标级 E2E；它需要真实 Windows + WebView2 窗口操作。
+
+## 首章选择逻辑验证（2026-08-30）
+
+- 新建、打开项目和删除节点后的自动跳转只选择章节，不会把小节误当成首章。
+- planning-data 跨卷排序和 app-store 状态流回归通过；前端测试达到 50 项。
