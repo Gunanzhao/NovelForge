@@ -190,3 +190,10 @@
 - 项目设置拒绝空作品名和负目标字数，并规范化字符串和小数目标值。
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：全部通过，12 个测试文件 / 47 个测试。
 - release EXE 独立启动 4 秒后仍 Responding 为 True；EXE 与 NSIS 已重新生成。
+
+## 节点状态与输入边界验证（2026-08-30）
+
+- 桌面节点状态对不存在节点返回明确错误；排序更新使用 SQLite 事务。
+- fallback 创建项目、复制/移动节点和资料写入的无效数值、标题、标签输入均被拒绝。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：全部通过，12 个测试文件 / 48 个测试。
+- cargo check、cargo test：通过，25 项 Rust 常规测试，1 项大型基准按设计忽略。

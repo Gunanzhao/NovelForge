@@ -586,6 +586,21 @@ fn consistency_check_accepts_global_chapter_numbers_across_volumes() {
 }
 
 #[test]
+fn node_status_rejects_missing_nodes() {
+    let root = test_root("status-boundaries");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "状态边界测试".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let error = super::commands::set_node_status(super::commands::NodeStatusInput {
+        project_path: project_path.clone(), node_id: "missing-node".to_string(), status: "done".to_string(),
+    }).expect_err("missing node must fail");
+    assert!(error.contains("节点不存在"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn statistics_include_daily_series_and_chapter_breakdown() {
     let root = test_root("statistics");
     let project_path = root.join("project").to_string_lossy().to_string();

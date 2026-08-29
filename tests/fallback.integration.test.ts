@@ -198,11 +198,29 @@ describe('browser fallback project workflow', () => {
     await expect(fallbackInvoke<ProjectData>('update_project', {
       input: { projectPath: path, title: '新标题', author: '作者', description: '', genre: '', targetWords: -1 },
     })).rejects.toThrow('目标字数无效')
+    await expect(fallbackInvoke<ProjectData>('update_project', {
+      input: { projectPath: path, title: '新标题', author: '作者', description: '', genre: '', targetWords: 42.9 },
+    })).rejects.toThrow('目标字数无效')
     const updated = await fallbackInvoke<ProjectData>('update_project', {
-      input: { projectPath: path, title: '  新标题  ', author: '  作者  ', description: '  简介  ', genre: '  类型  ', targetWords: 42.9 },
+      input: { projectPath: path, title: '  新标题  ', author: '  作者  ', description: '  简介  ', genre: '  类型  ', targetWords: 42 },
     })
     expect(updated.project.title).toBe('新标题')
     expect(updated.project.author).toBe('作者')
     expect(updated.project.targetWords).toBe(42)
+  })
+
+  it('rejects non-integer fallback project and move inputs', async () => {
+    const invalidPath = 'fallback-create-boundaries-project'
+    await expect(fallbackInvoke<ProjectData>('create_project', {
+      input: { ...input, path: invalidPath, targetWords: 1.5 },
+    })).rejects.toThrow('目标字数无效')
+    const path = 'fallback-move-boundaries-project'
+    const created = await fallbackInvoke<ProjectData>('create_project', { input: { ...input, path } })
+    const chapter = created.nodes.find((node) => node.kind === 'chapter')
+    expect(chapter).toBeDefined()
+    if (!chapter) return
+    await expect(fallbackInvoke<ProjectData>('move_node', {
+      input: { projectPath: path, nodeId: chapter.id, targetParentId: chapter.parentId, targetOrderIndex: 1.25 },
+    })).rejects.toThrow('目标顺序无效')
   })
 })

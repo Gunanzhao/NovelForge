@@ -656,12 +656,15 @@ pub fn set_node_status(input: NodeStatusInput) -> Result<ProjectData, String> {
         return Err("状态无效".to_string());
     }
     let (root, connection) = project_connection(&input.project_path)?;
-    connection
+    let changed = connection
         .execute(
             "UPDATE nodes SET status = ?1, updated_at = ?2 WHERE id = ?3 AND deleted_at IS NULL",
             params![input.status, storage::now(), input.node_id],
         )
         .map_err(|error| format!("更新章节状态失败：{}", error))?;
+    if changed == 0 {
+        return Err("节点不存在或已在回收站".to_string());
+    }
     storage::touch_project(&root)?;
     project_data(&root, &connection)
 }
@@ -671,9 +674,12 @@ pub fn reorder_node(input: crate::models::ReorderNodeInput) -> Result<ProjectDat
     if input.direction != "up" && input.direction != "down" {
         return Err("排序方向无效".to_string());
     }
-    let (root, connection) = project_connection(&input.project_path)?;
+    let (root, mut connection) = project_connection(&input.project_path)?;
     let current = storage::node_from_id(&connection, &input.node_id)?
         .ok_or_else(|| "节点不存在".to_string())?;
+    if current.deleted_at.is_some() {
+        return Err("节点不存在或已在回收站".to_string());
+    }
     let neighbour_order = if input.direction == "up" {
         current.order_index - 1
     } else {
@@ -688,12 +694,18 @@ pub fn reorder_node(input: crate::models::ReorderNodeInput) -> Result<ProjectDat
         .optional()
         .map_err(|error| format!("查找相邻节点失败：{}", error))?;
     if let Some(neighbour_id) = neighbour_id {
-        connection
-            .execute("UPDATE nodes SET order_index = ?1 WHERE id = ?2", params![neighbour_order, current.id])
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("无法开始排序事务：{}", error))?;
+        transaction
+            .execute("UPDATE nodes SET order_index = ?1 WHERE id = ?2 AND deleted_at IS NULL", params![neighbour_order, current.id])
             .map_err(|error| format!("更新节点顺序失败：{}", error))?;
-        connection
-            .execute("UPDATE nodes SET order_index = ?1 WHERE id = ?2", params![current.order_index, neighbour_id])
+        transaction
+            .execute("UPDATE nodes SET order_index = ?1 WHERE id = ?2 AND deleted_at IS NULL", params![current.order_index, neighbour_id])
             .map_err(|error| format!("更新节点顺序失败：{}", error))?;
+        transaction
+            .commit()
+            .map_err(|error| format!("提交节点排序失败：{}", error))?;
     }
     storage::touch_project(&root)?;
     project_data(&root, &connection)

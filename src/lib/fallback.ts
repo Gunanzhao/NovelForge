@@ -257,8 +257,9 @@ function restoreTrashSnapshot(store: FallbackStore, trash: TrashItem) {
 export async function fallbackInvoke<T>(command: string, args: Record<string, unknown>): Promise<T> {
   if (command === 'create_project') {
     const input = args.input as ProjectInput
-    if (!input.path.trim()) throw new Error('项目路径不能为空')
-    if (!input.title.trim()) throw new Error('作品名不能为空')
+    if (typeof input?.path !== 'string' || !input.path.trim()) throw new Error('项目路径不能为空')
+    if (typeof input?.title !== 'string' || !input.title.trim()) throw new Error('作品名不能为空')
+    if (!Number.isSafeInteger(input?.targetWords) || input.targetWords < 0) throw new Error('目标字数无效')
     if (readStore(input.path)) throw new Error('该浏览器项目已经存在')
     const store = makeProject(input)
     persist(input.path, store)
@@ -303,7 +304,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   if (command === 'rename_node') {
     const current = node(store, input?.nodeId as string)
     if (!current) throw new Error('节点不存在')
-    const title = (input?.title as string | undefined)?.trim() ?? ''
+    const title = typeof input?.title === 'string' ? input.title.trim() : ''
     if (!title) throw new Error('名称不能为空')
     current.title = title
     if (current.kind !== 'volume') store.documents[current.id] = replaceMarkdownTitle(store.documents[current.id] ?? '', title)
@@ -346,6 +347,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     const descendants = nodeDescendants(store, id)
     if (targetParentId && descendants.some((item) => item.id === targetParentId)) throw new Error('不能将节点移动到自己的后代下面')
     const siblings = store.data.nodes.filter((item) => item.parentId === targetParentId && item.id !== id)
+    if (input?.targetOrderIndex !== undefined && !Number.isSafeInteger(input.targetOrderIndex)) throw new Error('目标顺序无效')
     const requested = typeof input?.targetOrderIndex === 'number' ? input.targetOrderIndex : siblings.length
     const targetOrder = Math.max(0, Math.min(requested, siblings.length))
     const oldParentId = current.parentId
@@ -383,7 +385,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
         ...source,
         id: copyId,
         parentId: source.id === current.id ? targetParentId : idMap.get(source.parentId ?? '') ?? null,
-        title: source.id === current.id ? ((input?.title as string)?.trim() || source.title + ' 副本') : source.title,
+        title: source.id === current.id ? (typeof input?.title === 'string' ? input.title.trim() : '') || source.title + ' 副本' : source.title,
         orderIndex: source.id === current.id ? targetOrder : source.orderIndex,
         filePath: replaceNodePath(source.filePath, current.filePath, targetPath),
         createdAt: new Date().toISOString(),
@@ -447,7 +449,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   if (command === 'restore_recovery' || command === 'discard_recovery') return store.data as T
   if (command === 'upsert_entity') {
     const entityInput = input as unknown as EntityInput
-    const title = entityInput.title?.trim() ?? ''
+    const title = typeof entityInput.title === 'string' ? entityInput.title.trim() : ''
     if (!title) throw new Error('条目名称不能为空')
     if (!ENTITY_KINDS.has(entityInput.kind)) throw new Error('资料类型无效')
     if (!Array.isArray(entityInput.tags) || entityInput.tags.some((tag) => typeof tag !== 'string')) throw new Error('标签格式无效')
@@ -647,12 +649,12 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     const update = input as unknown as ProjectInput
     const title = typeof update?.title === 'string' ? update.title.trim() : ''
     if (!title) throw new Error('作品名不能为空')
-    if (!Number.isFinite(update?.targetWords) || update.targetWords < 0) throw new Error('目标字数无效')
+    if (!Number.isSafeInteger(update?.targetWords) || update.targetWords < 0) throw new Error('目标字数无效')
     store.data.project.title = title
     store.data.project.author = typeof update.author === 'string' ? update.author.trim() : ''
     store.data.project.description = typeof update.description === 'string' ? update.description.trim() : ''
     store.data.project.genre = typeof update.genre === 'string' ? update.genre.trim() : ''
-    store.data.project.targetWords = Math.floor(update.targetWords)
+    store.data.project.targetWords = update.targetWords
     updateTime(store.data)
     persist(projectPath, store)
     return store.data as T
