@@ -170,4 +170,39 @@ describe('browser fallback project workflow', () => {
     await expect(fallbackInvoke<DocumentData>('get_document', { input: { projectPath: path, nodeId: volume.id } })).rejects.toThrow('卷没有正文文件')
     await expect(fallbackInvoke<DocumentData>('save_document', { input: { projectPath: path, nodeId: volume.id, content: '非法', reason: '测试' } })).rejects.toThrow('只有未删除的章节或小节可以编辑')
   })
+
+  it('protects fallback entity ids from cross-kind and trashed edits', async () => {
+    const path = 'fallback-entity-boundaries-project'
+    await fallbackInvoke<ProjectData>('create_project', { input: { ...input, path } })
+    const created = await fallbackInvoke<ProjectData>('upsert_entity', {
+      input: { projectPath: path, kind: 'character', id: null, title: '林月', content: {}, tags: [] },
+    })
+    const character = created.entities.find((item) => item.kind === 'character')
+    expect(character).toBeDefined()
+    if (!character) return
+    await expect(fallbackInvoke<ProjectData>('upsert_entity', {
+      input: { projectPath: path, kind: 'location', id: character.id, title: '雾港', content: {}, tags: [] },
+    })).rejects.toThrow('资料类型不能在编辑时修改')
+    await fallbackInvoke<ProjectData>('delete_entity', { input: { projectPath: path, nodeId: character.id } })
+    await expect(fallbackInvoke<ProjectData>('upsert_entity', {
+      input: { projectPath: path, kind: 'character', id: character.id, title: '林月', content: {}, tags: [] },
+    })).rejects.toThrow('回收站中的资料不能直接编辑')
+  })
+
+  it('validates fallback project settings like the desktop command', async () => {
+    const path = 'fallback-settings-boundaries-project'
+    await fallbackInvoke<ProjectData>('create_project', { input: { ...input, path } })
+    await expect(fallbackInvoke<ProjectData>('update_project', {
+      input: { projectPath: path, title: '   ', author: '作者', description: '', genre: '', targetWords: 1 },
+    })).rejects.toThrow('作品名不能为空')
+    await expect(fallbackInvoke<ProjectData>('update_project', {
+      input: { projectPath: path, title: '新标题', author: '作者', description: '', genre: '', targetWords: -1 },
+    })).rejects.toThrow('目标字数无效')
+    const updated = await fallbackInvoke<ProjectData>('update_project', {
+      input: { projectPath: path, title: '  新标题  ', author: '  作者  ', description: '  简介  ', genre: '  类型  ', targetWords: 42.9 },
+    })
+    expect(updated.project.title).toBe('新标题')
+    expect(updated.project.author).toBe('作者')
+    expect(updated.project.targetWords).toBe(42)
+  })
 })

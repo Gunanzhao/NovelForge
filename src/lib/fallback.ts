@@ -319,6 +319,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     if (!NODE_STATUSES.has(status)) throw new Error('状态无效')
     current.status = status
     current.updatedAt = new Date().toISOString()
+    updateTime(store.data)
     persist(projectPath, store)
     return store.data as T
   }
@@ -331,8 +332,9 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     if (other) {
       other.orderIndex = current.orderIndex
       current.orderIndex += direction
-      persist(projectPath, store)
     }
+    updateTime(store.data)
+    persist(projectPath, store)
     return store.data as T
   }
   if (command === 'move_node') {
@@ -448,7 +450,12 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     const title = entityInput.title?.trim() ?? ''
     if (!title) throw new Error('条目名称不能为空')
     if (!ENTITY_KINDS.has(entityInput.kind)) throw new Error('资料类型无效')
+    if (!Array.isArray(entityInput.tags) || entityInput.tags.some((tag) => typeof tag !== 'string')) throw new Error('标签格式无效')
     const existing = entityInput.id ? entity(store, entityInput.id) : undefined
+    if (!existing && entityInput.id && Object.values(store.trashSnapshots).some((snapshot) => snapshot.entities.some((item) => item.id === entityInput.id))) {
+      throw new Error('回收站中的资料不能直接编辑，请先恢复')
+    }
+    if (existing && existing.kind !== entityInput.kind) throw new Error('资料类型不能在编辑时修改')
     const current: EntityRecord = existing ?? {
       id: entityInput.id ?? uid(), kind: entityInput.kind, title,
       content: {}, tags: [], filePath: entityInput.kind + '/' + uid() + '.md',
@@ -638,11 +645,14 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   if (command === 'read_logs') return '' as T
   if (command === 'update_project') {
     const update = input as unknown as ProjectInput
-    store.data.project.title = update.title
-    store.data.project.author = update.author
-    store.data.project.description = update.description
-    store.data.project.genre = update.genre
-    store.data.project.targetWords = update.targetWords
+    const title = typeof update?.title === 'string' ? update.title.trim() : ''
+    if (!title) throw new Error('作品名不能为空')
+    if (!Number.isFinite(update?.targetWords) || update.targetWords < 0) throw new Error('目标字数无效')
+    store.data.project.title = title
+    store.data.project.author = typeof update.author === 'string' ? update.author.trim() : ''
+    store.data.project.description = typeof update.description === 'string' ? update.description.trim() : ''
+    store.data.project.genre = typeof update.genre === 'string' ? update.genre.trim() : ''
+    store.data.project.targetWords = Math.floor(update.targetWords)
     updateTime(store.data)
     persist(projectPath, store)
     return store.data as T

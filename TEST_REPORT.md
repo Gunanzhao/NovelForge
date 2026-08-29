@@ -183,3 +183,10 @@
 - 章节重命名后 Markdown 一级标题同步更新；卷节点读取/保存被明确拒绝。
 - 历史恢复保留恢复前快照，并更新正文、统计和节点时间。
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：全部通过，12 个测试文件 / 45 个测试。
+
+## fallback 资料与设置边界验证（2026-08-30）
+
+- 资料条目跨类型修改和回收站 ID 复用均被拒绝；标签格式无效时拒绝写入。
+- 项目设置拒绝空作品名和负目标字数，并规范化字符串和小数目标值。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：全部通过，12 个测试文件 / 47 个测试。
+- release EXE 独立启动 4 秒后仍 Responding 为 True；EXE 与 NSIS 已重新生成。
