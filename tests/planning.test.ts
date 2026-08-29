@@ -63,6 +63,7 @@ describe('timeline and foreshadowing planning helpers', () => {
 
   it('normalizes legacy foreshadowing status labels', () => {
     expect(normalizeForeshadowingStatus('已埋设')).toBe('planted')
+    expect(normalizeForeshadowingStatus('部分回收')).toBe('partial')
     expect(normalizeForeshadowingStatus('resolved')).toBe('paid-off')
     expect(normalizeForeshadowingStatus('未知状态')).toBe('planned')
   })

@@ -113,18 +113,20 @@ export function findChapterByReference(chapters: NodeRecord[], reference: string
     : undefined
 }
 
-export type ForeshadowingStatus = 'planned' | 'planted' | 'paid-off' | 'abandoned'
+export type ForeshadowingStatus = 'planned' | 'planted' | 'partial' | 'paid-off' | 'abandoned'
 
 export const FORESHADOWING_STATUSES: Array<{ id: ForeshadowingStatus; label: string; description: string }> = [
-  { id: 'planned', label: '待埋设', description: '还没有写入正文' },
+  { id: 'planned', label: '计划中', description: '还没有写入正文' },
   { id: 'planted', label: '已埋设', description: '已经在正文中出现' },
+  { id: 'partial', label: '部分回收', description: '已经回应了一部分线索' },
   { id: 'paid-off', label: '已回收', description: '伏笔已经得到回应' },
-  { id: 'abandoned', label: '已搁置', description: '暂时不再继续推进' },
+  { id: 'abandoned', label: '废弃', description: '明确不再继续推进' },
 ]
 
 export function normalizeForeshadowingStatus(value: string): ForeshadowingStatus {
   const normalized = value.trim().toLocaleLowerCase()
   if (['planted', '已埋设', '已埋', '埋设'].includes(normalized)) return 'planted'
+  if (['partial', 'partially-paid', 'partially_paid', '部分回收', '部分解决', '部分回应'].includes(normalized)) return 'partial'
   if (['paid-off', 'paid_off', 'paidoff', 'resolved', '已回收', '已解决', '回收'].includes(normalized)) return 'paid-off'
   if (['abandoned', '已搁置', '搁置', '放弃', '废弃'].includes(normalized)) return 'abandoned'
   return 'planned'
