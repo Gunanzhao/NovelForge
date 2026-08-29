@@ -120,3 +120,23 @@
 ### 仍需人工
 
 * 真实桌面鼠标级 E2E（窗口内点击、输入、创建项目、完整导出/恢复和异常恢复）仍需在带 WebView2 的 Windows 桌面执行；当前环境未安装桌面自动化驱动。
+
+## 最终收尾验证（2026-08-30）
+
+本轮补齐资料自定义字段和地点树、作品/卷/章节三级大纲、时间线标签、伏笔部分回收、Wiki 反向引用、正文树窗口化渲染、保存事务回滚、损坏数据库 Markdown 重建、分级脱敏日志和 TXT 纯文本清理。
+
+| 层级 | 命令 / 范围 | 结果 |
+| --- | --- | --- |
+| Frontend tests | pnpm.cmd test -- --run | 通过：12 个测试文件 / 40 个测试 |
+| Type + lint | pnpm.cmd typecheck、pnpm.cmd lint | 均通过；Lint 0 error / 0 warning |
+| Frontend build | pnpm.cmd build | 通过；主 bundle 约 1.20 MB，保留体积提示 |
+| Rust unit | cargo test --manifest-path src-tauri/Cargo.toml | 通过：20 个测试，1 个 ignored |
+| Data safety | 保存事务失败、损坏 SQLite 重建、日志脱敏、Wiki FTS 反向查询 | 全部通过 |
+| Large-project acceptance | 1000 chapters / 1,000,000 characters ignored benchmark | 通过：30.83 秒 |
+| Windows package | pnpm.cmd tauri:build | 通过：release EXE 与 NSIS 安装包 |
+| Release smoke | 启动 target/release/novelforge.exe | 通过：独立进程存活 4 秒后正常退出 |
+
+### 当前未覆盖
+
+- 真实桌面鼠标级 E2E 仍需用户在带 WebView2 的 Windows 桌面按 DESKTOP_E2E_CHECKLIST.md 手动完成。
+- Rust 3 个 dead-code 警告与 Vite 主 bundle 体积提示不影响功能和发布构建。

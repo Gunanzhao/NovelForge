@@ -260,3 +260,30 @@
 
 * 只剩真实桌面鼠标级 E2E 需要在带 WebView2 的 Windows 桌面人工执行；当前环境没有 tauri-driver / geckodriver / chromedriver / Playwright。
 * Rust dead-code 警告和 Vite 主 bundle 体积提示属于非阻塞质量优化项，不影响功能完成或发布构建。
+
+## 2026-08-30：规格差距二次补齐与最终发布验收
+
+### 完成内容
+
+- 资料字段扩展为人物/地点完整规格，并支持自定义字段、标签排序、地点树前序排序和循环父级约束。
+- 写作规划补齐作品/卷/章节三级大纲、时间线标签、伏笔“部分回收”状态；资料条目显示正文 Wiki 反向引用章节。
+- 正文树改为扁平化窗口渲染并保留折叠、拖拽、移动和批量选择。
+- 保存后置数据库/索引写入改为事务；失败会恢复原正文并保留恢复文件。
+- 损坏 SQLite 会被可逆隔离，程序从 manuscript 和资料 Markdown 镜像重建正文树、资料记录和搜索索引。
+- 增加 DEBUG/INFO/WARN/ERROR 脱敏项目日志并在设置页查看；TXT 导出清理 Markdown 标记。
+
+### 验证结果
+
+- pnpm.cmd typecheck：通过。
+- pnpm.cmd lint：通过，0 error / 0 warning。
+- pnpm.cmd test -- --run：通过，12 个测试文件、40 个测试。
+- cargo test --manifest-path src-tauri/Cargo.toml：通过，20 个测试，1 个大型基准 ignored。
+- 1000 章 / 100 万字基准：通过，30.83 秒。
+- pnpm.cmd build：通过；主 bundle 约 1.20 MB，保留体积提示。
+- pnpm.cmd tauri:build：通过；release EXE 15,169,536 bytes，NSIS 安装包 4,273,964 bytes。
+- Release smoke：独立 EXE 启动 4 秒后仍存活，测试结束后按 PID 正常退出。
+
+### 当前剩余
+
+- 仅剩真实桌面鼠标级 E2E：需要用户在 Windows + WebView2 中按 DESKTOP_E2E_CHECKLIST.md 逐项点击确认；当前环境没有 tauri-driver 等驱动。
+- Rust 的 3 个 dead-code 警告和 Vite 主 bundle 体积提示属于非阻塞质量优化。
