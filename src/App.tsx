@@ -9,6 +9,8 @@ import { useAppStore } from './stores/app-store'
 import { Dashboard } from './components/Dashboard'
 import { EditorPane } from './components/EditorPane'
 import { PlanningView } from './components/PlanningView'
+import { TimelineView } from './components/TimelineView'
+import { ForeshadowingView } from './components/ForeshadowingView'
 import { EntityView } from './components/EntityView'
 import { Inspector } from './components/Inspector'
 import { ProjectDialog, NodeDialog } from './components/ProjectDialogs'
@@ -110,6 +112,8 @@ export default function App() {
     if (activeView === 'dashboard') return <Dashboard />
     if (activeView === 'manuscript') return <EditorPane />
     if (activeView === 'outline') return <PlanningView />
+    if (activeView === 'timeline') return <TimelineView />
+    if (activeView === 'foreshadowing') return <ForeshadowingView />
     if (activeView === 'search') return <SearchView />
     if (activeView === 'trash') return <TrashView />
     if (activeView === 'settings') return <SettingsView />

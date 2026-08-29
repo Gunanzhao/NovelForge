@@ -223,6 +223,91 @@ fn node_delete_restores_file_when_database_transaction_fails() {
 }
 
 #[test]
+fn entity_delete_restores_file_when_database_transaction_fails() {
+    let root = test_root("entity-delete-rollback");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let _created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "资料回滚测试".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "现代".to_string(),
+        target_words: 1000,
+    }).expect("create project");
+    let with_entity = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "timeline".to_string(),
+        id: None,
+        title: "第一次停电".to_string(),
+        content: serde_json::json!({"date": "2026-08-29", "description": "港区灯火同时熄灭"}),
+        tags: vec!["时间线".to_string()],
+    }).expect("save timeline entity");
+    let entity = with_entity.entities.iter().find(|item| item.title == "第一次停电").expect("timeline entity").clone();
+    let entity_path = root.join("project").join(&entity.file_path);
+    let original = fs::read_to_string(&entity_path).expect("entity mirror");
+    {
+        let connection = storage::open_db(&root.join("project")).expect("database");
+        connection.execute_batch(
+            "CREATE TRIGGER fail_entity_trash BEFORE INSERT ON trash_items BEGIN SELECT RAISE(ABORT, 'entity test failure'); END;"
+        ).expect("failure trigger");
+    }
+
+    let result = super::commands::delete_entity(super::models::NodeActionInput {
+        project_path: project_path.clone(),
+        node_id: entity.id.clone(),
+    });
+    assert!(result.is_err());
+    assert_eq!(fs::read_to_string(&entity_path).expect("restored entity"), original);
+    let reopened = super::commands::open_project(project_path.clone()).expect("reopen project");
+    assert!(reopened.entities.iter().any(|item| item.id == entity.id));
+    assert!(super::commands::list_trash(project_path).expect("list trash").is_empty());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn restore_trash_keeps_quarantined_entity_when_destination_exists() {
+    let root = test_root("entity-restore-collision");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let _created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "恢复冲突测试".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "现代".to_string(),
+        target_words: 1000,
+    }).expect("create project");
+    let with_entity = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "foreshadowing".to_string(),
+        id: None,
+        title: "缺失的钟声".to_string(),
+        content: serde_json::json!({"status": "planted"}),
+        tags: vec!["伏笔".to_string()],
+    }).expect("save foreshadowing entity");
+    let entity = with_entity.entities.iter().find(|item| item.title == "缺失的钟声").expect("foreshadowing entity").clone();
+    super::commands::delete_entity(super::models::NodeActionInput {
+        project_path: project_path.clone(),
+        node_id: entity.id.clone(),
+    }).expect("delete entity");
+    let trash = super::commands::list_trash(project_path.clone()).expect("list trash");
+    let trash_item = trash.iter().find(|item| item.ref_id == entity.id).expect("entity trash item").clone();
+    let original_path = root.join("project").join(&trash_item.original_path);
+    fs::create_dir_all(original_path.parent().expect("entity parent")).expect("entity parent");
+    fs::write(&original_path, "用户新建的同名文件").expect("collision file");
+    let trash_path = storage::safe_trash_path(&root.join("project"), &trash_item.trash_path).expect("trash path");
+
+    let result = super::commands::restore_trash(super::models::NodeActionInput {
+        project_path: project_path.clone(),
+        node_id: trash_item.id,
+    });
+    assert!(result.is_err());
+    assert_eq!(fs::read_to_string(&original_path).expect("collision remains"), "用户新建的同名文件");
+    assert!(trash_path.exists());
+    assert!(super::commands::list_trash(project_path).expect("trash remains").iter().any(|item| item.ref_id == entity.id));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn permanent_delete_rejects_external_database_path() {
     let root = test_root("permanent-boundary");
     let project_path = root.join("project").to_string_lossy().to_string();

@@ -38,6 +38,41 @@
 ### 下一步
 
 - 按 V0.2 增加场景卡、章节看板、人物关系图和命令注册接口；再接入可选 AI Provider 与显式上下文预览。
+
+## 2026-08-29：V0.2 写作规划第二阶段
+
+### 完成内容
+
+- 新增时间线专用工作区：按故事日期和时间排序事件，支持搜索、CRUD、人物 / 地点记录和章节引用跳转。
+- 新增伏笔专用工作区：按待埋设、已埋设、已回收、已搁置筛选，支持快捷改状态、CRUD、章节引用跳转和待跟进数量统计。
+- 将日期排序、中文时段排序、章节号解析和伏笔状态归一化提取为可测试的规划数据工具。
+- 补充浏览器 fallback 的时间线 / 伏笔持久化集成测试，以及 Rust 删除事务失败回滚、恢复目标冲突保护测试。
+
+### 修改文件
+
+- `src/components/TimelineView.tsx`
+- `src/components/ForeshadowingView.tsx`
+- `src/App.tsx`、`src/lib/planning-data.ts`、`src/planning.css`
+- `tests/planning.test.ts`、`tests/planning.integration.test.ts`
+- `src-tauri/src/rust_tests.rs`
+
+### 验证结果
+
+- `pnpm typecheck`：通过。
+- `pnpm lint`：通过，0 error / 0 warning。
+- `pnpm test`：通过，5 个测试文件、17 个测试。
+- `cargo test --manifest-path src-tauri/Cargo.toml`：通过，10 个 Rust 测试。
+- `pnpm build`：通过，时间线和伏笔视图进入 Vite 生产产物。
+- `pnpm tauri:build`：通过，生成 Windows x64 release EXE 和 NSIS 安装包；release EXE 已启动并正常退出。
+
+### 已知问题
+
+- 仍需真实桌面鼠标级 E2E 和 1000 章 / 100 万字性能验收。
+- 人物关系图、命令面板、AI Provider、一致性检查和 DOCX / EPUB / PDF 导出仍待后续版本。
+
+### 下一步
+
+- 先完成桌面 release 冒烟与异常场景 E2E，再进入人物关系图和命令面板设计。
 ## 2026-08-29：V0.2 写作规划第一阶段
 
 ### 完成内容

@@ -32,4 +32,29 @@ describe('planning fallback workflow', () => {
     expect(scenes.map((scene) => scene.content.order)).toEqual([0, 1])
     expect(scenes.every((scene) => scene.content.chapterId === chapter.id)).toBe(true)
   })
+
+  it('persists timeline events and foreshadowing status for dedicated views', async () => {
+    const projectInput: ProjectInput = { ...input, path: 'browser-special-planning-project' }
+    const created = await fallbackInvoke<ProjectData>('create_project', { input: projectInput })
+    const chapter = created.nodes.find((node) => node.kind === 'chapter')
+    expect(chapter).toBeDefined()
+    if (!chapter) return
+
+    await fallbackInvoke<ProjectData>('upsert_entity', { input: {
+      projectPath: projectInput.path, kind: 'timeline', id: null, title: '雾港停电',
+      content: { date: '2026-08-29', time: '晚上 21:30', description: '全城灯火熄灭', characters: '林月', location: '雾港', chapters: chapter.title },
+      tags: ['时间线'],
+    } })
+    await fallbackInvoke<ProjectData>('upsert_entity', { input: {
+      projectPath: projectInput.path, kind: 'foreshadowing', id: null, title: '钟楼的第三声钟响',
+      content: { description: '提示守门人并非人类', plantedIn: chapter.title, plannedPayoff: '第二章', actualPayoff: '', status: 'planted', notes: '需要在回收时补充细节' },
+      tags: ['伏笔'],
+    } })
+
+    const timeline = await fallbackInvoke<EntityRecord[]>('list_entities', { path: projectInput.path, kind: 'timeline' })
+    const foreshadowing = await fallbackInvoke<EntityRecord[]>('list_entities', { path: projectInput.path, kind: 'foreshadowing' })
+    expect(timeline).toHaveLength(1)
+    expect(timeline[0]?.content).toMatchObject({ date: '2026-08-29', time: '晚上 21:30', chapters: chapter.title })
+    expect(foreshadowing[0]?.content).toMatchObject({ status: 'planted', plantedIn: chapter.title })
+  })
 })
