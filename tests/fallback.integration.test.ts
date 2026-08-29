@@ -127,4 +127,18 @@ describe('browser fallback project workflow', () => {
     const copied = await fallbackInvoke<ProjectData>('copy_node', { input: { projectPath: path, nodeId: firstChapter.id, targetParentId: firstVolume.id, title: '第一章副本' } })
     expect(copied.nodes.some((node) => node.title === '第一章副本')).toBe(true)
   })
+
+  it('matches desktop validation for duplicate projects and invalid mutations', async () => {
+    const path = 'fallback-validation-project'
+    await fallbackInvoke<ProjectData>('create_project', { input: { ...input, path } })
+    await expect(fallbackInvoke<ProjectData>('create_project', { input: { ...input, path } })).rejects.toThrow('已经存在')
+    await expect(fallbackInvoke<ProjectData>('create_node', { input: { projectPath: path, kind: 'chapter', title: '', parentId: null } })).rejects.toThrow('标题不能为空')
+    const project = await fallbackInvoke<ProjectData>('open_project', { path })
+    const chapter = project.nodes.find((node) => node.kind === 'chapter')
+    expect(chapter).toBeDefined()
+    if (!chapter) return
+    await expect(fallbackInvoke<ProjectData>('set_node_status', { input: { projectPath: path, nodeId: chapter.id, status: 'invalid' } })).rejects.toThrow('状态无效')
+    await expect(fallbackInvoke<ProjectData>('delete_node', { input: { projectPath: path, nodeId: 'missing-node' } })).rejects.toThrow('节点不存在')
+    await expect(fallbackInvoke<ProjectData>('delete_entity', { input: { projectPath: path, nodeId: 'missing-entity' } })).rejects.toThrow('资料条目不存在')
+  })
 })

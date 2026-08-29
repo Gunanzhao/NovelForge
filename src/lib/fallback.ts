@@ -26,6 +26,8 @@ interface FallbackStore {
 
 const memory = new Map<string, FallbackStore>()
 const STORAGE_PREFIX = 'novelforge-fallback:'
+const NODE_STATUSES = new Set(['not-started', 'draft', 'first-draft', 'editing', 'done', 'locked'])
+const ENTITY_KINDS = new Set(['character', 'location', 'world', 'timeline', 'foreshadowing', 'outline', 'scene', 'note', 'relationship', 'attachment'])
 
 function uid() {
   return globalThis.crypto?.randomUUID?.() ?? ('fallback-' + Date.now() + '-' + Math.random().toString(16).slice(2))
@@ -223,6 +225,9 @@ function restoreTrashSnapshot(store: FallbackStore, trash: TrashItem) {
 export async function fallbackInvoke<T>(command: string, args: Record<string, unknown>): Promise<T> {
   if (command === 'create_project') {
     const input = args.input as ProjectInput
+    if (!input.path.trim()) throw new Error('项目路径不能为空')
+    if (!input.title.trim()) throw new Error('作品名不能为空')
+    if (readStore(input.path)) throw new Error('该浏览器项目已经存在')
     const store = makeProject(input)
     persist(input.path, store)
     return store.data as T
@@ -265,7 +270,9 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   if (command === 'rename_node') {
     const current = node(store, input?.nodeId as string)
     if (!current) throw new Error('节点不存在')
-    current.title = input?.title as string
+    const title = (input?.title as string | undefined)?.trim() ?? ''
+    if (!title) throw new Error('名称不能为空')
+    current.title = title
     current.updatedAt = new Date().toISOString()
     updateTime(store.data)
     persist(projectPath, store)
@@ -274,21 +281,23 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   if (command === 'set_node_status') {
     const current = node(store, input?.nodeId as string)
     if (!current) throw new Error('节点不存在')
-    current.status = input?.status as string
+    const status = input?.status as string
+    if (!NODE_STATUSES.has(status)) throw new Error('状态无效')
+    current.status = status
     current.updatedAt = new Date().toISOString()
     persist(projectPath, store)
     return store.data as T
   }
   if (command === 'reorder_node') {
     const current = node(store, input?.nodeId as string)
-    if (current) {
-      const direction = input?.direction === 'up' ? -1 : 1
-      const other = store.data.nodes.find((item) => item.parentId === current.parentId && item.orderIndex === current.orderIndex + direction)
-      if (other) {
-        other.orderIndex = current.orderIndex
-        current.orderIndex += direction
-        persist(projectPath, store)
-      }
+    if (!current) throw new Error('节点不存在')
+    if (input?.direction !== 'up' && input?.direction !== 'down') throw new Error('排序方向无效')
+    const direction = input.direction === 'up' ? -1 : 1
+    const other = store.data.nodes.find((item) => item.parentId === current.parentId && item.orderIndex === current.orderIndex + direction)
+    if (other) {
+      other.orderIndex = current.orderIndex
+      current.orderIndex += direction
+      persist(projectPath, store)
     }
     return store.data as T
   }
@@ -389,14 +398,17 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   if (command === 'restore_recovery' || command === 'discard_recovery') return store.data as T
   if (command === 'upsert_entity') {
     const entityInput = input as unknown as EntityInput
+    const title = entityInput.title?.trim() ?? ''
+    if (!title) throw new Error('条目名称不能为空')
+    if (!ENTITY_KINDS.has(entityInput.kind)) throw new Error('资料类型无效')
     const existing = entityInput.id ? entity(store, entityInput.id) : undefined
     const current: EntityRecord = existing ?? {
-      id: entityInput.id ?? uid(), kind: entityInput.kind, title: entityInput.title,
+      id: entityInput.id ?? uid(), kind: entityInput.kind, title,
       content: {}, tags: [], filePath: entityInput.kind + '/' + uid() + '.md',
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     }
     current.kind = entityInput.kind
-    current.title = entityInput.title
+    current.title = title
     current.content = entityInput.content
     current.tags = entityInput.tags
     current.updatedAt = new Date().toISOString()
@@ -411,31 +423,29 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   }
   if (command === 'delete_entity') {
     const current = entity(store, input?.nodeId as string)
-    if (current) {
-      const trashId = uid()
-      store.data.entities = store.data.entities.filter((item) => item.id !== current.id)
-      store.trash.push({ id: trashId, refId: current.id, refKind: 'entity', title: current.title, originalPath: current.filePath, trashPath: 'fallback://trash', deletedAt: new Date().toISOString() })
-      store.trashSnapshots[trashId] = { nodes: [], documents: {}, entities: [current] }
-      updateTime(store.data)
-      persist(projectPath, store)
-    }
+    if (!current) throw new Error('资料条目不存在')
+    const trashId = uid()
+    store.data.entities = store.data.entities.filter((item) => item.id !== current.id)
+    store.trash.push({ id: trashId, refId: current.id, refKind: 'entity', title: current.title, originalPath: current.filePath, trashPath: 'fallback://trash', deletedAt: new Date().toISOString() })
+    store.trashSnapshots[trashId] = { nodes: [], documents: {}, entities: [current] }
+    updateTime(store.data)
+    persist(projectPath, store)
     return store.data as T
   }
   if (command === 'delete_node') {
     const id = input?.nodeId as string
     const current = node(store, id)
-    if (current) {
-      const descendants = nodeDescendants(store, id)
-      const descendantIds = new Set(descendants.map((item) => item.id))
-      const trashId = uid()
-      const documents = Object.fromEntries(descendants.filter((item) => item.kind !== 'volume').map((item) => [item.id, store.documents[item.id] ?? '']))
-      store.data.nodes = store.data.nodes.filter((item) => !descendantIds.has(item.id))
-      for (const descendant of descendants) delete store.documents[descendant.id]
-      store.trash.push({ id: trashId, refId: id, refKind: 'node', title: current.title, originalPath: current.filePath, trashPath: 'fallback://trash', deletedAt: new Date().toISOString() })
-      store.trashSnapshots[trashId] = { nodes: descendants, documents, entities: [] }
-      updateTime(store.data)
-      persist(projectPath, store)
-    }
+    if (!current) throw new Error('节点不存在')
+    const descendants = nodeDescendants(store, id)
+    const descendantIds = new Set(descendants.map((item) => item.id))
+    const trashId = uid()
+    const documents = Object.fromEntries(descendants.filter((item) => item.kind !== 'volume').map((item) => [item.id, store.documents[item.id] ?? '']))
+    store.data.nodes = store.data.nodes.filter((item) => !descendantIds.has(item.id))
+    for (const descendant of descendants) delete store.documents[descendant.id]
+    store.trash.push({ id: trashId, refId: id, refKind: 'node', title: current.title, originalPath: current.filePath, trashPath: 'fallback://trash', deletedAt: new Date().toISOString() })
+    store.trashSnapshots[trashId] = { nodes: descendants, documents, entities: [] }
+    updateTime(store.data)
+    persist(projectPath, store)
     return store.data as T
   }
   if (command === 'list_trash') return store.trash as T
@@ -447,13 +457,13 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   }
   if (command === 'restore_trash') {
     const trash = store.trash.find((item) => item.id === input?.nodeId)
-    if (trash) {
-      restoreTrashSnapshot(store, trash)
-      persist(projectPath, store)
-    }
+    if (!trash) throw new Error('回收站项目不存在')
+    restoreTrashSnapshot(store, trash)
+    persist(projectPath, store)
     return store.data as T
   }
   if (command === 'permanent_delete') {
+    if (!store.trash.some((item) => item.id === input?.nodeId)) throw new Error('回收站项目不存在')
     store.trash = store.trash.filter((item) => item.id !== input?.nodeId)
     delete store.trashSnapshots[input?.nodeId as string]
     persist(projectPath, store)
