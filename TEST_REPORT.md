@@ -207,3 +207,9 @@
 
 - 伏笔总览的待跟进计数排除已回收和废弃状态；部分回收仍计入待跟进。
 - planning 状态语义回归通过；前端 49 项测试全部通过。
+
+## 最终验收复核（2026-08-30）
+
+- 大型验收基准再次通过：1 passed、0 failed；10 卷、1000 章、100 万字和资料数据命令链耗时 51.08 秒。
+- 最新 release 产物：E:\\NOVELFORGE\\src-tauri\\target\\release\\novelforge.exe（15,193,600 bytes）和 E:\\NOVELFORGE\\src-tauri\\target\\release\\bundle\\nsis\\NovelForge_0.1.0_x64-setup.exe（4,284,094 bytes）。
+- 当前唯一未完成的是桌面人工鼠标级 E2E；它需要真实 Windows + WebView2 窗口操作。
