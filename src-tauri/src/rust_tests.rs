@@ -570,24 +570,74 @@ fn large_project_acceptance_handles_1000_chapters_and_one_million_characters() {
         path: project_path.clone(), title: "大规模验收".to_string(), author: "测试".to_string(),
         description: String::new(), genre: "现代".to_string(), target_words: 1_000_000,
     }).expect("create project");
-    let volume_id = created.nodes.iter().find(|node| node.kind == "volume").expect("volume").id.clone();
+    let first_volume_id = created.nodes.iter().find(|node| node.kind == "volume").expect("volume").id.clone();
     let first_chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("first chapter").id.clone();
     super::commands::save_document(super::models::SaveDocumentInput {
         project_path: project_path.clone(), node_id: first_chapter, content: "字".repeat(1000), reason: "大规模验收".to_string(),
     }).expect("save first chapter");
-    for index in 1..1000 {
+    let mut volume_ids = vec![first_volume_id];
+    for volume_number in 2..=10 {
         let data = super::commands::create_node(super::models::NodeInput {
-            project_path: project_path.clone(), kind: "chapter".to_string(), title: format!("第{}章", index + 1), parent_id: Some(volume_id.clone()),
+            project_path: project_path.clone(), kind: "volume".to_string(), title: format!("第{}卷", volume_number), parent_id: None,
+        }).expect("create volume");
+        volume_ids.push(data.nodes.iter().find(|node| node.title == format!("第{}卷", volume_number)).expect("created volume").id.clone());
+    }
+    for chapter_number in 2..=1000 {
+        let volume_index = (chapter_number - 1) / 100;
+        let volume_id = volume_ids.get(volume_index).expect("volume for chapter");
+        let data = super::commands::create_node(super::models::NodeInput {
+            project_path: project_path.clone(), kind: "chapter".to_string(), title: format!("第{}章", chapter_number), parent_id: Some(volume_id.clone()),
         }).expect("create chapter");
-        let chapter = data.nodes.iter().find(|node| node.title == format!("第{}章", index + 1)).expect("created chapter");
+        let chapter = data.nodes.iter().find(|node| node.title == format!("第{}章", chapter_number)).expect("created chapter");
         super::commands::save_document(super::models::SaveDocumentInput {
             project_path: project_path.clone(), node_id: chapter.id.clone(), content: "字".repeat(1000), reason: "大规模验收".to_string(),
         }).expect("save chapter");
     }
+    for index in 0..100 {
+        let _ = super::commands::upsert_entity(super::models::EntityInput {
+            project_path: project_path.clone(), kind: "character".to_string(), id: None,
+            title: format!("人物{:03}", index + 1), content: serde_json::json!({"identity": "验收角色", "status": "活动"}), tags: vec!["大规模".to_string()],
+        }).expect("create character");
+    }
+    for index in 0..100 {
+        let _ = super::commands::upsert_entity(super::models::EntityInput {
+            project_path: project_path.clone(), kind: "location".to_string(), id: None,
+            title: format!("地点{:03}", index + 1), content: serde_json::json!({"type": "城市", "description": "大规模验收地点"}), tags: vec!["大规模".to_string()],
+        }).expect("create location");
+    }
+    for index in 0..200 {
+        let _ = super::commands::upsert_entity(super::models::EntityInput {
+            project_path: project_path.clone(), kind: "world".to_string(), id: None,
+            title: format!("世界观{:03}", index + 1), content: serde_json::json!({"category": "设定", "summary": "大规模验收世界观"}), tags: vec!["大规模".to_string()],
+        }).expect("create world entry");
+    }
+    for index in 0..500 {
+        let _ = super::commands::upsert_entity(super::models::EntityInput {
+            project_path: project_path.clone(), kind: "timeline".to_string(), id: None,
+            title: format!("时间线事件{:03}", index + 1), content: serde_json::json!({"date": format!("第{}日", index + 1), "chapters": format!("第{}章", (index % 1000) + 1), "description": "大规模验收事件"}), tags: vec!["大规模".to_string()],
+        }).expect("create timeline event");
+    }
+    for index in 0..100 {
+        let _ = super::commands::upsert_entity(super::models::EntityInput {
+            project_path: project_path.clone(), kind: "foreshadowing".to_string(), id: None,
+            title: format!("伏笔{:03}", index + 1), content: serde_json::json!({"status": "planned", "plannedPayoff": format!("第{}章", index + 10), "description": "大规模验收伏笔"}), tags: vec!["大规模".to_string()],
+        }).expect("create foreshadowing");
+    }
     let data = super::commands::open_project(project_path.clone()).expect("open large project");
     let stats = super::commands::get_statistics(super::models::StatisticsInput { project_path: project_path.clone(), current_node_id: None }).expect("large statistics");
+    assert_eq!(data.nodes.iter().filter(|node| node.kind == "volume").count(), 10);
     assert_eq!(stats.chapter_count, 1000);
     assert!(stats.total_words >= 1_000_000);
+    assert_eq!(data.entities.iter().filter(|entity| entity.kind == "character").count(), 100);
+    assert_eq!(data.entities.iter().filter(|entity| entity.kind == "location").count(), 100);
+    assert_eq!(data.entities.iter().filter(|entity| entity.kind == "world").count(), 200);
+    assert_eq!(data.entities.iter().filter(|entity| entity.kind == "timeline").count(), 500);
+    assert_eq!(data.entities.iter().filter(|entity| entity.kind == "foreshadowing").count(), 100);
+    let search = super::commands::search_project(super::models::SearchInput {
+        project_path: project_path.clone(), query: "世界观099".to_string(), kind: Some("world".to_string()),
+        scope: None, node_id: None, volume_path: None, tag: Some("大规模".to_string()), case_sensitive: None,
+    }).expect("search large project");
+    assert!(search.iter().any(|result| result.title == "世界观099"));
     assert!(started.elapsed() < std::time::Duration::from_secs(120));
     let _ = fs::remove_dir_all(root);
     assert_eq!(data.nodes.iter().filter(|node| node.kind == "chapter").count(), 1000);

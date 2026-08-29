@@ -278,7 +278,7 @@
 - pnpm.cmd lint：通过，0 error / 0 warning。
 - pnpm.cmd test -- --run：通过，12 个测试文件、40 个测试。
 - cargo test --manifest-path src-tauri/Cargo.toml：通过，20 个测试，1 个大型基准 ignored。
-- 1000 章 / 100 万字基准：通过，30.37 秒。
+- 大型最终验收：通过；10 卷、1000 章、100 万字、100 人物、100 地点、200 世界观、500 时间线、100 伏笔，真实命令链 53.94 秒，并通过重新打开、统计和资料搜索。
 - pnpm.cmd build：通过；主 bundle 约 1.20 MB，保留体积提示。
 - pnpm.cmd tauri:build：通过；release EXE 15,173,632 bytes，NSIS 安装包 4,273,662 bytes。
 - Release smoke：独立 EXE 启动 4 秒后仍存活，测试结束后按 PID 正常退出。
