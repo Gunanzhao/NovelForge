@@ -403,6 +403,39 @@ fn ai_provider_parses_openai_compatible_response() {
 }
 
 #[test]
+#[ignore = "large project acceptance benchmark; run explicitly with cargo test -- --ignored"]
+fn large_project_acceptance_handles_1000_chapters_and_one_million_characters() {
+    let root = test_root("large-project");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let started = std::time::Instant::now();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "大规模验收".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1_000_000,
+    }).expect("create project");
+    let volume_id = created.nodes.iter().find(|node| node.kind == "volume").expect("volume").id.clone();
+    let first_chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("first chapter").id.clone();
+    super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(), node_id: first_chapter, content: "字".repeat(1000), reason: "大规模验收".to_string(),
+    }).expect("save first chapter");
+    for index in 1..1000 {
+        let data = super::commands::create_node(super::models::NodeInput {
+            project_path: project_path.clone(), kind: "chapter".to_string(), title: format!("第{}章", index + 1), parent_id: Some(volume_id.clone()),
+        }).expect("create chapter");
+        let chapter = data.nodes.iter().find(|node| node.title == format!("第{}章", index + 1)).expect("created chapter");
+        super::commands::save_document(super::models::SaveDocumentInput {
+            project_path: project_path.clone(), node_id: chapter.id.clone(), content: "字".repeat(1000), reason: "大规模验收".to_string(),
+        }).expect("save chapter");
+    }
+    let data = super::commands::open_project(project_path.clone()).expect("open large project");
+    let stats = super::commands::get_statistics(project_path.clone()).expect("large statistics");
+    assert_eq!(stats.chapter_count, 1000);
+    assert!(stats.total_words >= 1_000_000);
+    assert!(started.elapsed() < std::time::Duration::from_secs(120));
+    let _ = fs::remove_dir_all(root);
+    assert_eq!(data.nodes.iter().filter(|node| node.kind == "chapter").count(), 1000);
+}
+
+#[test]
 fn restore_trash_keeps_quarantined_entity_when_destination_exists() {
     let root = test_root("entity-restore-collision");
     let project_path = root.join("project").to_string_lossy().to_string();

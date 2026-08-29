@@ -40,4 +40,9 @@
 - [x] DOCX / EPUB / PDF 导出
 - [x] 资料库附件导入
 - [x] 详细写作趋势与章节统计
-- [ ] 1000 章 / 100 万字性能验收
+- [x] 1000 章 / 100 万字性能验收（真实文件与 SQLite 基准：37.19 秒）
+
+## 最终验收
+
+- [x] Windows x64 release EXE 与 NSIS 安装包构建、启动冒烟
+- [ ] 真实桌面鼠标级 E2E 验收（需在带 WebView2 的 Windows 桌面手动完成；当前环境未安装 tauri-driver）

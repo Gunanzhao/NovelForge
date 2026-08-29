@@ -86,3 +86,23 @@
 - `pnpm lint`：通过，0 error / 0 warning。
 - `pnpm test`：通过，8 个测试文件、26 个测试；覆盖本地 AI 草稿、上下文拼接、偏好不保存 API Key。
 - `cargo test --manifest-path src-tauri/Cargo.toml`：通过，16 个 Rust 测试；包含本地模拟 OpenAI-compatible 响应解析。
+
+## 最终验收（2026-08-30）
+
+### 自动化结果
+
+| 层级 | 命令 / 范围 | 结果 |
+| --- | --- | --- |
+| Frontend tests | `pnpm.cmd test` | 通过：9 个测试文件 / 28 个测试 |
+| Type + lint | `pnpm.cmd typecheck`、`pnpm.cmd lint` | 均通过；Lint 0 error / 0 warning |
+| Frontend build | `pnpm.cmd build` | 通过；Vite 主 bundle 约 1.15 MB，保留体积提示 |
+| Rust unit | `cargo test --manifest-path src-tauri/Cargo.toml` | 通过：16 个测试，1 个 ignored |
+| Large-project acceptance | `cargo test --manifest-path src-tauri/Cargo.toml large_project_acceptance_handles_1000_chapters_and_one_million_characters -- --ignored --nocapture` | 通过：1000 章、统计字数不少于 1,000,000，37.19 秒 |
+| Windows package | `pnpm.cmd tauri:build` | 通过：release EXE + NSIS 安装包 |
+| Release smoke | 启动 `src-tauri/target/release/novelforge.exe` | 通过：实际 release 进程启动并正常结束 |
+
+### 未覆盖 / 需人工
+
+- 当前环境未安装 `tauri-driver`、`geckodriver`、`chromedriver` 或 Playwright，无法可靠执行真实桌面鼠标级 E2E。
+- 请在 Windows + WebView2 桌面上按 [`DESKTOP_E2E_CHECKLIST.md`](DESKTOP_E2E_CHECKLIST.md) 完成创建项目、编辑保存、资料 CRUD、导出、回收站恢复、AI 本地模式和异常恢复的人工验收。
+- Rust 的 3 个 dead-code 警告、Vite 主 bundle 体积提示和 PDF 标准字体兼容性属于非阻塞项。

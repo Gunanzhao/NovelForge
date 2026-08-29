@@ -170,6 +170,7 @@
 ### 下一步
 
 - 完成大规模性能基准、桌面 E2E 和发布版最终审计。
+
 ## 2026-08-29：V0.2 写作规划第一阶段
 
 ### 完成内容
@@ -205,3 +206,33 @@
 ### 下一步
 
 - 完成桌面 E2E 与数据安全异常测试，再开发时间线 / 伏笔专用视图。
+
+
+## 2026-08-30：V0.2 最终验收阶段
+
+### 完成内容
+
+- 新增 1000 章 / 100 万字真实文件与 SQLite 验收基准，覆盖项目创建、1000 章正文写入、重新打开和统计读取。
+- 修正基准的测试数据边界，确保首章也写入后再验证百万字统计。
+- 完成 Windows x64 release EXE 和 NSIS 安装包构建，并启动实际 release EXE 做进程级冒烟。
+- 增加桌面 E2E 人工验收清单，明确当前环境缺少 tauri-driver、geckodriver、chromedriver 和 Playwright，未虚报鼠标级自动化结果。
+
+### 验证结果
+
+- pnpm.cmd test：通过，9 个测试文件、28 个测试。
+- pnpm.cmd typecheck：通过。
+- pnpm.cmd lint：通过，0 error / 0 warning。
+- pnpm.cmd build：通过，Vite 生产产物生成；保留主 bundle 超过 500 kB 的提示。
+- cargo test --manifest-path src-tauri/Cargo.toml：通过，16 个测试；1 个大规模基准按设计标记为 ignored。
+- cargo test --manifest-path src-tauri/Cargo.toml large_project_acceptance_handles_1000_chapters_and_one_million_characters -- --ignored --nocapture：通过，1 个测试，37.19 秒；1000 章、统计字数不少于 1,000,000。
+- pnpm.cmd tauri:build：通过，生成 src-tauri/target/release/novelforge.exe 和 src-tauri/target/release/bundle/nsis/NovelForge_0.1.0_x64-setup.exe。
+- Release smoke：通过，实际 release EXE 启动并被测试进程正常结束。
+
+### 当前剩余
+
+- 真实桌面鼠标级 E2E 仍需用户在 Windows + WebView2 桌面上按 DESKTOP_E2E_CHECKLIST.md 手动执行，或在后续环境安装桌面自动化驱动后执行。
+- Rust 仍有 3 个非致命 dead-code 警告，Vite 仍提示主 bundle 超过 500 kB；两者不影响当前构建和运行。
+
+### 下一步
+
+- 完成桌面人工 E2E 后，回填清单中的结果并将最终验收项标记为完成。
