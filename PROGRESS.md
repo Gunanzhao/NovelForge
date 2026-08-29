@@ -236,3 +236,27 @@
 ### 下一步
 
 - 完成桌面人工 E2E 后，回填清单中的结果并将最终验收项标记为完成。
+
+## 2026-08-30：规格差距补齐与收尾
+
+### 完成内容
+
+* 正文树支持跨卷/跨章节移动、递归复制、拖拽排序和批量选择；移动时同步 Markdown 文件及子节点路径，数据库失败会回滚文件。
+* 增加 Ctrl+P 快速打开、Ctrl+F 当前文档搜索、Ctrl+Shift+F 全项目搜索，并补齐全部资料类型筛选。
+* 导出支持 Markdown、TXT、HTML、DOCX、EPUB、PDF；可选择整本、指定卷或指定章节，并配置作品名、作者、目录、卷/章节标题和封面路径。
+* AI 支持续写、润色、改写、扩写、缩写、摘要、章节摘要、大纲、角色对话、设定建议和名字生成；Provider 增加名称、Temperature、Max Tokens。
+* 补齐历史 Diff/复制旧版本、回收站清空、附件打开/章节关联、当前卷/章节统计和侧栏布局状态持久化。
+
+### 验证结果
+
+* pnpm.cmd test：通过，12 个测试文件、40 个测试。
+* pnpm.cmd typecheck：通过。
+* pnpm.cmd lint：通过，0 error / 0 warning。
+* cargo test --manifest-path src-tauri/Cargo.toml：通过，17 个测试，1 个 ignored。
+* pnpm.cmd tauri:build：通过，生成 Windows x64 release EXE 和 NSIS 安装包。
+* Release smoke：通过，独立 release EXE 启动并在 3 秒后保持运行，测试后正常结束。
+
+### 当前剩余
+
+* 只剩真实桌面鼠标级 E2E 需要在带 WebView2 的 Windows 桌面人工执行；当前环境没有 tauri-driver / geckodriver / chromedriver / Playwright。
+* Rust dead-code 警告和 Vite 主 bundle 体积提示属于非阻塞质量优化项，不影响功能完成或发布构建。

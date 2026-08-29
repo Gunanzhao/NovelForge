@@ -106,3 +106,17 @@
 - 当前环境未安装 `tauri-driver`、`geckodriver`、`chromedriver` 或 Playwright，无法可靠执行真实桌面鼠标级 E2E。
 - 请在 Windows + WebView2 桌面上按 [`DESKTOP_E2E_CHECKLIST.md`](DESKTOP_E2E_CHECKLIST.md) 完成创建项目、编辑保存、资料 CRUD、导出、回收站恢复、AI 本地模式和异常恢复的人工验收。
 - Rust 的 3 个 dead-code 警告、Vite 主 bundle 体积提示和 PDF 标准字体兼容性属于非阻塞项。
+
+## 规格差距补齐验证（2026-08-30）
+
+* 节点移动/复制：通过 Rust 真实文件系统集成测试，跨卷移动会同步章节小节目录和数据库路径，复制会生成独立 ID 与文件副本。
+* 拖拽排序与批量选择：通过 TypeScript 类型检查、Lint 和前端回归测试。
+* Ctrl+P 快速打开、Ctrl+F 当前文档搜索、Ctrl+Shift+F 全项目搜索及全资料类型筛选：通过前端回归测试。
+* HTML 和范围导出：通过 Rust 导出测试；Markdown/TXT/HTML/DOCX/EPUB/PDF 均生成成功。
+* AI 扩展：通过前端回归测试；Provider 名称、Temperature、Max Tokens 仅保存非敏感偏好，API Key 仍不写入持久化。
+* 回归结果：pnpm.cmd test 40/40；pnpm.cmd typecheck 通过；pnpm.cmd lint 0 error / 0 warning；cargo test 17 passed、1 ignored。
+* 发布结果：pnpm.cmd tauri:build 通过；release EXE 和 NSIS 安装包实际生成；release EXE 独立启动冒烟通过。
+
+### 仍需人工
+
+* 真实桌面鼠标级 E2E（窗口内点击、输入、创建项目、完整导出/恢复和异常恢复）仍需在带 WebView2 的 Windows 桌面执行；当前环境未安装桌面自动化驱动。
