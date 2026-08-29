@@ -773,9 +773,17 @@ pub fn delete_node(input: crate::models::NodeActionInput) -> Result<ProjectData,
     project_data(&root, &connection)
 }
 
+fn restore_document_after_save_failure(target: &Path, target_existed: bool, old_content: &str) -> Result<(), String> {
+    if target_existed {
+        storage::atomic_write(target, old_content.as_bytes())
+    } else {
+        storage::remove_file_if_exists(target)
+    }
+}
+
 fn save_document_internal(
     root: &Path,
-    connection: &Connection,
+    connection: &mut Connection,
     node_id: &str,
     content: &str,
     reason: &str,
@@ -786,40 +794,70 @@ fn save_document_internal(
         return Err("只有未删除的章节或小节可以编辑".to_string());
     }
     let target = storage::safe_relative(root, &node.file_path)?;
-    let old_content = fs::read_to_string(&target).unwrap_or_default();
+    let target_existed = target.exists();
+    let old_content = if target_existed {
+        fs::read_to_string(&target).map_err(|error| format!("读取原正文失败：{}", error))?
+    } else {
+        String::new()
+    };
     let (_recovery_id, recovery_path) = storage::write_recovery(root, node_id, content)?;
     storage::atomic_write(&target, content.as_bytes())?;
     let revision_id = storage::new_id();
-    let revision_path = storage::copy_history(root, node_id, &revision_id, content)?;
-    let created_at = storage::now();
-    connection
-        .execute(
-            "INSERT INTO revisions (id, node_id, node_title, reason, word_count, created_at, file_path) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![
-                revision_id,
-                node.id,
-                node.title,
-                if reason.trim().is_empty() { "自动保存" } else { reason },
-                storage::word_count(content) as i64,
-                created_at,
-                revision_path
-            ],
-        )
-        .map_err(|error| format!("记录历史快照失败：{}", error))?;
-    let delta = storage::word_count(content) as i64 - storage::word_count(&old_content) as i64;
-    connection
-        .execute(
-            "INSERT INTO activity (id, node_id, created_at, delta_words, word_count) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![storage::new_id(), node.id, storage::now(), delta, storage::word_count(content) as i64],
-        )
-        .map_err(|error| format!("记录写作统计失败：{}", error))?;
-    connection
-        .execute(
-            "UPDATE nodes SET updated_at = ?1 WHERE id = ?2",
-            params![storage::now(), node.id],
-        )
-        .map_err(|error| format!("更新章节时间失败：{}", error))?;
-    storage::index_record(connection, &node.id, &node.kind, &node.title, content, &node.file_path)?;
+    let revision_path = match storage::copy_history(root, node_id, &revision_id, content) {
+        Ok(path) => path,
+        Err(error) => {
+            let rollback = restore_document_after_save_failure(&target, target_existed, &old_content);
+            return match rollback {
+                Ok(()) => Err(format!("{}；原正文已恢复，恢复文件已保留", error)),
+                Err(rollback_error) => Err(format!("{}；原正文恢复失败：{}；恢复文件已保留", error, rollback_error)),
+            };
+        }
+    };
+    let database_result = (|| -> Result<(), String> {
+        let transaction = connection
+            .transaction()
+            .map_err(|error| format!("无法开始保存事务：{}", error))?;
+        let created_at = storage::now();
+        transaction
+            .execute(
+                "INSERT INTO revisions (id, node_id, node_title, reason, word_count, created_at, file_path) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    revision_id,
+                    node.id,
+                    node.title,
+                    if reason.trim().is_empty() { "自动保存" } else { reason },
+                    storage::word_count(content) as i64,
+                    created_at,
+                    revision_path
+                ],
+            )
+            .map_err(|error| format!("记录历史快照失败：{}", error))?;
+        let delta = storage::word_count(content) as i64 - storage::word_count(&old_content) as i64;
+        transaction
+            .execute(
+                "INSERT INTO activity (id, node_id, created_at, delta_words, word_count) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![storage::new_id(), node.id, storage::now(), delta, storage::word_count(content) as i64],
+            )
+            .map_err(|error| format!("记录写作统计失败：{}", error))?;
+        transaction
+            .execute(
+                "UPDATE nodes SET updated_at = ?1 WHERE id = ?2",
+                params![storage::now(), node.id],
+            )
+            .map_err(|error| format!("更新章节时间失败：{}", error))?;
+        storage::index_record(&transaction, &node.id, &node.kind, &node.title, content, &node.file_path)?;
+        transaction.commit().map_err(|error| format!("提交保存事务失败：{}", error))
+    })();
+    if let Err(error) = database_result {
+        let cleanup = storage::remove_file_if_exists(&storage::safe_relative(root, &revision_path)?);
+        let rollback = restore_document_after_save_failure(&target, target_existed, &old_content);
+        let mut detail = error;
+        if let Err(cleanup_error) = cleanup { detail.push_str(&format!("；历史快照清理失败：{}", cleanup_error)); }
+        return match rollback {
+            Ok(()) => Err(format!("{}；原正文已恢复，恢复文件已保留", detail)),
+            Err(rollback_error) => Err(format!("{}；原正文恢复失败：{}；恢复文件已保留", detail, rollback_error)),
+        };
+    }
     storage::touch_project(root)?;
     storage::remove_file_if_exists(Path::new(&recovery_path))?;
     let updated = storage::node_from_id(connection, node_id)?
@@ -877,8 +915,8 @@ pub fn get_document(input: crate::models::NodeActionInput) -> Result<DocumentDat
 
 #[tauri::command]
 pub fn save_document(input: SaveDocumentInput) -> Result<DocumentData, String> {
-    let (root, connection) = project_connection(&input.project_path)?;
-    save_document_internal(&root, &connection, &input.node_id, &input.content, &input.reason)
+    let (root, mut connection) = project_connection(&input.project_path)?;
+    save_document_internal(&root, &mut connection, &input.node_id, &input.content, &input.reason)
 }
 
 #[derive(Debug, Deserialize)]
@@ -910,7 +948,7 @@ pub fn read_recovery(input: RecoveryActionInput) -> Result<String, String> {
 
 #[tauri::command]
 pub fn restore_recovery(input: RecoveryActionInput) -> Result<ProjectData, String> {
-    let (root, connection) = project_connection(&input.project_path)?;
+    let (root, mut connection) = project_connection(&input.project_path)?;
     let node_id = input.recovery_id.split("--").next().unwrap_or_default().to_string();
     if node_id.is_empty() {
         return Err("恢复文件关联的章节无效".to_string());
@@ -919,7 +957,7 @@ pub fn restore_recovery(input: RecoveryActionInput) -> Result<ProjectData, Strin
     let content = fs::read_to_string(&recovery_file)
         .map_err(|error| format!("无法读取恢复内容：{}", error))?;
     preserve_current_revision(&root, &connection, &node_id, "恢复前自动快照")?;
-    save_document_internal(&root, &connection, &node_id, &content, "崩溃恢复")?;
+    save_document_internal(&root, &mut connection, &node_id, &content, "崩溃恢复")?;
     storage::remove_file_if_exists(&recovery_file)?;
     project_data(&root, &connection)
 }
@@ -956,14 +994,14 @@ pub fn read_history(input: RevisionActionInput) -> Result<String, String> {
 
 #[tauri::command]
 pub fn restore_history(input: RevisionActionInput) -> Result<ProjectData, String> {
-    let (root, connection) = project_connection(&input.project_path)?;
+    let (root, mut connection) = project_connection(&input.project_path)?;
     let (node_id, path): (String, String) = connection
         .query_row("SELECT node_id, file_path FROM revisions WHERE id = ?1", params![input.revision_id], |row| Ok((row.get(0)?, row.get(1)?)))
         .map_err(|error| format!("版本不存在：{}", error))?;
     let content = fs::read_to_string(storage::safe_relative(&root, &path)?)
         .map_err(|error| format!("无法读取历史内容：{}", error))?;
     preserve_current_revision(&root, &connection, &node_id, "恢复前自动快照")?;
-    save_document_internal(&root, &connection, &node_id, &content, "恢复历史版本")?;
+    save_document_internal(&root, &mut connection, &node_id, &content, "恢复历史版本")?;
     project_data(&root, &connection)
 }
 

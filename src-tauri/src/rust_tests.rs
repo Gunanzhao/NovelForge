@@ -250,6 +250,38 @@ fn restore_history_preserves_current_document() {
 }
 
 #[test]
+fn save_failure_restores_original_and_keeps_recovery_file() {
+    let root = test_root("save-rollback");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "保存回滚测试".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
+    super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(), node_id: chapter.id.clone(), content: "原正文".to_string(), reason: "初始".to_string(),
+    }).expect("save original");
+    {
+        let connection = storage::open_db(&root.join("project")).expect("database");
+        connection.execute_batch(
+            "CREATE TRIGGER fail_revision BEFORE INSERT ON revisions BEGIN SELECT RAISE(ABORT, 'save failure'); END;"
+        ).expect("failure trigger");
+    }
+
+    let result = super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(), node_id: chapter.id.clone(), content: "新正文，不应覆盖原稿".to_string(), reason: "触发失败".to_string(),
+    });
+    assert!(result.is_err());
+    assert_eq!(fs::read_to_string(root.join("project").join(&chapter.file_path)).expect("original remains"), "原正文");
+    let recovery = super::commands::list_recovery(project_path.clone()).expect("list recovery");
+    assert_eq!(recovery.len(), 1);
+    assert_eq!(super::commands::read_recovery(super::commands::RecoveryActionInput {
+        project_path, recovery_id: recovery[0].id.clone(),
+    }).expect("read recovery"), "新正文，不应覆盖原稿");
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn node_delete_restores_file_when_database_transaction_fails() {
     let root = test_root("delete-rollback");
     let project_path = root.join("project").to_string_lossy().to_string();
