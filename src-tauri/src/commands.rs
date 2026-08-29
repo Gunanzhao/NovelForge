@@ -1,7 +1,7 @@
 use crate::models::{
     DocumentData, EntityInput, EntityRecord, ExportInput, HistoryItem, NodeInput, NodeRecord,
     ProjectData, ProjectInput, ProjectMetadata, RecoveryItem, SaveDocumentInput, SearchInput,
-    SearchResult, Stats, TrashItem,
+    SearchResult, Stats, StatisticsInput, TrashItem,
 };
 use crate::storage_impl as storage;
 use chrono::{Duration, Utc};
@@ -663,6 +663,30 @@ pub fn import_attachment(input: crate::models::AttachmentInput) -> Result<Projec
     project_data(&root, &connection)
 }
 
+#[tauri::command]
+pub fn open_attachment(input: crate::models::NodeActionInput) -> Result<String, String> {
+    let (root, connection) = project_connection(&input.project_path)?;
+    let entity = storage::entity_from_id(&connection, &input.node_id)?
+        .ok_or_else(|| "附件不存在".to_string())?;
+    if entity.kind != "attachment" {
+        return Err("只能打开附件条目".to_string());
+    }
+    let absolute = storage::safe_relative(&root, &entity.file_path)?;
+    if !absolute.is_file() {
+        return Err("附件文件不存在，可能已被外部程序移动".to_string());
+    }
+    #[cfg(target_os = "windows")]
+    std::process::Command::new("explorer.exe").arg(&absolute).spawn()
+        .map_err(|error| format!("无法打开附件：{}", error))?;
+    #[cfg(target_os = "macos")]
+    std::process::Command::new("open").arg(&absolute).spawn()
+        .map_err(|error| format!("无法打开附件：{}", error))?;
+    #[cfg(target_os = "linux")]
+    std::process::Command::new("xdg-open").arg(&absolute).spawn()
+        .map_err(|error| format!("无法打开附件：{}", error))?;
+    Ok(absolute.to_string_lossy().to_string())
+}
+
 fn safe_filename(title: &str) -> String {
     let cleaned: String = title
         .chars()
@@ -723,6 +747,16 @@ pub fn list_entities(path: String, kind: Option<String>) -> Result<Vec<EntityRec
 pub fn list_trash(path: String) -> Result<Vec<TrashItem>, String> {
     let (_root, connection) = project_connection(&path)?;
     storage::trash_items(&connection)
+}
+
+#[tauri::command]
+pub fn empty_trash(path: String) -> Result<ProjectData, String> {
+    let items = list_trash(path.clone())?;
+    for item in items {
+        permanent_delete(crate::models::NodeActionInput { project_path: path.clone(), node_id: item.id })?;
+    }
+    let (root, connection) = project_connection(&path)?;
+    project_data(&root, &connection)
 }
 
 #[tauri::command]
@@ -1100,17 +1134,19 @@ pub fn check_consistency(path: String) -> Result<crate::models::ConsistencyRepor
 }
 
 #[tauri::command]
-pub fn get_statistics(path: String) -> Result<Stats, String> {
-    let (root, connection) = project_connection(&path)?;
+pub fn get_statistics(input: StatisticsInput) -> Result<Stats, String> {
+    let (root, connection) = project_connection(&input.project_path)?;
     let nodes = storage::all_nodes(&connection, false)?;
     let mut total_words = 0;
     let mut chapter_count = 0;
     let mut chapter_stats = Vec::new();
+    let mut word_counts = std::collections::HashMap::<String, u64>::new();
     for node in nodes.iter().filter(|node| node.kind != "volume") {
         if node.kind == "chapter" { chapter_count += 1; }
         if let Ok(content) = fs::read_to_string(storage::safe_relative(&root, &node.file_path)?) {
             let words = storage::word_count(&content);
             total_words += words;
+            word_counts.insert(node.id.clone(), words);
             if node.kind == "chapter" {
                 chapter_stats.push(crate::models::ChapterStats {
                     id: node.id.clone(), title: node.title.clone(), words, updated_at: node.updated_at.clone(),
@@ -1146,6 +1182,8 @@ pub fn get_statistics(path: String) -> Result<Stats, String> {
             if date.date_naive() >= month_start { month_words += positive; }
         }
     }
+    let active_days = dates.len() as u64;
+    let average_daily_words = if active_days > 0 { daily_totals.values().sum::<u64>() / active_days } else { 0 };
     let mut streak = 0;
     let mut cursor = now.date_naive();
     loop {
@@ -1157,6 +1195,14 @@ pub fn get_statistics(path: String) -> Result<Stats, String> {
             break;
         }
     }
+    let mut longest_streak = 0;
+    let mut run = 0;
+    let mut previous: Option<chrono::NaiveDate> = None;
+    for date in dates.iter().filter_map(|value| chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").ok()) {
+        if previous.is_some_and(|last| date == last + Duration::days(1)) { run += 1; } else { run = 1; }
+        longest_streak = longest_streak.max(run);
+        previous = Some(date);
+    }
     let metadata = storage::read_project_json(&root)?;
     let daily = (0..30).rev().map(|offset| {
         let date = (now - Duration::days(offset)).format("%Y-%m-%d").to_string();
@@ -1164,9 +1210,32 @@ pub fn get_statistics(path: String) -> Result<Stats, String> {
         crate::models::DailyStats { date, words }
     }).collect();
     chapter_stats.sort_by(|left, right| right.words.cmp(&left.words).then_with(|| left.title.cmp(&right.title)));
+    let current_node = input.current_node_id.as_deref().and_then(|id| nodes.iter().find(|node| node.id == id));
+    let current_chapter_words = current_node.filter(|node| node.kind == "chapter").and_then(|node| word_counts.get(&node.id).copied()).unwrap_or(0);
+    let mut current_volume_id: Option<String> = None;
+    if let Some(node) = current_node {
+        let mut parent = node.parent_id.clone();
+        while let Some(parent_id) = parent {
+            if let Some(parent_node) = nodes.iter().find(|candidate| candidate.id == parent_id) {
+                if parent_node.kind == "volume" { current_volume_id = Some(parent_node.id.clone()); break; }
+                parent = parent_node.parent_id.clone();
+            } else { break; }
+        }
+    }
+    let current_volume_words = current_volume_id.map(|volume_id| {
+        nodes.iter().filter(|node| node.kind != "volume" && (node.id == volume_id || {
+            let mut parent = node.parent_id.clone();
+            let mut found = false;
+            while let Some(parent_id) = parent {
+                if parent_id == volume_id { found = true; break; }
+                parent = nodes.iter().find(|candidate| candidate.id == parent_id).and_then(|candidate| candidate.parent_id.clone());
+            }
+            found
+        })).map(|node| word_counts.get(&node.id).copied().unwrap_or(0)).sum()
+    }).unwrap_or(0);
     Ok(Stats {
-        total_words, today_words, yesterday_words, week_words, month_words,
-        chapter_count, target_words: metadata.target_words, writing_streak: streak, daily, chapter_stats,
+        total_words, current_volume_words, current_chapter_words, today_words, yesterday_words, week_words, month_words,
+        chapter_count, target_words: metadata.target_words, writing_streak: streak, average_daily_words, longest_writing_streak: longest_streak, daily, chapter_stats,
     })
 }
 

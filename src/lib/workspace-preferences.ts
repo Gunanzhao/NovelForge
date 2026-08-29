@@ -8,6 +8,7 @@ export interface WorkspacePreferences {
   editorLineHeight: number
   contentWidth: number
   paragraphSpacing: number
+  dailyTargetWords: number
 }
 
 export const DEFAULT_WORKSPACE_PREFERENCES: WorkspacePreferences = {
@@ -18,6 +19,7 @@ export const DEFAULT_WORKSPACE_PREFERENCES: WorkspacePreferences = {
   editorLineHeight: 1.95,
   contentWidth: 920,
   paragraphSpacing: 15,
+  dailyTargetWords: 1500,
 }
 
 export const WORKSPACE_PREFERENCES_STORAGE_KEY = 'novelforge:workspace-preferences:v1'
@@ -39,6 +41,7 @@ export function normalizeWorkspacePreferences(value: unknown): WorkspacePreferen
     editorLineHeight: finiteNumber(source.editorLineHeight, DEFAULT_WORKSPACE_PREFERENCES.editorLineHeight, 1.4, 2.6),
     contentWidth: finiteNumber(source.contentWidth, DEFAULT_WORKSPACE_PREFERENCES.contentWidth, 560, 1200, true),
     paragraphSpacing: finiteNumber(source.paragraphSpacing, DEFAULT_WORKSPACE_PREFERENCES.paragraphSpacing, 0, 40, true),
+    dailyTargetWords: finiteNumber(source.dailyTargetWords, DEFAULT_WORKSPACE_PREFERENCES.dailyTargetWords, 0, 100_000, true),
   }
 }
 

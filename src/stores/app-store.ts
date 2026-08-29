@@ -45,8 +45,8 @@ function firstChapter(data: ProjectData) {
 }
 
 const emptyStats: Stats = {
-  totalWords: 0, todayWords: 0, yesterdayWords: 0, weekWords: 0, monthWords: 0,
-  chapterCount: 0, targetWords: 0, writingStreak: 0, daily: [], chapterStats: [],
+  totalWords: 0, currentVolumeWords: 0, currentChapterWords: 0, todayWords: 0, yesterdayWords: 0, weekWords: 0, monthWords: 0,
+  chapterCount: 0, targetWords: 0, writingStreak: 0, averageDailyWords: 0, longestWritingStreak: 0, daily: [], chapterStats: [],
 }
 
 interface AppState {
@@ -97,6 +97,7 @@ interface AppState {
   loadTrash: () => Promise<void>
   restoreTrash: (trashId: string) => Promise<void>
   permanentlyDelete: (trashId: string) => Promise<void>
+  emptyTrash: () => Promise<void>
   runSearch: (query: string, options?: Omit<import('../lib/types').SearchInput, 'projectPath' | 'query'>) => Promise<void>
   refreshStats: () => Promise<void>
   exportProject: (format: ExportFormat) => Promise<string>
@@ -375,6 +376,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) { get().setError(error) }
   },
 
+  emptyTrash: async () => {
+    const projectPath = get().projectPath
+    if (!projectPath) return
+    try {
+      await get().refreshData(await projectApi.emptyTrash(projectPath), false)
+      await get().loadTrash()
+    } catch (error) { get().setError(error) }
+  },
+
   runSearch: async (query, options) => {
     const projectPath = get().projectPath
     set({ searchQuery: query })
@@ -389,7 +399,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   refreshStats: async () => {
     const projectPath = get().projectPath
     if (!projectPath) return
-    try { set({ stats: await projectApi.stats(projectPath) }) }
+    try { set({ stats: await projectApi.stats(projectPath, get().document?.node.id) }) }
     catch (error) { get().setError(error) }
   },
 

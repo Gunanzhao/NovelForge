@@ -82,6 +82,8 @@ export interface DocumentData {
 
 export interface Stats {
   totalWords: number
+  currentVolumeWords?: number
+  currentChapterWords?: number
   todayWords: number
   yesterdayWords: number
   weekWords: number
@@ -89,6 +91,8 @@ export interface Stats {
   chapterCount: number
   targetWords: number
   writingStreak: number
+  averageDailyWords?: number
+  longestWritingStreak?: number
   daily: DailyStats[]
   chapterStats: ChapterStats[]
 }

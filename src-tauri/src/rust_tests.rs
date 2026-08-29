@@ -83,6 +83,12 @@ fn real_command_workflow_persists_markdown_and_recoverable_trash() {
         project_path: project_path.clone(), node_id: trash_id,
     }).expect("restore node");
     assert!(restored.nodes.iter().any(|node| node.id == chapter.id));
+    let _ = super::commands::delete_node(super::models::NodeActionInput {
+        project_path: project_path.clone(), node_id: chapter.id.clone(),
+    }).expect("delete again");
+    let emptied = super::commands::empty_trash(project_path.clone()).expect("empty trash");
+    assert!(!emptied.nodes.iter().any(|node| node.id == chapter.id));
+    assert!(super::commands::list_trash(project_path.clone()).expect("list emptied trash").is_empty());
     let reopened = super::commands::open_project(project_path).expect("reopen project");
     assert_eq!(reopened.project.title, "雾港来信");
     let _ = fs::remove_dir_all(root);
@@ -328,13 +334,17 @@ fn statistics_include_daily_series_and_chapter_breakdown() {
     }).expect("create project");
     let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
     super::commands::save_document(super::models::SaveDocumentInput {
-        project_path: project_path.clone(), node_id: chapter.id.clone(), content: "# 第一章\n\n一段统计正文".to_string(), reason: "统计测试".to_string(),
+        project_path: project_path.clone(), node_id: chapter.id.clone(), content: "# 第一章\n\n一段统计正文".repeat(20), reason: "统计测试".to_string(),
     }).expect("save document");
-    let stats = super::commands::get_statistics(project_path).expect("statistics");
+    let stats = super::commands::get_statistics(super::models::StatisticsInput { project_path, current_node_id: Some(chapter.id.clone()) }).expect("statistics");
     assert_eq!(stats.daily.len(), 30);
     assert_eq!(stats.chapter_stats.len(), 1);
     assert_eq!(stats.chapter_stats[0].id, chapter.id);
     assert!(stats.chapter_stats[0].words > 0);
+    assert_eq!(stats.current_chapter_words, stats.chapter_stats[0].words);
+    assert!(stats.current_volume_words >= stats.current_chapter_words);
+    assert!(stats.average_daily_words > 0);
+    assert!(stats.longest_writing_streak >= stats.writing_streak);
     let _ = fs::remove_dir_all(root);
 }
 
@@ -428,7 +438,7 @@ fn large_project_acceptance_handles_1000_chapters_and_one_million_characters() {
         }).expect("save chapter");
     }
     let data = super::commands::open_project(project_path.clone()).expect("open large project");
-    let stats = super::commands::get_statistics(project_path.clone()).expect("large statistics");
+    let stats = super::commands::get_statistics(super::models::StatisticsInput { project_path: project_path.clone(), current_node_id: None }).expect("large statistics");
     assert_eq!(stats.chapter_count, 1000);
     assert!(stats.total_words >= 1_000_000);
     assert!(started.elapsed() < std::time::Duration::from_secs(120));

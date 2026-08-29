@@ -104,6 +104,8 @@ pub struct DocumentData {
 #[serde(rename_all = "camelCase")]
 pub struct Stats {
     pub total_words: u64,
+    pub current_volume_words: u64,
+    pub current_chapter_words: u64,
     pub today_words: u64,
     pub yesterday_words: u64,
     pub week_words: u64,
@@ -111,6 +113,8 @@ pub struct Stats {
     pub chapter_count: u64,
     pub target_words: u64,
     pub writing_streak: u64,
+    pub average_daily_words: u64,
+    pub longest_writing_streak: u64,
     pub daily: Vec<DailyStats>,
     pub chapter_stats: Vec<ChapterStats>,
 }
@@ -246,6 +250,13 @@ pub struct SearchInput {
     pub volume_path: Option<String>,
     pub tag: Option<String>,
     pub case_sensitive: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatisticsInput {
+    pub project_path: String,
+    pub current_node_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

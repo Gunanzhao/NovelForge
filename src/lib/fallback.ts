@@ -266,6 +266,11 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     return store.data as T
   }
   if (command === 'list_trash') return store.trash as T
+  if (command === 'empty_trash') {
+    store.trash = []
+    persist(projectPath, store)
+    return store.data as T
+  }
   if (command === 'restore_trash') {
     const trash = store.trash.find((item) => item.id === input?.nodeId)
     if (trash) {
@@ -307,6 +312,11 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     return results.slice(0, 100) as T
   }
   if (command === 'check_consistency') return analyzeConsistency(store.data, store.documents) as T
+  if (command === 'open_attachment') {
+    const current = entity(store, input?.nodeId as string)
+    if (!current || current.kind !== 'attachment') throw new Error('附件不存在')
+    return ('fallback://' + current.filePath) as T
+  }
   if (command === 'ai_complete') {
     const aiInput = args.input as { model?: string; prompt: string }
     const excerpt = aiInput.prompt.trim().slice(0, 900)
@@ -333,10 +343,49 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     const chapterStats = store.data.nodes.filter((item) => item.kind === 'chapter').map((item) => ({
       id: item.id, title: item.title, words: countWords(store.documents[item.id] ?? ''), updatedAt: item.updatedAt,
     })).sort((left, right) => right.words - left.words || left.title.localeCompare(right.title, 'zh-CN'))
+    const activeDates = Array.from(dailyTotals.entries()).filter(([, words]) => words > 0).map(([date]) => date).sort()
+    const averageDailyWords = activeDates.length ? Math.floor(Array.from(dailyTotals.values()).reduce((sum, words) => sum + words, 0) / activeDates.length) : 0
+    let writingStreak = 0
+    const cursor = new Date(now)
+    while (dailyTotals.get(dayKey(cursor)) && (dailyTotals.get(dayKey(cursor)) ?? 0) > 0) {
+      writingStreak += 1
+      cursor.setDate(cursor.getDate() - 1)
+    }
+    let longestWritingStreak = 0
+    let run = 0
+    let previousDate = ''
+    for (const date of activeDates) {
+      const currentDate = new Date(date + 'T00:00:00')
+      const previous = previousDate ? new Date(previousDate + 'T00:00:00') : undefined
+      if (previous && Math.round((currentDate.getTime() - previous.getTime()) / 86400000) === 1) run += 1
+      else run = 1
+      longestWritingStreak = Math.max(longestWritingStreak, run)
+      previousDate = date
+    }
+    const currentNodeId = (args.input as { currentNodeId?: string } | undefined)?.currentNodeId
+    const currentNode = currentNodeId ? node(store, currentNodeId) : undefined
+    const currentChapterWords = currentNode?.kind === 'chapter' ? countWords(store.documents[currentNode.id] ?? '') : 0
+    let currentVolumeId: string | undefined
+    let parentId = currentNode?.parentId
+    while (parentId) {
+      const parent = node(store, parentId)
+      if (!parent) break
+      if (parent.kind === 'volume') { currentVolumeId = parent.id; break }
+      parentId = parent.parentId
+    }
+    const currentVolumeWords = currentVolumeId ? store.data.nodes.filter((item) => {
+      if (item.kind === 'volume') return false
+      let candidate = item.parentId
+      while (candidate) {
+        if (candidate === currentVolumeId) return true
+        candidate = node(store, candidate)?.parentId ?? null
+      }
+      return false
+    }).reduce((sum, item) => sum + countWords(store.documents[item.id] ?? ''), 0) : 0
     return {
-      totalWords: total, todayWords, yesterdayWords: 0, weekWords: todayWords, monthWords: todayWords,
+      totalWords: total, currentVolumeWords, currentChapterWords, todayWords, yesterdayWords: 0, weekWords: todayWords, monthWords: todayWords,
       chapterCount: store.data.nodes.filter((item) => item.kind === 'chapter').length,
-      targetWords: store.data.project.targetWords, writingStreak: todayWords > 0 ? 1 : 0, daily, chapterStats,
+      targetWords: store.data.project.targetWords, writingStreak, averageDailyWords, longestWritingStreak, daily, chapterStats,
     } as T
   }
   if (command === 'export_project') {
