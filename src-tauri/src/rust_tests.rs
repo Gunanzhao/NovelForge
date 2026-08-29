@@ -99,6 +99,20 @@ fn real_command_workflow_persists_markdown_and_recoverable_trash() {
 }
 
 #[test]
+fn application_logs_are_levelled_and_redacted() {
+    let root = test_root("logs");
+    storage::create_project_directories(&root).expect("project directories");
+    storage::append_log(&root, "INFO", "document_saved").expect("info log");
+    storage::append_log(&root, "ERROR", "api_key=super-secret\nfull text").expect("redacted log");
+    let logs = storage::read_logs(&root).expect("read logs");
+    assert!(logs.contains("[INFO] document_saved"));
+    assert!(logs.contains("[ERROR] [REDACTED]"));
+    assert!(!logs.contains("super-secret"));
+    assert!(storage::append_log(&root, "TRACE", "invalid").is_err());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn move_and_copy_nodes_keep_markdown_files_and_tree_paths_in_sync() {
     let root = test_root("move-copy");
     let project_path = root.join("project").to_string_lossy().to_string();

@@ -40,6 +40,7 @@ pub fn run() {
             commands::ai_complete,
             commands::get_statistics,
             commands::export_project,
+            commands::read_logs,
             commands::update_project
         ]);
     if let Err(error) = builder.run(tauri::generate_context!()) {

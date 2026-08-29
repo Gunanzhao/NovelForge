@@ -57,6 +57,7 @@ export const projectApi = {
   openAttachment: (input: { projectPath: string; nodeId: string }) => command<string>('open_attachment', { input }),
   stats: (path: string, nodeId?: string) => command<Stats>('get_statistics', { input: { projectPath: path, currentNodeId: nodeId } }),
   exportProject: (input: ExportInput) => command<string>('export_project', { input }),
+  readLogs: (path: string) => command<string>('read_logs', { path }),
   updateProject: (input: { projectPath: string; title: string; author: string; description: string; genre: string; targetWords: number }) => command<ProjectData>('update_project', { input }),
 }
 

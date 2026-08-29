@@ -519,6 +519,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     if (exportInput.format === 'markdown' || exportInput.format === 'txt' || exportInput.format === 'html') void exportText(store, exportInput.format, exportInput)
     return ('browser://exports/' + store.data.project.title + '.' + exportInput.format) as T
   }
+  if (command === 'read_logs') return '' as T
   if (command === 'update_project') {
     const update = input as unknown as ProjectInput
     store.data.project.title = update.title

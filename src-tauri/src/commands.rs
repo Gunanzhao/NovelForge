@@ -296,6 +296,7 @@ pub fn create_project(input: ProjectInput) -> Result<ProjectData, String> {
     };
     insert_node(&connection, &chapter)?;
     storage::index_record(&connection, &chapter.id, &chapter.kind, &chapter.title, starter, &chapter.file_path)?;
+    let _ = storage::append_log(&root, "INFO", "project_created");
     project_data(&root, &connection)
 }
 
@@ -303,6 +304,7 @@ pub fn create_project(input: ProjectInput) -> Result<ProjectData, String> {
 pub fn open_project(path: String) -> Result<ProjectData, String> {
     let (root, connection) = project_connection(&path)?;
     storage::refresh_search_index(&root, &connection)?;
+    let _ = storage::append_log(&root, "INFO", "project_opened");
     project_data(&root, &connection)
 }
 
@@ -806,6 +808,7 @@ fn save_document_internal(
     let revision_path = match storage::copy_history(root, node_id, &revision_id, content) {
         Ok(path) => path,
         Err(error) => {
+            let _ = storage::append_log(root, "ERROR", "document_save_failed");
             let rollback = restore_document_after_save_failure(&target, target_existed, &old_content);
             return match rollback {
                 Ok(()) => Err(format!("{}；原正文已恢复，恢复文件已保留", error)),
@@ -849,6 +852,7 @@ fn save_document_internal(
         transaction.commit().map_err(|error| format!("提交保存事务失败：{}", error))
     })();
     if let Err(error) = database_result {
+        let _ = storage::append_log(root, "ERROR", "document_save_failed");
         let cleanup = storage::remove_file_if_exists(&storage::safe_relative(root, &revision_path)?);
         let rollback = restore_document_after_save_failure(&target, target_existed, &old_content);
         let mut detail = error;
@@ -860,6 +864,7 @@ fn save_document_internal(
     }
     storage::touch_project(root)?;
     storage::remove_file_if_exists(Path::new(&recovery_path))?;
+    let _ = storage::append_log(root, "INFO", "document_saved");
     let updated = storage::node_from_id(connection, node_id)?
         .ok_or_else(|| "保存后无法读取章节".to_string())?;
     Ok(DocumentData { node: updated, content: content.to_string() })
@@ -1035,6 +1040,7 @@ pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
     let index_content = if input.kind == "attachment" { input.content.to_string() } else { storage::markdown_entity(&input.title, &input.content, &input.tags) };
     storage::index_record(&connection, &entity_id, &input.kind, input.title.trim(), &index_content, &file_path)?;
     storage::touch_project(&root)?;
+    let _ = storage::append_log(&root, "INFO", "entity_saved");
     project_data(&root, &connection)
 }
 
@@ -1974,7 +1980,14 @@ pub fn export_project(input: ExportInput) -> Result<String, String> {
     let relative = format!(".novelforge/exports/{}", filename);
     let target = storage::safe_relative(&root, &relative)?;
     storage::atomic_write(&target, &bytes)?;
+    let _ = storage::append_log(&root, "INFO", "export_created");
     Ok(target.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn read_logs(path: String) -> Result<String, String> {
+    let (root, _connection) = project_connection(&path)?;
+    storage::read_logs(&root)
 }
 
 #[derive(Debug, Deserialize)]
@@ -2002,5 +2015,6 @@ pub fn update_project(input: ProjectSettingsInput) -> Result<ProjectData, String
     metadata.target_words = input.target_words;
     metadata.updated_at = storage::now();
     storage::write_project_json(&root, &metadata)?;
+    let _ = storage::append_log(&root, "INFO", "project_settings_updated");
     project_data(&root, &connection)
 }
