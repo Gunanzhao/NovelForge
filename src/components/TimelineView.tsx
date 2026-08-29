@@ -14,10 +14,11 @@ interface TimelineDraft {
   characters: string
   location: string
   chapters: string
+  tags: string
 }
 
 function blankDraft(): TimelineDraft {
-  return { title: '', date: '', time: '', description: '', characters: '', location: '', chapters: '' }
+  return { title: '', date: '', time: '', description: '', characters: '', location: '', chapters: '', tags: '' }
 }
 
 function toDraft(entity: EntityRecord | undefined) {
@@ -30,6 +31,7 @@ function toDraft(entity: EntityRecord | undefined) {
   draft.characters = contentText(entity, 'characters')
   draft.location = contentText(entity, 'location')
   draft.chapters = contentText(entity, 'chapters')
+  draft.tags = entity.tags.filter((tag) => tag !== '时间线').join(', ')
   return draft
 }
 
@@ -111,8 +113,9 @@ export function TimelineView() {
           characters: draft.characters,
           location: draft.location,
           chapters: draft.chapters,
+          tags: draft.tags,
         },
-        tags: ['时间线'],
+        tags: ['时间线', ...draft.tags.split(/[,，]/u).map((tag) => tag.trim()).filter(Boolean)],
       })
       const refreshed = useAppStore.getState().data?.entities ?? []
       const saved = creating
@@ -163,6 +166,7 @@ export function TimelineView() {
             <div className="field-grid"><Field label="地点"><TextInput value={draft.location} onChange={(event) => updateField('location', event.target.value)} placeholder="发生地点" /></Field><Field label="参与人物"><TextInput value={draft.characters} onChange={(event) => updateField('characters', event.target.value)} placeholder="用逗号分隔人物" /></Field></div>
             <Field label="事件描述"><textarea className="text-area" value={draft.description} onChange={(event) => updateField('description', event.target.value)} placeholder="记录发生了什么，以及它对故事造成的影响…" /></Field>
             <Field label="关联章节" hint="可填写章节标题或章节号，多个值用逗号分隔"><TextInput value={draft.chapters} onChange={(event) => updateField('chapters', event.target.value)} placeholder="例如：第一章, 第三章" /></Field>
+            <Field label="标签" hint="多个标签用逗号分隔"><TextInput value={draft.tags} onChange={(event) => updateField('tags', event.target.value)} placeholder="例如：转折、线索、高潮" /></Field>
             <div className="special-preview-row"><span><Clock3 size={13} />{draft.date || '未定日期'}{draft.time ? ' · ' + draft.time : ''}</span><span><MapPin size={13} />{draft.location || '未定地点'}</span><span><Users size={13} />{draft.characters || '未指定人物'}</span></div>
             {!creating && selected ? <div className="special-related"><span className="field-label">正文链接</span><ChapterReferences value={draft.chapters} chapters={chapters} onOpen={(id) => void selectNode(id)} /></div> : null}
             <div className="entity-actions"><Button onClick={() => void save()} disabled={busy || !draft.title.trim()}><Save size={14} />{busy ? '保存中…' : '保存事件'}</Button>{selected && !creating ? <Button variant="danger" onClick={() => void remove()}><Trash2 size={14} />移入回收站</Button> : null}</div>

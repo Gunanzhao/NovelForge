@@ -438,7 +438,7 @@ pub struct NodeStatusInput {
 
 #[tauri::command]
 pub fn set_node_status(input: NodeStatusInput) -> Result<ProjectData, String> {
-    let allowed = ["not-started", "draft", "editing", "done", "locked"];
+    let allowed = ["not-started", "draft", "first-draft", "editing", "done", "locked"];
     if !allowed.contains(&input.status.as_str()) {
         return Err("状态无效".to_string());
     }

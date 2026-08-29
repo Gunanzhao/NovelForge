@@ -9,8 +9,8 @@ function scene(id: string, order?: number, createdAt = id): EntityRecord {
   return { id, kind: 'scene', title: id, content: order === undefined ? {} : { order }, tags: [], filePath: id + '.md', createdAt, updatedAt: createdAt }
 }
 
-function timeline(id: string, date: string, time = '', createdAt = id): EntityRecord {
-  return { id, kind: 'timeline', title: id, content: { date, time }, tags: [], filePath: id + '.md', createdAt, updatedAt: createdAt }
+function timeline(id: string, date: string, time = '', createdAt = id, tags: string[] = []): EntityRecord {
+  return { id, kind: 'timeline', title: id, content: { date, time }, tags, filePath: id + '.md', createdAt, updatedAt: createdAt }
 }
 
 const chapters: NodeRecord[] = [
@@ -52,6 +52,7 @@ describe('timeline and foreshadowing planning helpers', () => {
     expect(filterTimelineEntities(events, { location: '青崖' }).map((item) => item.id)).toEqual(['mountain'])
     expect(filterTimelineEntities(events, { chapter: '第二章' }).map((item) => item.id)).toEqual(['mountain'])
     expect(filterTimelineEntities(events, { query: '雾港' }).map((item) => item.id)).toEqual(['harbor'])
+    expect(filterTimelineEntities([{ ...timeline('tagged', '2026-08-31', '', 'tagged', ['转折']) }], { query: '转折' }).map((item) => item.id)).toEqual(['tagged'])
   })
 
   it('resolves chapter title and chapter number references', () => {

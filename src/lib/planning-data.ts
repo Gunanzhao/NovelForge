@@ -86,7 +86,7 @@ export function filterTimelineEntities(entities: EntityRecord[], filters: Timeli
   return entities.filter((event) => {
     const fields = [
       event.title, contentText(event, 'description'), contentText(event, 'characters'),
-      contentText(event, 'location'), contentText(event, 'chapters'),
+      contentText(event, 'location'), contentText(event, 'chapters'), event.tags.join(' '),
     ].join(' ').toLocaleLowerCase()
     if (query && !fields.includes(query)) return false
     if (character && !contentText(event, 'characters').toLocaleLowerCase().includes(character)) return false

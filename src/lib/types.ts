@@ -127,6 +127,7 @@ export const ENTITY_LABELS: Record<EntityKind, string> = {
 export const NODE_STATUS_LABELS: Record<string, string> = {
   'not-started': '未开始',
   draft: '草稿',
+  'first-draft': '初稿',
   editing: '修改中',
   done: '完成',
   locked: '锁定',
@@ -134,16 +135,19 @@ export const NODE_STATUS_LABELS: Record<string, string> = {
 
 export const ENTITY_FIELDS: Record<EntityKind, Array<{ key: string; label: string; multiline?: boolean }>> = {
   character: [
-    { key: 'alias', label: '别名' }, { key: 'gender', label: '性别' }, { key: 'age', label: '年龄' },
-    { key: 'identity', label: '身份 / 职业' }, { key: 'faction', label: '阵营' },
+    { key: 'alias', label: '别名' }, { key: 'gender', label: '性别' }, { key: 'age', label: '年龄' }, { key: 'birthday', label: '生日' },
+    { key: 'identity', label: '身份 / 职业' }, { key: 'faction', label: '阵营' }, { key: 'avatar', label: '头像路径' },
     { key: 'appearance', label: '外貌', multiline: true }, { key: 'personality', label: '性格', multiline: true },
-    { key: 'ability', label: '能力与弱点', multiline: true }, { key: 'background', label: '背景 / 动机 / 秘密', multiline: true },
-    { key: 'status', label: '当前状态' }, { key: 'notes', label: '备注', multiline: true },
+    { key: 'ability', label: '能力', multiline: true }, { key: 'weakness', label: '弱点', multiline: true },
+    { key: 'habit', label: '习惯', multiline: true }, { key: 'background', label: '背景', multiline: true },
+    { key: 'goal', label: '目标', multiline: true }, { key: 'motivation', label: '动机', multiline: true }, { key: 'secret', label: '秘密', multiline: true },
+    { key: 'firstAppearance', label: '首次登场' }, { key: 'status', label: '当前状态' }, { key: 'notes', label: '备注', multiline: true },
   ],
   location: [
-    { key: 'type', label: '类型' }, { key: 'parent', label: '所属地点' }, { key: 'description', label: '描述', multiline: true },
-    { key: 'climate', label: '人口 / 气候', multiline: true }, { key: 'history', label: '历史', multiline: true },
-    { key: 'factions', label: '势力' }, { key: 'notes', label: '备注', multiline: true },
+    { key: 'type', label: '类型' }, { key: 'parentId', label: '所属地点' }, { key: 'description', label: '描述', multiline: true },
+    { key: 'population', label: '人口' }, { key: 'climate', label: '气候', multiline: true }, { key: 'history', label: '历史', multiline: true },
+    { key: 'factions', label: '势力' }, { key: 'importantCharacters', label: '重要人物' }, { key: 'importantEvents', label: '重要事件' },
+    { key: 'relatedChapters', label: '相关章节' }, { key: 'image', label: '图片路径' }, { key: 'notes', label: '备注', multiline: true },
   ],
   world: [
     { key: 'category', label: '分类' }, { key: 'summary', label: '摘要', multiline: true },
@@ -151,7 +155,7 @@ export const ENTITY_FIELDS: Record<EntityKind, Array<{ key: string; label: strin
   ],
   timeline: [
     { key: 'date', label: '日期' }, { key: 'time', label: '时间' }, { key: 'description', label: '事件描述', multiline: true },
-    { key: 'characters', label: '参与人物' }, { key: 'location', label: '地点' }, { key: 'chapters', label: '关联章节' },
+    { key: 'characters', label: '参与人物' }, { key: 'location', label: '地点' }, { key: 'chapters', label: '关联章节' }, { key: 'tags', label: '标签' },
   ],
   foreshadowing: [
     { key: 'description', label: '说明', multiline: true }, { key: 'plantedIn', label: '首次埋设章节' },
@@ -160,7 +164,8 @@ export const ENTITY_FIELDS: Record<EntityKind, Array<{ key: string; label: strin
   ],
   outline: [
     { key: 'goal', label: '章节目标', multiline: true }, { key: 'conflict', label: '主要冲突', multiline: true },
-    { key: 'events', label: '重要事件', multiline: true }, { key: 'result', label: '结果', multiline: true },
+    { key: 'events', label: '重要事件', multiline: true }, { key: 'characters', label: '出场人物' }, { key: 'location', label: '地点' },
+    { key: 'result', label: '结果', multiline: true },
   ],
   scene: [
     { key: 'pov', label: 'POV' }, { key: 'location', label: '地点' }, { key: 'time', label: '时间' },

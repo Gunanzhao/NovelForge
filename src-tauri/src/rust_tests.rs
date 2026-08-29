@@ -57,6 +57,10 @@ fn real_command_workflow_persists_markdown_and_recoverable_trash() {
         target_words: 5000,
     }).expect("create project");
     let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
+    let status_data = super::commands::set_node_status(super::commands::NodeStatusInput {
+        project_path: project_path.clone(), node_id: chapter.id.clone(), status: "first-draft".to_string(),
+    }).expect("set first-draft status");
+    assert_eq!(status_data.nodes.iter().find(|node| node.id == chapter.id).expect("status chapter").status, "first-draft");
     let saved = super::commands::save_document(super::models::SaveDocumentInput {
         project_path: project_path.clone(),
         node_id: chapter.id.clone(),
