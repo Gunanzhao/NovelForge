@@ -50,4 +50,12 @@ describe('consistency analyzer', () => {
     const report = analyzeConsistency(data, {})
     expect(report.issueCount).toBe(0)
   })
+
+  it('accepts chapter titles containing spaces and dashes', () => {
+    const titledChapter = { ...chapter, title: '第二章 - CDP' }
+    const timeline = entity('timeline-1', 'timeline', '事件', { chapters: '第二章 - CDP' })
+    const data = { ...project([timeline]), nodes: [titledChapter] }
+    const report = analyzeConsistency(data, {})
+    expect(report.issueCount).toBe(0)
+  })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  contentNumber, filterTimelineEntities, findChapterByReference, isOpenForeshadowingStatus, normalizeForeshadowingStatus, reorderItems,
+  chapterReferenceTokens, contentNumber, filterTimelineEntities, findChapterByReference, isOpenForeshadowingStatus, normalizeForeshadowingStatus, reorderItems,
   sortChapterNodes, sortManuscriptNodes,
   sortPlanningEntities, sortTimelineEntities,
 } from '../src/lib/planning-data'
@@ -60,6 +60,10 @@ describe('timeline and foreshadowing planning helpers', () => {
     expect(findChapterByReference(chapters, '第二章')?.id).toBe('chapter-2')
     expect(findChapterByReference(chapters, '第 1 章')?.id).toBe('chapter-1')
     expect(findChapterByReference(chapters, '第 9 章')).toBeUndefined()
+  })
+
+  it('keeps spaces inside chapter titles while splitting explicit lists', () => {
+    expect(chapterReferenceTokens('第二章 - CDP, 第 3 章；第四章')).toEqual(['第二章 - CDP', '第 3 章', '第四章'])
   })
 
   it('sorts chapters by volume order before the volume-local order', () => {

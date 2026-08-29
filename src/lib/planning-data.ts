@@ -97,7 +97,10 @@ export function filterTimelineEntities(entities: EntityRecord[], filters: Timeli
 }
 
 export function chapterReferenceTokens(value: string) {
-  return value.split(/[，,、;；\s]+/u).map((item) => item.trim()).filter(Boolean)
+  // Chapter titles may legitimately contain spaces, dashes, or other
+  // punctuation.  The UI documents comma-separated references, so only
+  // explicit list separators should split the value.
+  return value.split(/[，,、;；\r\n]+/u).map((item) => item.trim()).filter(Boolean)
 }
 
 export function sortChapterNodes(nodes: NodeRecord[]) {

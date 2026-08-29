@@ -1700,7 +1700,7 @@ fn wiki_targets(content: &str) -> Vec<String> {
 }
 
 fn chapter_reference_tokens(value: &str) -> Vec<String> {
-    value.split(|character: char| ",，、;；\t\r\n ".contains(character))
+    value.split(|character: char| ",，、;；\r\n".contains(character))
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
