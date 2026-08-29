@@ -37,6 +37,11 @@ declare module './types' {
     projectPath: string
     query: string
     kind?: string
+    scope?: 'project' | 'current'
+    nodeId?: string
+    volumePath?: string
+    tag?: string
+    caseSensitive?: boolean
   }
 
   interface ExportInput {

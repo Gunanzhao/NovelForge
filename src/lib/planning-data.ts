@@ -71,6 +71,31 @@ export function sortTimelineEntities(entities: EntityRecord[]) {
   })
 }
 
+export interface TimelineFilters {
+  query?: string
+  character?: string
+  location?: string
+  chapter?: string
+}
+
+export function filterTimelineEntities(entities: EntityRecord[], filters: TimelineFilters) {
+  const query = filters.query?.trim().toLocaleLowerCase() ?? ''
+  const character = filters.character?.trim().toLocaleLowerCase() ?? ''
+  const location = filters.location?.trim().toLocaleLowerCase() ?? ''
+  const chapter = filters.chapter?.trim().toLocaleLowerCase() ?? ''
+  return entities.filter((event) => {
+    const fields = [
+      event.title, contentText(event, 'description'), contentText(event, 'characters'),
+      contentText(event, 'location'), contentText(event, 'chapters'),
+    ].join(' ').toLocaleLowerCase()
+    if (query && !fields.includes(query)) return false
+    if (character && !contentText(event, 'characters').toLocaleLowerCase().includes(character)) return false
+    if (location && !contentText(event, 'location').toLocaleLowerCase().includes(location)) return false
+    if (chapter && !contentText(event, 'chapters').toLocaleLowerCase().includes(chapter)) return false
+    return true
+  })
+}
+
 export function chapterReferenceTokens(value: string) {
   return value.split(/[，,、;；\s]+/u).map((item) => item.trim()).filter(Boolean)
 }

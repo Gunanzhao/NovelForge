@@ -70,6 +70,7 @@ fn real_command_workflow_persists_markdown_and_recoverable_trash() {
     }).expect("save entity");
     let results = super::commands::search_project(super::models::SearchInput {
         project_path: project_path.clone(), query: "雾港".to_string(), kind: None,
+        scope: None, node_id: None, volume_path: None, tag: None, case_sensitive: None,
     }).expect("search project");
     assert!(results.iter().any(|result| result.id == chapter.id));
     let after_delete = super::commands::delete_node(super::models::NodeActionInput {

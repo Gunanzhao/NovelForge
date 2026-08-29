@@ -853,43 +853,84 @@ fn snippet(content: &str, query: &str) -> String {
     value
 }
 
+fn contains_search_terms(value: &str, query: &str, case_sensitive: bool) -> bool {
+    let source = if case_sensitive { value.to_string() } else { value.to_lowercase() };
+    query.split_whitespace().filter(|term| !term.is_empty()).all(|term| {
+        let needle = if case_sensitive { term.to_string() } else { term.to_lowercase() };
+        source.contains(&needle)
+    })
+}
+
+fn search_matches_filters(connection: &Connection, input: &SearchInput, id: &str, kind: &str, path: &str, title: &str, content: &str) -> Result<bool, String> {
+    if input.scope.as_deref() == Some("current") && input.node_id.as_deref() != Some(id) {
+        return Ok(false);
+    }
+    if let Some(volume_path) = input.volume_path.as_deref().filter(|value| !value.trim().is_empty()) {
+        let normalized = volume_path.trim_end_matches('/').replace('\\', "/");
+        if !path.replace('\\', "/").starts_with(&(normalized + "/")) {
+            return Ok(false);
+        }
+    }
+    if let Some(tag) = input.tag.as_deref().filter(|value| !value.trim().is_empty()) {
+        if kind == "chapter" || kind == "section" {
+            return Ok(false);
+        }
+        let tags_json: Option<String> = connection.query_row(
+            "SELECT tags_json FROM entities WHERE id = ?1 AND deleted_at IS NULL",
+            params![id],
+            |row| row.get(0),
+        ).optional().map_err(|error| format!("读取搜索标签失败：{}", error))?;
+        let tags: Vec<String> = tags_json.and_then(|value| serde_json::from_str(&value).ok()).unwrap_or_default();
+        let matched = tags.iter().any(|value| {
+            if input.case_sensitive.unwrap_or(false) { value.contains(tag) } else { value.to_lowercase().contains(&tag.to_lowercase()) }
+        });
+        if !matched { return Ok(false); }
+    }
+    if input.case_sensitive.unwrap_or(false) && !contains_search_terms(&format!("{} {}", title, content), &input.query, true) {
+        return Ok(false);
+    }
+    Ok(true)
+}
+
 #[tauri::command]
 pub fn search_project(input: SearchInput) -> Result<Vec<SearchResult>, String> {
     let (_root, connection) = project_connection(&input.project_path)?;
     let mut results = Vec::new();
     let fts_query = clean_query(&input.query);
     if !fts_query.is_empty() {
+        let mut fts_rows = Vec::new();
         if let Ok(mut statement) = connection.prepare(
-            "SELECT ref_id, kind, title, path, snippet(search_index, 3, '<mark>', '</mark>', '…', 24) FROM search_index WHERE search_index MATCH ?1 LIMIT 100",
+            "SELECT ref_id, kind, title, path, content, snippet(search_index, 3, '<mark>', '</mark>', '…', 24) FROM search_index WHERE search_index MATCH ?1 LIMIT 100",
         ) {
             if let Ok(rows) = statement.query_map(params![fts_query], |row| {
-                Ok(SearchResult {
-                    id: row.get(0)?, kind: row.get(1)?, title: row.get(2)?, path: row.get(3)?, snippet: row.get(4)?,
-                })
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?, row.get::<_, String>(4)?, row.get::<_, String>(5)?))
             }) {
-                for row in rows.flatten() {
-                    if input.kind.as_deref().is_none_or(|kind| kind == row.kind || (kind == "manuscript" && (row.kind == "chapter" || row.kind == "section"))) {
-                        results.push(row);
-                    }
-                }
+                fts_rows.extend(rows.flatten());
+            }
+        }
+        for (id, kind, title, path, content, highlighted) in fts_rows {
+            let matches_kind = input.kind.as_deref().is_none_or(|filter| filter == kind || (filter == "manuscript" && (kind == "chapter" || kind == "section")));
+            if matches_kind && search_matches_filters(&connection, &input, &id, &kind, &path, &title, &content)? {
+                results.push(SearchResult { id, kind, title, path, snippet: highlighted });
             }
         }
     }
     let like = format!("%{}%", input.query.trim());
-    let mut fallback = connection.prepare(
-        "SELECT ref_id, kind, title, path, content FROM search_index WHERE title LIKE ?1 OR content LIKE ?1 LIMIT 100",
-    ).map_err(|error| format!("执行全文搜索失败：{}", error))?;
-    let rows = fallback.query_map(params![like], |row| {
-        let content: String = row.get(4)?;
-        Ok(SearchResult {
-            id: row.get(0)?, kind: row.get(1)?, title: row.get(2)?, path: row.get(3)?,
-            snippet: snippet(&content, &input.query),
-        })
-    }).map_err(|error| format!("执行全文搜索失败：{}", error))?;
-    for row in rows.flatten() {
-        let matches_kind = input.kind.as_deref().is_none_or(|kind| kind == row.kind || (kind == "manuscript" && (row.kind == "chapter" || row.kind == "section")));
-        if matches_kind && !results.iter().any(|existing: &SearchResult| existing.id == row.id) {
-            results.push(row);
+    let mut fallback_rows = Vec::new();
+    {
+        let mut fallback = connection.prepare(
+            "SELECT ref_id, kind, title, path, content FROM search_index WHERE title LIKE ?1 OR content LIKE ?1 LIMIT 100",
+        ).map_err(|error| format!("执行全文搜索失败：{}", error))?;
+        let rows = fallback.query_map(params![like], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?, row.get::<_, String>(4)?))
+        }).map_err(|error| format!("执行全文搜索失败：{}", error))?;
+        fallback_rows.extend(rows.flatten());
+    }
+    for (id, kind, title, path, content) in fallback_rows {
+        let matches_kind = input.kind.as_deref().is_none_or(|filter| filter == kind || (filter == "manuscript" && (kind == "chapter" || kind == "section")));
+        let matches_filters = search_matches_filters(&connection, &input, &id, &kind, &path, &title, &content)?;
+        if matches_kind && matches_filters && !results.iter().any(|existing: &SearchResult| existing.id == id) {
+            results.push(SearchResult { id, kind, title, path, snippet: snippet(&content, &input.query) });
         }
     }
     results.truncate(100);

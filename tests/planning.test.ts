@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  contentNumber, findChapterByReference, normalizeForeshadowingStatus, reorderItems,
+  contentNumber, filterTimelineEntities, findChapterByReference, normalizeForeshadowingStatus, reorderItems,
   sortPlanningEntities, sortTimelineEntities,
 } from '../src/lib/planning-data'
 import type { EntityRecord, NodeRecord } from '../src/lib/types'
@@ -41,6 +41,17 @@ describe('timeline and foreshadowing planning helpers', () => {
       timeline('first', '2026-08-28'),
     ])
     expect(sorted.map((item) => item.id)).toEqual(['first', 'early', 'late', 'undated'])
+  })
+
+  it('filters timeline events by query, character, location and chapter', () => {
+    const events = [
+      { ...timeline('harbor', '2026-08-29'), content: { date: '2026-08-29', characters: '林月', location: '雾港', chapters: '第一章' } },
+      { ...timeline('mountain', '2026-08-30'), content: { date: '2026-08-30', characters: '顾川', location: '青崖', chapters: '第二章' } },
+    ]
+    expect(filterTimelineEntities(events, { character: '林月' }).map((item) => item.id)).toEqual(['harbor'])
+    expect(filterTimelineEntities(events, { location: '青崖' }).map((item) => item.id)).toEqual(['mountain'])
+    expect(filterTimelineEntities(events, { chapter: '第二章' }).map((item) => item.id)).toEqual(['mountain'])
+    expect(filterTimelineEntities(events, { query: '雾港' }).map((item) => item.id)).toEqual(['harbor'])
   })
 
   it('resolves chapter title and chapter number references', () => {

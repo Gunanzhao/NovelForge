@@ -97,7 +97,7 @@ interface AppState {
   loadTrash: () => Promise<void>
   restoreTrash: (trashId: string) => Promise<void>
   permanentlyDelete: (trashId: string) => Promise<void>
-  runSearch: (query: string, kind?: string) => Promise<void>
+  runSearch: (query: string, options?: Omit<import('../lib/types').SearchInput, 'projectPath' | 'query'>) => Promise<void>
   refreshStats: () => Promise<void>
   exportProject: (format: ExportFormat) => Promise<string>
   updateProject: (input: { title: string; author: string; description: string; genre: string; targetWords: number }) => Promise<void>
@@ -375,14 +375,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) { get().setError(error) }
   },
 
-  runSearch: async (query, kind) => {
+  runSearch: async (query, options) => {
     const projectPath = get().projectPath
     set({ searchQuery: query })
     if (!projectPath || !query.trim()) {
       set({ searchResults: [] })
       return
     }
-    try { set({ searchResults: await projectApi.search({ projectPath, query, kind }) }) }
+    try { set({ searchResults: await projectApi.search({ projectPath, query, ...options }) }) }
     catch (error) { get().setError(error) }
   },
 

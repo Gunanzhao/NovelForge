@@ -59,4 +59,21 @@ describe('browser fallback project workflow', () => {
     expect(trash).toHaveLength(1)
     expect(trash[0].refId).toBe(chapter.id)
   })
+
+  it('supports current-document, volume and tag search filters', async () => {
+    const path = 'search-filter-project'
+    const created = await fallbackInvoke<ProjectData>('create_project', { input: { ...input, path } })
+    const chapter = created.nodes.find((node) => node.kind === 'chapter')
+    const volume = created.nodes.find((node) => node.kind === 'volume')
+    expect(chapter && volume).toBeTruthy()
+    if (!chapter || !volume) return
+    await fallbackInvoke<DocumentData>('save_document', { input: { projectPath: path, nodeId: chapter.id, content: '林月在雾港写下秘密。', reason: '筛选测试' } })
+    await fallbackInvoke<ProjectData>('upsert_entity', { input: { projectPath: path, kind: 'character', id: null, title: '林月', content: { summary: '主角' }, tags: ['主角'] } })
+    const current = await fallbackInvoke<SearchResult[]>('search_project', { input: { projectPath: path, query: '雾港', scope: 'current', nodeId: chapter.id } })
+    expect(current.map((item) => item.id)).toEqual([chapter.id])
+    const tagged = await fallbackInvoke<SearchResult[]>('search_project', { input: { projectPath: path, query: '林月', tag: '主角' } })
+    expect(tagged.some((item) => item.title === '林月')).toBe(true)
+    const volumeResults = await fallbackInvoke<SearchResult[]>('search_project', { input: { projectPath: path, query: '秘密', volumePath: volume.filePath } })
+    expect(volumeResults.some((item) => item.id === chapter.id)).toBe(true)
+  })
 })

@@ -21,6 +21,9 @@
 .special-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 30px 13px; }
 .special-search { display: flex; align-items: center; gap: 7px; width: min(380px, 100%); color: var(--faint); }
 .special-search .text-input { min-width: 0; flex: 1; }
+.timeline-toolbar { align-items: flex-start; flex-wrap: wrap; }
+.timeline-filters { display: flex; flex-wrap: wrap; gap: 5px; }
+.timeline-filters .select-input { min-width: 105px; max-width: 150px; }
 .special-layout { display: grid; grid-template-columns: 340px minmax(0, 1fr); min-height: 560px; margin: 0 30px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
 .special-list-pane { min-width: 0; border-right: 1px solid var(--line); }
 .special-list-head { padding: 16px 14px 11px; border-bottom: 1px solid var(--line); }

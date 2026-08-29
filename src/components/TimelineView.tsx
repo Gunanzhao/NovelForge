@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BookOpen, CalendarDays, Clock3, MapPin, Plus, Save, Search, Trash2, Users } from 'lucide-react'
 import type { EntityRecord, NodeRecord } from '../lib/types'
-import { chapterReferenceTokens, contentText, findChapterByReference, sortTimelineEntities } from '../lib/planning-data'
+import { chapterReferenceTokens, contentText, filterTimelineEntities, findChapterByReference, sortTimelineEntities } from '../lib/planning-data'
 import { useAppStore } from '../stores/app-store'
 import { Button, Field, Panel, TextInput } from './ui'
 import '../planning.css'
@@ -58,6 +58,9 @@ export function TimelineView() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [filter, setFilter] = useState('')
+  const [characterFilter, setCharacterFilter] = useState('')
+  const [locationFilter, setLocationFilter] = useState('')
+  const [chapterFilter, setChapterFilter] = useState('')
   const [draft, setDraft] = useState<TimelineDraft>(blankDraft)
   const [busy, setBusy] = useState(false)
 
@@ -65,12 +68,10 @@ export function TimelineView() {
     .filter((node) => node.kind === 'chapter')
     .sort((left, right) => left.orderIndex - right.orderIndex), [data?.nodes])
   const events = useMemo(() => sortTimelineEntities((data?.entities ?? []).filter((entity) => entity.kind === 'timeline')), [data?.entities])
-  const visibleEvents = useMemo(() => {
-    const query = filter.trim().toLocaleLowerCase()
-    if (!query) return events
-    return events.filter((event) => [event.title, contentText(event, 'description'), contentText(event, 'characters'), contentText(event, 'location'), contentText(event, 'chapters')]
-      .join(' ').toLocaleLowerCase().includes(query))
-  }, [events, filter])
+  const characters = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'character').sort((left, right) => left.title.localeCompare(right.title, 'zh-CN')), [data?.entities])
+  const locations = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'location').sort((left, right) => left.title.localeCompare(right.title, 'zh-CN')), [data?.entities])
+  const visibleEvents = useMemo(() => filterTimelineEntities(events, { query: filter, character: characterFilter, location: locationFilter, chapter: chapterFilter }), [chapterFilter, characterFilter, events, filter, locationFilter])
+  const hasFilter = Boolean(filter.trim() || characterFilter || locationFilter || chapterFilter)
   const selected = events.find((event) => event.id === selectedId)
 
   useEffect(() => {
@@ -141,8 +142,9 @@ export function TimelineView() {
       <div><p className="eyebrow">STORY TIMELINE</p><h1>时间线</h1><p>按故事内时间整理关键事件，并把事件和正文章节、人物与地点连接起来。</p></div>
       <div className="special-summary"><strong>{events.length}</strong><span>个事件</span></div>
     </div>
-    <div className="special-toolbar">
+    <div className="special-toolbar timeline-toolbar">
       <div className="special-search"><Search size={14} /><TextInput value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="搜索事件、人物或地点" /></div>
+      <div className="timeline-filters"><select className="select-input" value={characterFilter} onChange={(event) => setCharacterFilter(event.target.value)} aria-label="按人物筛选"><option value="">全部人物</option>{characters.map((character) => <option key={character.id} value={character.title}>{character.title}</option>)}</select><select className="select-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="按地点筛选"><option value="">全部地点</option>{locations.map((location) => <option key={location.id} value={location.title}>{location.title}</option>)}</select><select className="select-input" value={chapterFilter} onChange={(event) => setChapterFilter(event.target.value)} aria-label="按章节筛选"><option value="">全部章节</option>{chapters.map((chapter) => <option key={chapter.id} value={chapter.title}>{chapter.title}</option>)}</select></div>
       <Button onClick={startNew}><Plus size={14} />新建事件</Button>
     </div>
     <div className="special-layout">
@@ -151,7 +153,7 @@ export function TimelineView() {
         <div className="special-list">{visibleEvents.length ? visibleEvents.map((event) => <button key={event.id} type="button" className={'special-list-item' + (event.id === selectedId && !creating ? ' active' : '')} onClick={() => { setCreating(false); setSelectedId(event.id) }}>
           <span className="special-list-icon"><CalendarDays size={14} /></span>
           <span className="special-list-copy"><strong>{event.title}</strong><small>{[contentText(event, 'date'), contentText(event, 'time'), contentText(event, 'location')].filter(Boolean).join(' · ') || '未填写时间信息'}</small><em>{contentText(event, 'description') || '尚未填写事件描述'}</em></span>
-        </button>) : <div className="empty-state"><CalendarDays size={24} /><div><strong>{filter ? '没有匹配事件' : '还没有时间线事件'}</strong><span>{filter ? '换一个关键词试试。' : '把故事中的关键节点记录下来，后续可以从章节直接回看。'}</span></div></div>}</div>
+        </button>) : <div className="empty-state"><CalendarDays size={24} /><div><strong>{hasFilter ? '没有匹配事件' : '还没有时间线事件'}</strong><span>{hasFilter ? '换一个筛选条件试试。' : '把故事中的关键节点记录下来，后续可以从章节直接回看。'}</span></div></div>}</div>
       </aside>
       <section className="special-editor">
         <Panel className="special-card">{creating || selected ? <><div className="planning-card-head"><div><p className="eyebrow">EVENT DETAIL</p><h3>{creating ? '新建时间线事件' : selected?.title}</h3></div><span className="planning-state">{busy ? '保存中…' : '本地资料'}</span></div>

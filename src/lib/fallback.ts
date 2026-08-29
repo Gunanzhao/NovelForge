@@ -281,17 +281,26 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   }
   if (command === 'search_project') {
     const search = args.input as SearchInput
-    const query = search.query.toLocaleLowerCase()
+    const query = search.query.trim()
+    const normalizedQuery = query.toLocaleLowerCase()
+    const volumeMatches = (path: string) => !search.volumePath || path.startsWith(search.volumePath.replace(/\\/gu, '/') + '/')
+    const textMatches = (title: string, content: string) => {
+      const source = title + content
+      return search.caseSensitive ? source.includes(query) : source.toLocaleLowerCase().includes(normalizedQuery)
+    }
+    const tagMatches = (item: EntityRecord) => !search.tag || item.tags.some((tag) => search.caseSensitive ? tag.includes(search.tag ?? '') : tag.toLocaleLowerCase().includes((search.tag ?? '').toLocaleLowerCase()))
     const results: SearchResult[] = []
     for (const item of store.data.nodes.filter((candidate) => candidate.kind !== 'volume')) {
       const content = store.documents[item.id] ?? ''
-      if ((!search.kind || search.kind === 'manuscript') && (item.title + content).toLocaleLowerCase().includes(query)) {
+      const currentOnly = search.scope === 'current' && search.nodeId !== item.id
+      if (!currentOnly && (!search.kind || search.kind === 'manuscript') && volumeMatches(item.filePath) && textMatches(item.title, content)) {
         results.push({ id: item.id, kind: item.kind, title: item.title, path: item.filePath, snippet: content.slice(0, 160) })
       }
     }
     for (const item of store.data.entities) {
       const content = JSON.stringify(item.content)
-      if ((!search.kind || search.kind === item.kind) && (item.title + content).toLocaleLowerCase().includes(query)) {
+      const currentOnly = search.scope === 'current'
+      if (!currentOnly && (!search.kind || search.kind === item.kind) && tagMatches(item) && textMatches(item.title, content)) {
         results.push({ id: item.id, kind: item.kind, title: item.title, path: item.filePath, snippet: content.slice(0, 160) })
       }
     }

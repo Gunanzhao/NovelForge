@@ -241,6 +241,11 @@ pub struct SearchInput {
     pub project_path: String,
     pub query: String,
     pub kind: Option<String>,
+    pub scope: Option<String>,
+    pub node_id: Option<String>,
+    pub volume_path: Option<String>,
+    pub tag: Option<String>,
+    pub case_sensitive: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
