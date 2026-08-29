@@ -249,3 +249,22 @@ pub struct ExportInput {
     pub project_path: String,
     pub format: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiCompletionInput {
+    pub endpoint: String,
+    pub api_key: String,
+    pub model: String,
+    pub system_prompt: String,
+    pub prompt: String,
+    pub temperature: Option<f32>,
+    pub max_tokens: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiCompletionResult {
+    pub content: String,
+    pub model: String,
+}

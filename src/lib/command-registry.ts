@@ -15,6 +15,7 @@ export type CommandId =
   | 'open-attachment'
   | 'open-consistency'
   | 'open-statistics'
+  | 'open-ai'
 
 export interface CommandDescriptor {
   id: CommandId
@@ -39,6 +40,7 @@ export const COMMANDS: CommandDescriptor[] = [
   { id: 'open-attachment', label: '打开资料附件', description: '管理项目内的研究资料和附件', keywords: ['资料', '附件', 'research', 'attachment'], defaultShortcut: 'Ctrl+7' },
   { id: 'open-consistency', label: '打开一致性检查', description: '扫描断开的 Wiki 和章节引用', keywords: ['一致性', '检查', 'consistency'], defaultShortcut: 'Ctrl+8' },
   { id: 'open-statistics', label: '打开详细统计', description: '查看写作趋势和章节排行', keywords: ['统计', '趋势', 'statistics'], defaultShortcut: 'Ctrl+9' },
+  { id: 'open-ai', label: '打开 AI 辅助', description: '显式选择上下文并运行写作辅助', keywords: ['AI', '续写', '润色', '摘要', 'assistant'], defaultShortcut: 'Ctrl+0' },
 ]
 
 export type ShortcutMap = Record<CommandId, string>
@@ -101,7 +103,7 @@ export function commandView(commandId: CommandId): ViewId | undefined {
   const views: Partial<Record<CommandId, ViewId>> = {
     'open-dashboard': 'dashboard', 'open-manuscript': 'manuscript', 'open-outline': 'outline',
     'open-timeline': 'timeline', 'open-foreshadowing': 'foreshadowing', 'open-relationship': 'relationship',
-    'open-search': 'search', 'open-attachment': 'attachment', 'open-consistency': 'consistency', 'open-statistics': 'statistics',
+    'open-search': 'search', 'open-attachment': 'attachment', 'open-consistency': 'consistency', 'open-statistics': 'statistics', 'open-ai': 'ai',
   }
   return views[commandId]
 }

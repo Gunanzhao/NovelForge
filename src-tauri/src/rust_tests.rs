@@ -1,5 +1,8 @@
 use super::storage_impl as storage;
 use std::fs;
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::thread;
 
 fn test_root(name: &str) -> std::path::PathBuf {
     let root = std::env::temp_dir().join(format!("novelforge-{}-{}", name, storage::new_id()));
@@ -369,6 +372,34 @@ fn export_project_writes_all_supported_formats() {
     }
     assert!(super::commands::export_project(super::models::ExportInput { project_path, format: "html".to_string() }).is_err());
     let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn ai_endpoint_normalization_rejects_invalid_urls() {
+    assert_eq!(super::commands::normalize_ai_endpoint("http://127.0.0.1:1234/v1" ).expect("base endpoint"), "http://127.0.0.1:1234/v1/chat/completions");
+    assert_eq!(super::commands::normalize_ai_endpoint("https://api.example.com/v1/chat/completions/").expect("completion endpoint"), "https://api.example.com/v1/chat/completions");
+    assert!(super::commands::normalize_ai_endpoint("api.example.com").is_err());
+}
+
+#[test]
+fn ai_provider_parses_openai_compatible_response() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("mock AI listener");
+    let address = listener.local_addr().expect("mock AI address");
+    let handle = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("mock AI request");
+        let mut request = [0_u8; 8192];
+        let _ = stream.read(&mut request);
+        let body = r#"{"model":"mock-model","choices":[{"message":{"content":"生成结果"}}]}"#;
+        let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
+        stream.write_all(response.as_bytes()).expect("mock AI response");
+    });
+    let result = super::commands::ai_complete(super::models::AiCompletionInput {
+        endpoint: format!("http://{}/v1", address), api_key: "test-secret".to_string(), model: "mock-model".to_string(),
+        system_prompt: "系统".to_string(), prompt: "用户请求".to_string(), temperature: Some(0.7), max_tokens: Some(100),
+    }).expect("AI response");
+    handle.join().expect("mock AI thread");
+    assert_eq!(result.content, "生成结果");
+    assert_eq!(result.model, "mock-model");
 }
 
 #[test]

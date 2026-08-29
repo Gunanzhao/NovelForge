@@ -79,3 +79,10 @@
 - `pnpm lint`：通过，0 error / 0 warning。
 - `pnpm test`：通过，7 个测试文件、24 个测试。
 - `cargo test --manifest-path src-tauri/Cargo.toml`：通过，14 个 Rust 测试；覆盖五种导出格式、ZIP 内容和无效格式拒绝。
+
+## AI Provider 与上下文辅助验证（2026-08-30）
+
+- `pnpm typecheck`：通过。
+- `pnpm lint`：通过，0 error / 0 warning。
+- `pnpm test`：通过，8 个测试文件、26 个测试；覆盖本地 AI 草稿、上下文拼接、偏好不保存 API Key。
+- `cargo test --manifest-path src-tauri/Cargo.toml`：通过，16 个 Rust 测试；包含本地模拟 OpenAI-compatible 响应解析。

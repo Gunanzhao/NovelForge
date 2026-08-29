@@ -298,6 +298,11 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     return results.slice(0, 100) as T
   }
   if (command === 'check_consistency') return analyzeConsistency(store.data, store.documents) as T
+  if (command === 'ai_complete') {
+    const aiInput = args.input as { model?: string; prompt: string }
+    const excerpt = aiInput.prompt.trim().slice(0, 900)
+    return { model: 'novelforge-local', content: `【本地辅助草稿】\n\n当前浏览器开发模式没有连接远程 Provider。以下内容根据已选上下文生成了可继续编辑的提示草稿：\n\n${excerpt}\n\n请在上方补充你的写作意图，再将这份草稿改写成正文。` } as T
+  }
   if (command === 'get_statistics') {
     let total = 0
     for (const content of Object.values(store.documents)) total += countWords(content)

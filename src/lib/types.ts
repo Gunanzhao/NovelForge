@@ -1,6 +1,6 @@
 export type NodeKind = 'volume' | 'chapter' | 'section'
 export type EntityKind = 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note' | 'relationship' | 'attachment'
-export type ViewId = 'dashboard' | 'manuscript' | EntityKind | 'consistency' | 'statistics' | 'search' | 'trash' | 'settings'
+export type ViewId = 'dashboard' | 'manuscript' | EntityKind | 'consistency' | 'statistics' | 'ai' | 'search' | 'trash' | 'settings'
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type ExportFormat = 'markdown' | 'txt' | 'docx' | 'epub' | 'pdf'
@@ -205,4 +205,19 @@ export interface ConsistencyReport {
   errors: number
   warnings: number
   issues: ConsistencyIssue[]
+}
+
+export interface AiCompletionInput {
+  endpoint: string
+  apiKey: string
+  model: string
+  systemPrompt: string
+  prompt: string
+  temperature?: number
+  maxTokens?: number
+}
+
+export interface AiCompletionResult {
+  content: string
+  model: string
 }

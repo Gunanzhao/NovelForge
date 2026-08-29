@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
-  ConsistencyReport, DocumentData, EntityInput, EntityRecord, ExportInput, HistoryItem, NodeInput, ProjectData,
+  AiCompletionInput, AiCompletionResult, ConsistencyReport, DocumentData, EntityInput, EntityRecord, ExportInput, HistoryItem, NodeInput, ProjectData,
   ProjectInput, RecoveryItem, SaveDocumentInput, SearchInput, SearchResult, Stats, TrashItem,
 } from './types'
 import { fallbackInvoke } from './fallback'
@@ -49,6 +49,7 @@ export const projectApi = {
   permanentDelete: (input: { projectPath: string; nodeId: string }) => command<ProjectData>('permanent_delete', { input }),
   search: (input: SearchInput) => command<SearchResult[]>('search_project', { input }),
   consistency: (path: string) => command<ConsistencyReport>('check_consistency', { path }),
+  aiComplete: (input: AiCompletionInput) => command<AiCompletionResult>('ai_complete', { input }),
   importAttachment: (input: { projectPath: string; sourcePath: string; description: string }) => command<ProjectData>('import_attachment', { input }),
   stats: (path: string) => command<Stats>('get_statistics', { path }),
   exportProject: (input: ExportInput) => command<string>('export_project', { input }),

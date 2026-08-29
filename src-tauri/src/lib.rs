@@ -33,6 +33,7 @@ pub fn run() {
             commands::permanent_delete,
             commands::search_project,
             commands::check_consistency,
+            commands::ai_complete,
             commands::get_statistics,
             commands::export_project,
             commands::update_project

@@ -15,6 +15,7 @@ import { PlanningView } from './components/PlanningView'
 import { TimelineView } from './components/TimelineView'
 import { ForeshadowingView } from './components/ForeshadowingView'
 import { AttachmentsView } from './components/AttachmentsView'
+import { AiAssistantView } from './components/AiAssistantView'
 import { EntityView } from './components/EntityView'
 import { Inspector } from './components/Inspector'
 import { ProjectDialog, NodeDialog } from './components/ProjectDialogs'
@@ -117,6 +118,7 @@ export default function App() {
     if (activeView === 'consistency') return <ConsistencyView />
     if (activeView === 'statistics') return <StatisticsView />
     if (activeView === 'attachment') return <AttachmentsView />
+    if (activeView === 'ai') return <AiAssistantView />
     if (activeView === 'search') return <SearchView />
     if (activeView === 'trash') return <TrashView />
     if (activeView === 'settings') return <SettingsView />

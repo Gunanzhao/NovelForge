@@ -145,6 +145,31 @@
 ### 下一步
 
 - 实现可选 AI Provider、上下文预览和不依赖 API Key 的本地辅助流程。
+
+## 2026-08-30：V0.2 写作规划第六阶段
+
+### 完成内容
+
+- 新增 AI 辅助工作区：显式勾选正文 / 资料上下文，运行续写、润色、改写和摘要，并可预览、复制、追加或替换正文。
+- 接入 OpenAI-compatible `/v1/chat/completions` 请求；Endpoint 和模型偏好可保存，API Key 只存在当前窗口内，不写入 localStorage、项目文件或日志。
+- 未填写 Provider 地址或处于浏览器开发模式时提供本地离线草稿模式，核心写作不依赖账号或 API Key。
+- 增加 Provider 地址校验、本地模拟 HTTP 响应解析、上下文提示和 API Key 不落盘测试。
+
+### 验证结果
+
+- `pnpm typecheck`：通过。
+- `pnpm lint`：通过，0 error / 0 warning。
+- `pnpm test`：通过，8 个测试文件、26 个测试。
+- `cargo test --manifest-path src-tauri/Cargo.toml`：通过，16 个 Rust 测试。
+
+### 已知问题
+
+- 仍需在用户实际 Provider / 本地模型上进行人工交互验收；本轮已用本地模拟 HTTP 服务验证请求响应链路。
+- 桌面鼠标级 E2E 和 1000 章 / 100 万字性能验收仍待最终阶段。
+
+### 下一步
+
+- 完成大规模性能基准、桌面 E2E 和发布版最终审计。
 ## 2026-08-29：V0.2 写作规划第一阶段
 
 ### 完成内容
