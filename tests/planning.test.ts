@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   contentNumber, filterTimelineEntities, findChapterByReference, normalizeForeshadowingStatus, reorderItems,
+  sortChapterNodes,
   sortPlanningEntities, sortTimelineEntities,
 } from '../src/lib/planning-data'
 import type { EntityRecord, NodeRecord } from '../src/lib/types'
@@ -59,6 +60,19 @@ describe('timeline and foreshadowing planning helpers', () => {
     expect(findChapterByReference(chapters, '第二章')?.id).toBe('chapter-2')
     expect(findChapterByReference(chapters, '第 1 章')?.id).toBe('chapter-1')
     expect(findChapterByReference(chapters, '第 9 章')).toBeUndefined()
+  })
+
+  it('sorts chapters by volume order before the volume-local order', () => {
+    const nodes: NodeRecord[] = [
+      { id: 'volume-2', kind: 'volume', parentId: null, title: '第二卷', orderIndex: 1, status: 'not-started', filePath: 'volume-2', createdAt: '2026-01-01', updatedAt: '2026-01-01' },
+      { id: 'chapter-3', kind: 'chapter', parentId: 'volume-2', title: '卷二开端', orderIndex: 0, status: 'draft', filePath: 'chapter-3.md', createdAt: '2026-01-03', updatedAt: '2026-01-03' },
+      { id: 'volume-1', kind: 'volume', parentId: null, title: '第一卷', orderIndex: 0, status: 'not-started', filePath: 'volume-1', createdAt: '2026-01-01', updatedAt: '2026-01-01' },
+      { id: 'chapter-2', kind: 'chapter', parentId: 'volume-1', title: '卷一收束', orderIndex: 1, status: 'draft', filePath: 'chapter-2.md', createdAt: '2026-01-02', updatedAt: '2026-01-02' },
+      { id: 'chapter-1', kind: 'chapter', parentId: 'volume-1', title: '卷一开端', orderIndex: 0, status: 'draft', filePath: 'chapter-1.md', createdAt: '2026-01-01', updatedAt: '2026-01-01' },
+    ]
+    expect(sortChapterNodes(nodes).map((chapter) => chapter.id)).toEqual(['chapter-1', 'chapter-2', 'chapter-3'])
+    expect(findChapterByReference(nodes, '第3章')?.id).toBe('chapter-3')
+    expect(findChapterByReference(nodes, '卷二开端')?.id).toBe('chapter-3')
   })
 
   it('normalizes legacy foreshadowing status labels', () => {

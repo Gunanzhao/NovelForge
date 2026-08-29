@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CheckSquare, FileArchive, FileDown, FileText, Square } from 'lucide-react'
 import type { ExportFormat, ExportInput, ProjectData } from '../lib/types'
+import { sortChapterNodes } from '../lib/planning-data'
 import { Button, Field, Modal, TextInput } from './ui'
 
 const formats: Array<{ id: ExportFormat; label: string; description: string; icon: typeof FileDown }> = [
@@ -34,7 +35,7 @@ export function ExportDialog({
   const [includeChapterTitles, setIncludeChapterTitles] = useState(true)
   const [coverPath, setCoverPath] = useState('')
   const volumes = useMemo(() => data.nodes.filter((node) => node.kind === 'volume').sort((left, right) => left.orderIndex - right.orderIndex), [data.nodes])
-  const chapters = useMemo(() => data.nodes.filter((node) => node.kind === 'chapter').sort((left, right) => left.orderIndex - right.orderIndex), [data.nodes])
+  const chapters = useMemo(() => sortChapterNodes(data.nodes), [data.nodes])
 
   useEffect(() => {
     if (!open) return

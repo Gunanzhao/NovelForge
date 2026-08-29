@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, BookOpen, GripVertical, Plus, Save, Trash2 } from 'lucide-react'
 import type { EntityRecord } from '../lib/types'
-import { contentNumber, contentText, reorderItems, sortPlanningEntities } from '../lib/planning-data'
+import { contentNumber, contentText, reorderItems, sortChapterNodes, sortPlanningEntities } from '../lib/planning-data'
 import { useAppStore } from '../stores/app-store'
 import { Button, Field, Panel, TextInput } from './ui'
 
@@ -48,7 +48,7 @@ export function SceneView({ chapterId, onChapterChange }: { chapterId: string; o
   const [busy, setBusy] = useState(false)
   const [draggedSceneId, setDraggedSceneId] = useState<string | null>(null)
 
-  const chapters = useMemo(() => (data?.nodes ?? []).filter((node) => node.kind === 'chapter').sort((left, right) => left.orderIndex - right.orderIndex), [data?.nodes])
+  const chapters = useMemo(() => sortChapterNodes(data?.nodes ?? []), [data?.nodes])
   const scenes = useMemo(() => sortPlanningEntities((data?.entities ?? []).filter((entity) => entity.kind === 'scene' && contentText(entity, 'chapterId') === chapterId)), [data?.entities, chapterId])
   const selectedScene = scenes.find((scene) => scene.id === editingSceneId)
 

@@ -1695,18 +1695,47 @@ fn chapter_reference_tokens(value: &str) -> Vec<String> {
         .collect()
 }
 
-fn chapter_reference_exists(chapters: &[NodeRecord], reference: &str) -> bool {
+fn ordered_chapters(nodes: &[NodeRecord]) -> Vec<NodeRecord> {
+    let volume_order: HashMap<&str, i64> = nodes
+        .iter()
+        .filter(|node| node.kind == "volume")
+        .map(|node| (node.id.as_str(), node.order_index))
+        .collect();
+    let mut chapters: Vec<NodeRecord> = nodes
+        .iter()
+        .filter(|node| node.kind == "chapter")
+        .cloned()
+        .collect();
+    chapters.sort_by(|left, right| {
+        let left_volume_order = left
+            .parent_id
+            .as_deref()
+            .and_then(|id| volume_order.get(id))
+            .copied()
+            .unwrap_or(i64::MAX);
+        let right_volume_order = right
+            .parent_id
+            .as_deref()
+            .and_then(|id| volume_order.get(id))
+            .copied()
+            .unwrap_or(i64::MAX);
+        left_volume_order
+            .cmp(&right_volume_order)
+            .then_with(|| left.order_index.cmp(&right.order_index))
+            .then_with(|| left.created_at.cmp(&right.created_at))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    chapters
+}
+
+fn chapter_reference_exists(nodes: &[NodeRecord], reference: &str) -> bool {
     let normalized = reference.trim();
     if normalized.is_empty() { return false; }
+    let chapters = ordered_chapters(nodes);
     if chapters.iter().any(|chapter| chapter.title.trim() == normalized) { return true; }
     let digits: String = normalized.chars().filter(|character| character.is_ascii_digit()).collect();
     let Ok(number) = digits.parse::<usize>() else { return false };
-    number > 0 && chapters.iter().min_by_key(|chapter| chapter.order_index)
-        .map(|first| first.order_index).is_some_and(|_| {
-            let mut ordered = chapters.to_vec();
-            ordered.sort_by_key(|chapter| chapter.order_index);
-            ordered.get(number - 1).is_some()
-        })
+    number > 0 && chapters.get(number - 1).is_some()
 }
 
 fn consistency_issue(
@@ -1766,7 +1795,6 @@ pub fn check_consistency(path: String) -> Result<crate::models::ConsistencyRepor
     let (root, connection) = project_connection(&path)?;
     let nodes = storage::all_nodes(&connection, false)?;
     let entities = storage::all_entities(&connection, false)?;
-    let chapters: Vec<NodeRecord> = nodes.iter().filter(|node| node.kind == "chapter").cloned().collect();
     let mut issues = Vec::new();
     let mut known_titles = std::collections::HashSet::new();
     let mut duplicate_titles = std::collections::HashSet::new();
@@ -1810,7 +1838,7 @@ pub fn check_consistency(path: String) -> Result<crate::models::ConsistencyRepor
         };
         for (key, label) in fields {
             for reference in chapter_reference_tokens(&json_text(&entity.content, key)) {
-                if !chapter_reference_exists(&chapters, &reference) {
+                if !chapter_reference_exists(&nodes, &reference) {
                     issues.push(consistency_issue("warning", "missing-chapter-reference", &format!("{}不存在", label), format!("“{}”无法匹配当前正文中的章节。", reference), &entity.id, &entity.kind, &entity.file_path));
                 }
             }

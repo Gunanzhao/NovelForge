@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BookOpen, CalendarDays, Clock3, MapPin, Plus, Save, Search, Trash2, Users } from 'lucide-react'
 import type { EntityRecord, NodeRecord } from '../lib/types'
-import { chapterReferenceTokens, contentText, filterTimelineEntities, findChapterByReference, sortTimelineEntities } from '../lib/planning-data'
+import { chapterReferenceTokens, contentText, filterTimelineEntities, findChapterByReference, sortChapterNodes, sortTimelineEntities } from '../lib/planning-data'
 import { useAppStore } from '../stores/app-store'
 import { Button, Field, Panel, TextInput } from './ui'
 import '../planning.css'
@@ -35,15 +35,15 @@ function toDraft(entity: EntityRecord | undefined) {
   return draft
 }
 
-function ChapterReferences({ value, chapters, onOpen }: {
+function ChapterReferences({ value, nodes, onOpen }: {
   value: string
-  chapters: NodeRecord[]
+  nodes: NodeRecord[]
   onOpen: (id: string) => void
 }) {
   const references = chapterReferenceTokens(value)
   if (!references.length) return <span className="planning-reference-empty">未关联章节</span>
   return <div className="planning-reference-list">{references.map((reference) => {
-    const chapter = findChapterByReference(chapters, reference)
+    const chapter = findChapterByReference(nodes, reference)
     return chapter
       ? <button key={reference} type="button" className="planning-reference" onClick={() => onOpen(chapter.id)}><BookOpen size={11} />{chapter.title}</button>
       : <span key={reference} className="planning-reference missing">{reference}</span>
@@ -66,9 +66,7 @@ export function TimelineView() {
   const [draft, setDraft] = useState<TimelineDraft>(blankDraft)
   const [busy, setBusy] = useState(false)
 
-  const chapters = useMemo(() => (data?.nodes ?? [])
-    .filter((node) => node.kind === 'chapter')
-    .sort((left, right) => left.orderIndex - right.orderIndex), [data?.nodes])
+  const chapters = useMemo(() => sortChapterNodes(data?.nodes ?? []), [data?.nodes])
   const events = useMemo(() => sortTimelineEntities((data?.entities ?? []).filter((entity) => entity.kind === 'timeline')), [data?.entities])
   const characters = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'character').sort((left, right) => left.title.localeCompare(right.title, 'zh-CN')), [data?.entities])
   const locations = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'location').sort((left, right) => left.title.localeCompare(right.title, 'zh-CN')), [data?.entities])
@@ -168,7 +166,7 @@ export function TimelineView() {
             <Field label="关联章节" hint="可填写章节标题或章节号，多个值用逗号分隔"><TextInput value={draft.chapters} onChange={(event) => updateField('chapters', event.target.value)} placeholder="例如：第一章, 第三章" /></Field>
             <Field label="标签" hint="多个标签用逗号分隔"><TextInput value={draft.tags} onChange={(event) => updateField('tags', event.target.value)} placeholder="例如：转折、线索、高潮" /></Field>
             <div className="special-preview-row"><span><Clock3 size={13} />{draft.date || '未定日期'}{draft.time ? ' · ' + draft.time : ''}</span><span><MapPin size={13} />{draft.location || '未定地点'}</span><span><Users size={13} />{draft.characters || '未指定人物'}</span></div>
-            {!creating && selected ? <div className="special-related"><span className="field-label">正文链接</span><ChapterReferences value={draft.chapters} chapters={chapters} onOpen={(id) => void selectNode(id)} /></div> : null}
+            {!creating && selected ? <div className="special-related"><span className="field-label">正文链接</span><ChapterReferences value={draft.chapters} nodes={data.nodes} onOpen={(id) => void selectNode(id)} /></div> : null}
             <div className="entity-actions"><Button onClick={() => void save()} disabled={busy || !draft.title.trim()}><Save size={14} />{busy ? '保存中…' : '保存事件'}</Button>{selected && !creating ? <Button variant="danger" onClick={() => void remove()}><Trash2 size={14} />移入回收站</Button> : null}</div>
           </div>
         </> : <div className="empty-state"><CalendarDays size={25} /><div><strong>选择一个事件</strong><span>从左侧选择事件，或新建一条时间线记录。</span></div></div>}</Panel>

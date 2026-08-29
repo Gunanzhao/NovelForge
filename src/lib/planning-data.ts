@@ -100,16 +100,35 @@ export function chapterReferenceTokens(value: string) {
   return value.split(/[，,、;；\s]+/u).map((item) => item.trim()).filter(Boolean)
 }
 
-export function findChapterByReference(chapters: NodeRecord[], reference: string) {
+export function sortChapterNodes(nodes: NodeRecord[]) {
+  const volumeOrder = new Map(
+    nodes
+      .filter((node) => node.kind === 'volume')
+      .map((volume) => [volume.id, volume.orderIndex]),
+  )
+  return nodes
+    .filter((node) => node.kind === 'chapter')
+    .sort((left, right) => {
+      const leftVolumeOrder = volumeOrder.get(left.parentId ?? '') ?? Number.MAX_SAFE_INTEGER
+      const rightVolumeOrder = volumeOrder.get(right.parentId ?? '') ?? Number.MAX_SAFE_INTEGER
+      return leftVolumeOrder - rightVolumeOrder
+        || left.orderIndex - right.orderIndex
+        || left.createdAt.localeCompare(right.createdAt)
+        || left.id.localeCompare(right.id)
+    })
+}
+
+export function findChapterByReference(nodes: NodeRecord[], reference: string) {
   const normalized = reference.trim()
   if (!normalized) return undefined
+  const chapters = sortChapterNodes(nodes)
   const exact = chapters.find((chapter) => chapter.title.trim() === normalized)
   if (exact) return exact
   const number = normalized.match(/(?:第\s*)?(\d+)\s*章?/u)
   if (!number) return undefined
   const index = Number(number[1]) - 1
   return Number.isInteger(index) && index >= 0
-    ? [...chapters].sort((left, right) => left.orderIndex - right.orderIndex)[index]
+    ? chapters[index]
     : undefined
 }
 

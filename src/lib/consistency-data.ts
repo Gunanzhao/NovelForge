@@ -15,14 +15,13 @@ function issue(
   return { id: `${code}:${refId}:${title}`, severity, code, title, detail, refId, refKind, path }
 }
 
-function chapterReferenceExists(chapters: NodeRecord[], value: string) {
-  return Boolean(findChapterByReference(chapters, value))
+function chapterReferenceExists(nodes: NodeRecord[], value: string) {
+  return Boolean(findChapterByReference(nodes, value))
 }
 
 export function analyzeConsistency(data: ProjectData, documents: Record<string, string>): ConsistencyReport {
   const issues: ConsistencyIssue[] = []
   const activeEntities = data.entities
-  const chapters = data.nodes.filter((node) => node.kind === 'chapter')
   const knownTitles = new Set(activeEntities.map((entity) => entity.title.trim()).filter(Boolean))
   const duplicateTitles = new Map<string, EntityRecord>()
 
@@ -70,7 +69,7 @@ export function analyzeConsistency(data: ProjectData, documents: Record<string, 
   for (const entity of activeEntities) {
     for (const field of chapterReferenceFields.filter((candidate) => candidate.kind === entity.kind)) {
       for (const reference of chapterReferenceTokens(entityValue(entity, field.key))) {
-        if (!chapterReferenceExists(chapters, reference)) {
+        if (!chapterReferenceExists(data.nodes, reference)) {
           issues.push(issue('warning', 'missing-chapter-reference', `${field.label}不存在`, `“${reference}”无法匹配当前正文中的章节。`, entity.id, entity.kind, entity.filePath))
         }
       }

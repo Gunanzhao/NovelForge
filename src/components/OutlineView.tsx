@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BookOpen, ExternalLink, Save, Trash2 } from 'lucide-react'
 import type { EntityRecord, NodeRecord } from '../lib/types'
-import { contentText } from '../lib/planning-data'
+import { contentText, sortChapterNodes } from '../lib/planning-data'
 import { useAppStore } from '../stores/app-store'
 import { Button, Field, Panel, TextInput } from './ui'
 
@@ -70,9 +70,7 @@ export function OutlineView() {
     const volumes = data.nodes
       .filter((node) => node.kind === 'volume')
       .sort((left, right) => left.orderIndex - right.orderIndex || left.createdAt.localeCompare(right.createdAt))
-    const chapters = data.nodes
-      .filter((node) => node.kind === 'chapter')
-      .sort((left, right) => left.orderIndex - right.orderIndex || left.createdAt.localeCompare(right.createdAt))
+    const chapters = sortChapterNodes(data.nodes)
     return [
       { key: targetKey('work', data.project.id), kind: 'work', id: data.project.id, title: data.project.title },
       ...volumes.map((node) => ({ key: targetKey('volume', node.id), kind: 'volume' as const, id: node.id, title: node.title, node })),

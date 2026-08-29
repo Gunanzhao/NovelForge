@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BookOpen, Clipboard, ExternalLink, FileArchive, FileText, Image, Paperclip, Plus, Save, Trash2 } from 'lucide-react'
 import { chooseFile, isDesktop, projectApi } from '../lib/api'
-import { contentText } from '../lib/planning-data'
+import { contentText, sortChapterNodes } from '../lib/planning-data'
 import type { EntityRecord } from '../lib/types'
 import { useAppStore } from '../stores/app-store'
 import { Button, Field, Panel, TextInput } from './ui'
@@ -49,7 +49,7 @@ export function AttachmentsView() {
     return query ? attachments.filter((attachment) => [attachment.title, attachment.filePath, ...attachment.tags, contentText(attachment, 'description')].join(' ').toLocaleLowerCase().includes(query)) : attachments
   }, [attachments, filter])
   const selected = attachments.find((attachment) => attachment.id === selectedId)
-  const chapters = useMemo(() => (data?.nodes ?? []).filter((node) => node.kind === 'chapter').sort((left, right) => left.orderIndex - right.orderIndex), [data?.nodes])
+  const chapters = useMemo(() => sortChapterNodes(data?.nodes ?? []), [data?.nodes])
 
   useEffect(() => {
     if (selectedId && !selected) setSelectedId(attachments[0]?.id ?? null)

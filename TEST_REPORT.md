@@ -155,3 +155,19 @@
 
 - pnpm.cmd tauri:build：通过；release EXE 15,187,968 bytes，NSIS 安装包 4,275,768 bytes。
 - release EXE 独立进程存活 4 秒且响应正常；分包后的 WebView2 页面目标加载成功（标题 NovelForge，URL tauri.localhost）。
+
+## 多卷章节引用与排序验证（2026-08-30）
+
+- 前端新增跨卷章节排序和引用解析回归：先按卷顺序，再按卷内章节顺序；44 项前端测试全部通过。
+- Rust 一致性检查改为使用完整正文树解析全局章节引用；24 项常规 Rust 测试全部通过，1 项大型基准按设计忽略。
+- 真实多卷命令链覆盖：创建第二卷、创建卷内章节、保存时间线章节引用并执行一致性检查，未产生错误章节引用。
+
+### 当前仍需人工
+
+- 仅剩真实桌面鼠标级 E2E：需在 Windows + WebView2 中按 DESKTOP_E2E_CHECKLIST.md 逐项点击验收；当前环境没有可靠的桌面自动化驱动。
+- PDF 的 STSong-Light 标准 CID 字体跨阅读器视觉一致性仍属于非阻塞质量优化。
+
+## 多卷修复 release 重建（2026-08-30）
+
+- pnpm.cmd tauri:build：通过；release EXE 15,192,576 bytes，NSIS 安装包 4,280,566 bytes。
+- 独立 release EXE 启动 4 秒后仍存活且 Responding 为 True，测试后按 PID 正常退出。

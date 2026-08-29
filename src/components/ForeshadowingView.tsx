@@ -43,15 +43,15 @@ function statusIcon(status: ForeshadowingStatus) {
   return CircleDashed
 }
 
-function ChapterReferences({ value, chapters, onOpen }: {
+function ChapterReferences({ value, nodes, onOpen }: {
   value: string
-  chapters: NodeRecord[]
+  nodes: NodeRecord[]
   onOpen: (id: string) => void
 }) {
   const references = chapterReferenceTokens(value)
   if (!references.length) return <span className="planning-reference-empty">未关联章节</span>
   return <div className="planning-reference-list">{references.map((reference) => {
-    const chapter = findChapterByReference(chapters, reference)
+    const chapter = findChapterByReference(nodes, reference)
     return chapter
       ? <button key={reference} type="button" className="planning-reference" onClick={() => onOpen(chapter.id)}><BookOpen size={11} />{chapter.title}</button>
       : <span key={reference} className="planning-reference missing">{reference}</span>
@@ -72,9 +72,6 @@ export function ForeshadowingView() {
   const [draft, setDraft] = useState<ForeshadowingDraft>(blankDraft)
   const [busy, setBusy] = useState(false)
 
-  const chapters = useMemo(() => (data?.nodes ?? [])
-    .filter((node) => node.kind === 'chapter')
-    .sort((left, right) => left.orderIndex - right.orderIndex), [data?.nodes])
   const entries = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'foreshadowing'), [data?.entities])
   const visibleEntries = useMemo(() => {
     const query = filter.trim().toLocaleLowerCase()
@@ -195,8 +192,8 @@ export function ForeshadowingView() {
           <div className="planning-form">
             <Field label="伏笔标题"><TextInput autoFocus={creating} value={draft.title} onChange={(event) => updateField('title', event.target.value)} placeholder="例如：钟楼里缺失的第十三口钟" /></Field>
             <Field label="伏笔说明"><textarea className="text-area" value={draft.description} onChange={(event) => updateField('description', event.target.value)} placeholder="记录读者已经看到的线索、隐藏信息和预期效果…" /></Field>
-            <div className="field-grid"><Field label="首次埋设章节"><TextInput value={draft.plantedIn} onChange={(event) => updateField('plantedIn', event.target.value)} placeholder="例如：第 2 章" /><ChapterReferences value={draft.plantedIn} chapters={chapters} onOpen={(id) => void selectNode(id)} /></Field><Field label="计划回收章节"><TextInput value={draft.plannedPayoff} onChange={(event) => updateField('plannedPayoff', event.target.value)} placeholder="例如：第 18 章" /><ChapterReferences value={draft.plannedPayoff} chapters={chapters} onOpen={(id) => void selectNode(id)} /></Field></div>
-            <div className="field-grid"><Field label="实际回收章节"><TextInput value={draft.actualPayoff} onChange={(event) => updateField('actualPayoff', event.target.value)} placeholder="回收后填写" /><ChapterReferences value={draft.actualPayoff} chapters={chapters} onOpen={(id) => void selectNode(id)} /></Field><Field label="状态"><select className="select-input" value={draft.status} onChange={(event) => updateField('status', event.target.value)}>{FORESHADOWING_STATUSES.map((status) => <option key={status.id} value={status.id}>{status.label} · {status.description}</option>)}</select></Field></div>
+            <div className="field-grid"><Field label="首次埋设章节"><TextInput value={draft.plantedIn} onChange={(event) => updateField('plantedIn', event.target.value)} placeholder="例如：第 2 章" /><ChapterReferences value={draft.plantedIn} nodes={data.nodes} onOpen={(id) => void selectNode(id)} /></Field><Field label="计划回收章节"><TextInput value={draft.plannedPayoff} onChange={(event) => updateField('plannedPayoff', event.target.value)} placeholder="例如：第 18 章" /><ChapterReferences value={draft.plannedPayoff} nodes={data.nodes} onOpen={(id) => void selectNode(id)} /></Field></div>
+            <div className="field-grid"><Field label="实际回收章节"><TextInput value={draft.actualPayoff} onChange={(event) => updateField('actualPayoff', event.target.value)} placeholder="回收后填写" /><ChapterReferences value={draft.actualPayoff} nodes={data.nodes} onOpen={(id) => void selectNode(id)} /></Field><Field label="状态"><select className="select-input" value={draft.status} onChange={(event) => updateField('status', event.target.value)}>{FORESHADOWING_STATUSES.map((status) => <option key={status.id} value={status.id}>{status.label} · {status.description}</option>)}</select></Field></div>
             <Field label="备注"><textarea className="text-area compact" value={draft.notes} onChange={(event) => updateField('notes', event.target.value)} placeholder="补充写作提醒、相关人物或需要检查的章节…" /></Field>
             <div className="entity-actions"><Button onClick={() => void save()} disabled={busy || !draft.title.trim()}><Save size={14} />{busy ? '保存中…' : '保存伏笔'}</Button>{selected && !creating ? <Button variant="danger" onClick={() => void remove()}><Trash2 size={14} />移入回收站</Button> : null}</div>
           </div>

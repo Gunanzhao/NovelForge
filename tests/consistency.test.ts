@@ -6,6 +6,14 @@ const chapter: NodeRecord = {
   id: 'chapter-1', kind: 'chapter', parentId: 'volume-1', title: '第一章', orderIndex: 0, status: 'draft',
   filePath: 'manuscript/volume_001/chapter_001.md', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
 }
+const volume2: NodeRecord = {
+  id: 'volume-2', kind: 'volume', parentId: null, title: '第二卷', orderIndex: 1, status: 'not-started',
+  filePath: 'manuscript/volume_002', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+}
+const chapter2: NodeRecord = {
+  id: 'chapter-2', kind: 'chapter', parentId: 'volume-2', title: '卷二开端', orderIndex: 0, status: 'draft',
+  filePath: 'manuscript/volume_002/chapter_001.md', createdAt: '2026-01-02T00:00:00Z', updatedAt: '2026-01-02T00:00:00Z',
+}
 
 function entity(id: string, kind: EntityRecord['kind'], title: string, content: Record<string, unknown>): EntityRecord {
   return { id, kind, title, content, tags: [], filePath: `${kind}/${id}.md`, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' }
@@ -36,5 +44,10 @@ describe('consistency analyzer', () => {
     expect(report.errors).toBe(0)
     expect(report.warnings).toBe(0)
   })
-})
 
+  it('resolves numeric chapter references across volume-local order indexes', () => {
+    const data = { ...project([]), nodes: [chapter, volume2, chapter2] }
+    const report = analyzeConsistency(data, {})
+    expect(report.issueCount).toBe(0)
+  })
+})

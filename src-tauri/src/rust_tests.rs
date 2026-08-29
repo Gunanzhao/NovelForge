@@ -556,6 +556,36 @@ fn consistency_check_reports_missing_wiki_and_broken_relationship() {
 }
 
 #[test]
+fn consistency_check_accepts_global_chapter_numbers_across_volumes() {
+    let root = test_root("consistency-multi-volume");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "多卷一致性测试".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let first_volume = created.nodes.iter().find(|node| node.kind == "volume").expect("first volume").clone();
+    let _second_chapter_data = super::commands::create_node(super::models::NodeInput {
+        project_path: project_path.clone(), kind: "chapter".to_string(), title: "卷一第二章".to_string(),
+        parent_id: Some(first_volume.id.clone()),
+    }).expect("create second chapter");
+    let second_volume_data = super::commands::create_node(super::models::NodeInput {
+        project_path: project_path.clone(), kind: "volume".to_string(), title: "第二卷".to_string(), parent_id: None,
+    }).expect("create second volume");
+    let second_volume = second_volume_data.nodes.iter().find(|node| node.title == "第二卷").expect("second volume").clone();
+    super::commands::create_node(super::models::NodeInput {
+        project_path: project_path.clone(), kind: "chapter".to_string(), title: "卷二第一章".to_string(),
+        parent_id: Some(second_volume.id.clone()),
+    }).expect("create third chapter");
+    super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(), kind: "timeline".to_string(), id: None, title: "第三章事件".to_string(),
+        content: serde_json::json!({"chapters": "第3章", "description": "跨卷章节引用"}), tags: vec!["时间线".to_string()],
+    }).expect("save timeline");
+    let report = super::commands::check_consistency(project_path).expect("consistency report");
+    assert!(!report.issues.iter().any(|issue| issue.code == "missing-chapter-reference"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn statistics_include_daily_series_and_chapter_breakdown() {
     let root = test_root("statistics");
     let project_path = root.join("project").to_string_lossy().to_string();
