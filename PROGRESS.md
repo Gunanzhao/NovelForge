@@ -294,3 +294,10 @@
 - 配置 React、CodeMirror、Markdown 和图标依赖的生产分包，最大 chunk 约 364 kB，构建体积警告消失。
 - 质量阶段验证：cargo check 无代码警告，pnpm.cmd build 通过。
 - 当前功能侧仍只剩带 WebView2 的 Windows 桌面鼠标级 E2E，需要用户手动执行。
+
+## 2026-08-30：浏览器 fallback 对齐
+
+- 修复 fallback 新建章/节路径，使其遵守 manuscript/volume_###/chapter_###/section_###.md 层级。
+- 回收站改为保存递归节点、正文和资料快照，支持恢复、冲突保护、清空和永久删除。
+- 浏览器模式选择 DOCX/EPUB/PDF 时明确提示使用桌面版，不再返回伪成功路径。
+- 新增回归覆盖；前端测试从 40 项增至 41 项。

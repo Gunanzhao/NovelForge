@@ -43,9 +43,12 @@ describe('browser fallback project workflow', () => {
     expect(consistency.issueCount).toBe(0)
     const exportPath = await fallbackInvoke<string>('export_project', { input: { projectPath: input.path, format: 'markdown' } })
     expect(exportPath).toContain('browser://exports')
-    for (const format of ['txt', 'html', 'docx', 'epub', 'pdf'] as const) {
+    for (const format of ['txt', 'html'] as const) {
       const path = await fallbackInvoke<string>('export_project', { input: { projectPath: input.path, format } })
       expect(path.endsWith('.' + format)).toBe(true)
+    }
+    for (const format of ['docx', 'epub', 'pdf'] as const) {
+      await expect(fallbackInvoke<string>('export_project', { input: { projectPath: input.path, format } })).rejects.toThrow('请使用桌面版导出')
     }
   })
 
@@ -58,6 +61,37 @@ describe('browser fallback project workflow', () => {
     const trash = await fallbackInvoke<TrashItem[]>('list_trash', { path: 'trash-test-project' })
     expect(trash).toHaveLength(1)
     expect(trash[0].refId).toBe(chapter.id)
+    const restored = await fallbackInvoke<ProjectData>('restore_trash', { input: { projectPath: 'trash-test-project', nodeId: trash[0].id } })
+    expect(restored.nodes.some((node) => node.id === chapter.id)).toBe(true)
+    expect(await fallbackInvoke<TrashItem[]>('list_trash', { path: 'trash-test-project' })).toHaveLength(0)
+  })
+
+  it('keeps nested markdown paths and restores recursive node and entity snapshots', async () => {
+    const path = 'nested-trash-test-project'
+    const created = await fallbackInvoke<ProjectData>('create_project', { input: { ...input, path } })
+    const volume = created.nodes.find((node) => node.kind === 'volume')
+    const chapter = created.nodes.find((node) => node.kind === 'chapter')
+    expect(volume && chapter).toBeTruthy()
+    if (!volume || !chapter) return
+    const extraChapterData = await fallbackInvoke<ProjectData>('create_node', { input: { projectPath: path, kind: 'chapter', title: '第二章', parentId: volume.id } })
+    const extraChapter = extraChapterData.nodes.find((node) => node.title === '第二章')
+    expect(extraChapter?.filePath).toBe('manuscript/volume_001/chapter_002.md')
+    if (!extraChapter) return
+    const sectionData = await fallbackInvoke<ProjectData>('create_node', { input: { projectPath: path, kind: 'section', title: '第二章·节', parentId: extraChapter.id } })
+    const section = sectionData.nodes.find((node) => node.title === '第二章·节')
+    expect(section?.filePath).toBe('manuscript/volume_001/chapter_002/section_001.md')
+    if (!section) return
+    await fallbackInvoke<EntityRecord>('upsert_entity', {
+      input: { projectPath: path, kind: 'character', id: null, title: '林月', content: { role: '主角' }, tags: ['主角'] },
+    })
+    const beforeDelete = await fallbackInvoke<ProjectData>('delete_node', { input: { projectPath: path, nodeId: volume.id } })
+    expect(beforeDelete.nodes).toHaveLength(0)
+    const trash = await fallbackInvoke<TrashItem[]>('list_trash', { path })
+    expect(trash).toHaveLength(1)
+    const afterRestore = await fallbackInvoke<ProjectData>('restore_trash', { input: { projectPath: path, nodeId: trash[0].id } })
+    expect(afterRestore.nodes.filter((node) => node.kind !== 'volume')).toHaveLength(3)
+    expect(afterRestore.nodes.find((node) => node.id === section.id)?.filePath).toBe(section.filePath)
+    expect(afterRestore.entities.some((entity) => entity.title === '林月')).toBe(true)
   })
 
   it('supports current-document, volume and tag search filters', async () => {

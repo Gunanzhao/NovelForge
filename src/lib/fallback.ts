@@ -9,11 +9,18 @@ interface StoredHistory extends HistoryItem {
   content: string
 }
 
+interface TrashSnapshot {
+  nodes: NodeRecord[]
+  documents: Record<string, string>
+  entities: EntityRecord[]
+}
+
 interface FallbackStore {
   data: ProjectData
   documents: Record<string, string>
   history: StoredHistory[]
   trash: TrashItem[]
+  trashSnapshots: Record<string, TrashSnapshot>
   activities: Array<{ createdAt: string; deltaWords: number }>
 }
 
@@ -45,6 +52,10 @@ function readStore(path: string) {
     const raw = localStorage.getItem(key)
     if (raw) {
       const parsed = JSON.parse(raw) as FallbackStore
+      parsed.history ??= []
+      parsed.trash ??= []
+      parsed.trashSnapshots ??= {}
+      parsed.activities ??= []
       memory.set(key, parsed)
       return parsed
     }
@@ -81,6 +92,7 @@ function makeProject(input: ProjectInput): FallbackStore {
     documents: { [chapterId]: content },
     history: [],
     trash: [],
+    trashSnapshots: {},
     activities: [],
   }
 }
@@ -175,6 +187,39 @@ function exportText(store: FallbackStore, format: 'markdown' | 'txt' | 'html', i
   return format === 'markdown' ? markdown : title + '\n作者：' + author + '\n\n' + rendered
 }
 
+function restoreTrashSnapshot(store: FallbackStore, trash: TrashItem) {
+  const snapshot = store.trashSnapshots[trash.id]
+  if (!snapshot) throw new Error('此回收站条目没有可恢复的快照')
+  const activeNodeIds = new Set(store.data.nodes.map((item) => item.id))
+  const activeNodePaths = new Set(store.data.nodes.map((item) => item.filePath))
+  const activeEntityIds = new Set(store.data.entities.map((item) => item.id))
+  const activeEntityPaths = new Set(store.data.entities.map((item) => item.filePath))
+  if (snapshot.nodes.some((item) => activeNodeIds.has(item.id) || activeNodePaths.has(item.filePath))) {
+    throw new Error('恢复失败：正文节点或文件路径已经被占用')
+  }
+  if (snapshot.entities.some((item) => activeEntityIds.has(item.id) || activeEntityPaths.has(item.filePath))) {
+    throw new Error('恢复失败：资料条目或文件路径已经被占用')
+  }
+  const snapshotNodeIds = new Set(snapshot.nodes.map((item) => item.id))
+  const availableParentIds = new Set([...activeNodeIds, ...snapshotNodeIds])
+  if (snapshot.nodes.some((item) => item.parentId && !availableParentIds.has(item.parentId))) {
+    throw new Error('恢复失败：父级节点不存在')
+  }
+  const restoredNodes = snapshot.nodes.map((item) => ({ ...item }))
+  for (const item of restoredNodes) {
+    if (item.parentId && !snapshotNodeIds.has(item.parentId)) {
+      const siblingCount = store.data.nodes.filter((candidate) => candidate.parentId === item.parentId && candidate.kind === item.kind).length
+      item.orderIndex = siblingCount
+    }
+  }
+  store.data.nodes.push(...restoredNodes)
+  store.data.entities.push(...snapshot.entities.map((item) => ({ ...item, tags: [...item.tags], content: { ...item.content } })))
+  Object.assign(store.documents, snapshot.documents)
+  store.trash = store.trash.filter((item) => item.id !== trash.id)
+  delete store.trashSnapshots[trash.id]
+  updateTime(store.data)
+}
+
 export async function fallbackInvoke<T>(command: string, args: Record<string, unknown>): Promise<T> {
   if (command === 'create_project') {
     const input = args.input as ProjectInput
@@ -199,15 +244,15 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   if (command === 'create_node') {
     const kind = input?.kind as NodeRecord['kind']
     const parentId = (input?.parentId as string | null) ?? null
-    const title = input?.title as string
+    const title = (input?.title as string | undefined)?.trim() ?? ''
+    if (!['volume', 'chapter', 'section'].includes(kind)) throw new Error('不支持的正文节点类型')
+    if (!title) throw new Error('节点标题不能为空')
+    const parent = validateNodeTarget(store, kind, parentId)
     const siblings = store.data.nodes.filter((item) => item.parentId === parentId && item.kind === kind)
     const orderIndex = siblings.length
     const createdAt = new Date().toISOString()
     const id = uid()
-    const prefix = kind === 'chapter' ? 'manuscript/chapter' : 'manuscript/section'
-    const filePath = kind === 'volume'
-      ? 'manuscript/volume_' + String(orderIndex + 1).padStart(3, '0')
-      : prefix + '_' + String(orderIndex + 1).padStart(3, '0') + '.md'
+    const filePath = fallbackNodePath(store, kind, parent, orderIndex)
     const newNode: NodeRecord = {
       id, kind, parentId, title, orderIndex, status: 'not-started', filePath, createdAt, updatedAt: createdAt,
     }
@@ -367,8 +412,11 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   if (command === 'delete_entity') {
     const current = entity(store, input?.nodeId as string)
     if (current) {
+      const trashId = uid()
       store.data.entities = store.data.entities.filter((item) => item.id !== current.id)
-      store.trash.push({ id: uid(), refId: current.id, refKind: 'entity', title: current.title, originalPath: current.filePath, trashPath: 'fallback://trash', deletedAt: new Date().toISOString() })
+      store.trash.push({ id: trashId, refId: current.id, refKind: 'entity', title: current.title, originalPath: current.filePath, trashPath: 'fallback://trash', deletedAt: new Date().toISOString() })
+      store.trashSnapshots[trashId] = { nodes: [], documents: {}, entities: [current] }
+      updateTime(store.data)
       persist(projectPath, store)
     }
     return store.data as T
@@ -377,9 +425,15 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     const id = input?.nodeId as string
     const current = node(store, id)
     if (current) {
-      store.data.nodes = store.data.nodes.filter((item) => item.id !== id && item.parentId !== id)
-      delete store.documents[id]
-      store.trash.push({ id: uid(), refId: id, refKind: 'node', title: current.title, originalPath: current.filePath, trashPath: 'fallback://trash', deletedAt: new Date().toISOString() })
+      const descendants = nodeDescendants(store, id)
+      const descendantIds = new Set(descendants.map((item) => item.id))
+      const trashId = uid()
+      const documents = Object.fromEntries(descendants.filter((item) => item.kind !== 'volume').map((item) => [item.id, store.documents[item.id] ?? '']))
+      store.data.nodes = store.data.nodes.filter((item) => !descendantIds.has(item.id))
+      for (const descendant of descendants) delete store.documents[descendant.id]
+      store.trash.push({ id: trashId, refId: id, refKind: 'node', title: current.title, originalPath: current.filePath, trashPath: 'fallback://trash', deletedAt: new Date().toISOString() })
+      store.trashSnapshots[trashId] = { nodes: descendants, documents, entities: [] }
+      updateTime(store.data)
       persist(projectPath, store)
     }
     return store.data as T
@@ -387,19 +441,21 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   if (command === 'list_trash') return store.trash as T
   if (command === 'empty_trash') {
     store.trash = []
+    store.trashSnapshots = {}
     persist(projectPath, store)
     return store.data as T
   }
   if (command === 'restore_trash') {
     const trash = store.trash.find((item) => item.id === input?.nodeId)
     if (trash) {
-      store.trash = store.trash.filter((item) => item.id !== trash.id)
+      restoreTrashSnapshot(store, trash)
       persist(projectPath, store)
     }
     return store.data as T
   }
   if (command === 'permanent_delete') {
     store.trash = store.trash.filter((item) => item.id !== input?.nodeId)
+    delete store.trashSnapshots[input?.nodeId as string]
     persist(projectPath, store)
     return store.data as T
   }
@@ -516,7 +572,10 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   }
   if (command === 'export_project') {
     const exportInput = args.input as ExportInput
-    if (exportInput.format === 'markdown' || exportInput.format === 'txt' || exportInput.format === 'html') void exportText(store, exportInput.format, exportInput)
+    if (exportInput.format !== 'markdown' && exportInput.format !== 'txt' && exportInput.format !== 'html') {
+      throw new Error('浏览器开发模式暂不生成 DOCX、EPUB 或 PDF，请使用桌面版导出。')
+    }
+    void exportText(store, exportInput.format, exportInput)
     return ('browser://exports/' + store.data.project.title + '.' + exportInput.format) as T
   }
   if (command === 'read_logs') return '' as T

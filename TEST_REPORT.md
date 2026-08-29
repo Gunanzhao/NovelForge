@@ -145,4 +145,5 @@
 
 - Rust cargo check：通过，已无 dead-code 警告；cargo test 通过 20 项（1 项大型基准 ignored）。
 - pnpm.cmd build：通过；React、CodeMirror、Markdown 和图标依赖已分包，最大 chunk 约 364 kB，未出现体积警告。
+- 浏览器 fallback 回归：路径层级、递归删除/恢复、资料快照和二进制导出边界均覆盖；前端测试总数更新为 41 项。
 - 当前仍需人工的唯一功能验收门槛是带 WebView2 的 Windows 桌面鼠标级 E2E。
