@@ -29,6 +29,9 @@ pub struct NodeRecord {
     pub updated_at: String,
     #[serde(skip_serializing)]
     pub deleted_at: Option<String>,
+    // Kept in the database-facing model so trash metadata can round-trip
+    // without exposing it to the frontend payload.
+    #[allow(dead_code)]
     #[serde(skip_serializing)]
     pub deleted_path: Option<String>,
 }
@@ -46,6 +49,9 @@ pub struct EntityRecord {
     pub updated_at: String,
     #[serde(skip_serializing)]
     pub deleted_at: Option<String>,
+    // Kept in the database-facing model so trash metadata can round-trip
+    // without exposing it to the frontend payload.
+    #[allow(dead_code)]
     #[serde(skip_serializing)]
     pub deleted_path: Option<String>,
 }

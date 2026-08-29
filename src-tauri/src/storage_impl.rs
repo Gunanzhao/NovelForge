@@ -494,10 +494,6 @@ pub fn parse_timestamp(value: &str) -> Option<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(value).ok().map(|date| date.with_timezone(&Utc))
 }
 
-pub fn date_key(value: &str) -> Option<String> {
-    parse_timestamp(value).map(|date| date.format("%Y-%m-%d").to_string())
-}
-
 pub fn copy_history(root: &Path, node_id: &str, revision_id: &str, content: &str) -> Result<String, String> {
     let relative = format!(".novelforge/history/{}/{}.md", node_id, revision_id);
     let path = safe_relative(root, &relative)?;
