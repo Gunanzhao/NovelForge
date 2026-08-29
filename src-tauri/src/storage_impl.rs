@@ -2,7 +2,7 @@ use crate::models::{EntityRecord, HistoryItem, NodeRecord, ProjectMetadata, Reco
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use uuid::Uuid;
@@ -92,10 +92,45 @@ pub fn word_count(content: &str) -> u64 {
     content.chars().filter(|character| !character.is_whitespace()).count() as u64
 }
 
+fn canonical_root(root: &Path) -> Result<PathBuf, String> {
+    fs::canonicalize(root).map_err(|error| format!("无法规范化项目根目录：{}", error))
+}
+
+fn canonical_existing_ancestor(path: &Path) -> Result<PathBuf, String> {
+    let mut current = Some(path);
+    while let Some(candidate) = current {
+        if candidate.exists() {
+            return fs::canonicalize(candidate)
+                .map_err(|error| format!("无法规范化项目路径 {}：{}", candidate.display(), error));
+        }
+        current = candidate.parent();
+    }
+    Err("无法找到项目路径的现有父目录".to_string())
+}
+
+fn ensure_within_root(root: &Path, candidate: &Path) -> Result<(), String> {
+    let canonical_root = canonical_root(root)?;
+    let boundary = if candidate.exists() {
+        let canonical_candidate = fs::canonicalize(candidate)
+            .map_err(|error| format!("无法规范化项目路径 {}：{}", candidate.display(), error))?;
+        if canonical_candidate == canonical_root {
+            return Err("项目路径不能指向项目根目录本身".to_string());
+        }
+        canonical_candidate
+    } else {
+        canonical_existing_ancestor(candidate)?
+    };
+    if !boundary.starts_with(&canonical_root) {
+        return Err(format!("项目路径越界：{}", candidate.display()));
+    }
+    Ok(())
+}
+
 pub fn create_project_directories(root: &Path) -> Result<(), String> {
     for directory in DIRECTORIES {
-        fs::create_dir_all(root.join(directory)).map_err(|error| {
-            format!("无法创建项目目录 {}：{}", root.join(directory).display(), error)
+        let path = safe_relative(root, directory)?;
+        fs::create_dir_all(&path).map_err(|error| {
+            format!("无法创建项目目录 {}：{}", path.display(), error)
         })?;
     }
     Ok(())
@@ -126,14 +161,15 @@ pub fn existing_project_root(input: &str) -> Result<PathBuf, String> {
     if !root.is_dir() {
         return Err("项目路径不是文件夹".to_string());
     }
-    if !root.join(PROJECT_FILE).is_file() {
+    let project_file = safe_relative(&root, PROJECT_FILE)?;
+    if !project_file.is_file() {
         return Err("这里没有找到 project.json，不是有效的 NovelForge 项目".to_string());
     }
     Ok(root)
 }
 
 pub fn open_db(root: &Path) -> Result<Connection, String> {
-    let database_path = root.join(".novelforge").join("database.sqlite");
+    let database_path = safe_relative(root, ".novelforge/database.sqlite")?;
     fs::create_dir_all(database_path.parent().ok_or_else(|| "无法确定数据库目录".to_string())?)
         .map_err(|error| format!("无法创建数据库目录：{}", error))?;
     let connection = Connection::open(&database_path)
@@ -145,11 +181,11 @@ pub fn open_db(root: &Path) -> Result<Connection, String> {
 pub fn write_project_json(root: &Path, metadata: &ProjectMetadata) -> Result<(), String> {
     let data = serde_json::to_vec_pretty(metadata)
         .map_err(|error| format!("项目元数据序列化失败：{}", error))?;
-    atomic_write(&root.join(PROJECT_FILE), &data)
+    atomic_write(&safe_relative(root, PROJECT_FILE)?, &data)
 }
 
 pub fn read_project_json(root: &Path) -> Result<ProjectMetadata, String> {
-    let data = fs::read(root.join(PROJECT_FILE))
+    let data = fs::read(safe_relative(root, PROJECT_FILE)?)
         .map_err(|error| format!("无法读取 project.json：{}", error))?;
     serde_json::from_slice(&data).map_err(|error| format!("project.json 格式无效：{}", error))
 }
@@ -165,10 +201,31 @@ pub fn safe_relative(root: &Path, relative: &str) -> Result<PathBuf, String> {
     if candidate.is_absolute() || relative.trim().is_empty() {
         return Err("项目相对路径无效".to_string());
     }
-    if candidate.components().any(|component| matches!(component, Component::ParentDir)) {
-        return Err("项目路径不能包含上级目录".to_string());
+    if candidate.components().any(|component| !matches!(component, Component::Normal(_))) {
+        return Err("项目路径只能包含普通相对路径段".to_string());
     }
-    Ok(root.join(candidate))
+    let joined = root.join(candidate);
+    ensure_within_root(root, &joined)?;
+    Ok(joined)
+}
+
+pub fn safe_trash_path(root: &Path, stored_path: &str) -> Result<PathBuf, String> {
+    let candidate = PathBuf::from(stored_path);
+    if !candidate.is_absolute() {
+        return Err("回收站路径必须是绝对路径".to_string());
+    }
+    let trash_root = safe_relative(root, "trash/items")?;
+    if !trash_root.is_dir() {
+        return Err("项目回收站目录不存在".to_string());
+    }
+    let canonical_trash_root = fs::canonicalize(&trash_root)
+        .map_err(|error| format!("无法规范化回收站目录：{}", error))?;
+    let canonical_candidate = fs::canonicalize(&candidate)
+        .map_err(|error| format!("无法访问回收站内容 {}：{}", candidate.display(), error))?;
+    if canonical_candidate == canonical_trash_root || !canonical_candidate.starts_with(&canonical_trash_root) {
+        return Err(format!("拒绝访问项目回收站外的路径：{}", candidate.display()));
+    }
+    Ok(canonical_candidate)
 }
 
 pub fn atomic_write(target: &Path, content: &[u8]) -> Result<(), String> {
@@ -312,7 +369,7 @@ pub fn refresh_search_index(root: &Path, connection: &Connection) -> Result<(), 
 }
 
 pub fn recovery_items(root: &Path, connection: &Connection) -> Result<Vec<RecoveryItem>, String> {
-    let recovery_dir = root.join(".novelforge").join("recovery");
+    let recovery_dir = safe_relative(root, ".novelforge/recovery")?;
     if !recovery_dir.is_dir() {
         return Ok(Vec::new());
     }
@@ -446,14 +503,15 @@ pub fn remove_file_if_exists(path: &Path) -> Result<(), String> {
 }
 
 pub fn move_to_trash(root: &Path, original: &Path, ref_id: &str) -> Result<String, String> {
-    let trash_directory = root.join("trash").join("items");
+    ensure_within_root(root, original)?;
+    if !original.exists() {
+        return Err(format!("待删除内容不存在：{}", original.display()));
+    }
+    let trash_directory = safe_relative(root, "trash/items")?;
     fs::create_dir_all(&trash_directory).map_err(|error| format!("无法创建回收站目录：{}", error))?;
     let filename = original.file_name().and_then(|name| name.to_str()).unwrap_or("item");
     let trash_path = trash_directory.join(format!("{}_{}_{}", ref_id, Utc::now().timestamp_millis(), filename));
-    if original.exists() {
-        fs::rename(original, &trash_path).map_err(|error| format!("移动到回收站失败：{}", error))?;
-    } else {
-        File::create(&trash_path).map_err(|error| format!("创建回收站占位文件失败：{}", error))?;
-    }
+    ensure_within_root(root, &trash_path)?;
+    fs::rename(original, &trash_path).map_err(|error| format!("移动到回收站失败：{}", error))?;
     Ok(trash_path.to_string_lossy().to_string())
 }

@@ -83,3 +83,94 @@ fn real_command_workflow_persists_markdown_and_recoverable_trash() {
     assert_eq!(reopened.project.title, "雾港来信");
     let _ = fs::remove_dir_all(root);
 }
+
+#[test]
+fn trash_path_must_stay_inside_project() {
+    let root = test_root("trash-boundary");
+    storage::create_project_directories(&root).expect("project directories");
+    let outside = root.parent().expect("temporary parent").join(format!("novelforge-outside-{}", storage::new_id()));
+    fs::create_dir_all(&outside).expect("outside directory");
+    let sentinel = outside.join("sentinel.txt");
+    fs::write(&sentinel, "do not delete").expect("sentinel");
+    let inside = root.join("trash/items/inside.md");
+    fs::create_dir_all(inside.parent().expect("trash item parent")).expect("trash items directory");
+    fs::write(&inside, "trash").expect("trash item");
+
+    assert!(storage::safe_trash_path(&root, &sentinel.to_string_lossy()).is_err());
+    assert_eq!(
+        storage::safe_trash_path(&root, &inside.to_string_lossy()).expect("inside path"),
+        fs::canonicalize(&inside).expect("canonical inside path")
+    );
+    assert_eq!(fs::read_to_string(&sentinel).expect("sentinel remains"), "do not delete");
+    let _ = fs::remove_dir_all(root);
+    let _ = fs::remove_dir_all(outside);
+}
+
+#[test]
+fn node_delete_restores_file_when_database_transaction_fails() {
+    let root = test_root("delete-rollback");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "回滚测试".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "现代".to_string(),
+        target_words: 1000,
+    }).expect("create project");
+    let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
+    let chapter_path = root.join("project").join(&chapter.file_path);
+    let original = fs::read_to_string(&chapter_path).expect("chapter content");
+    {
+        let connection = storage::open_db(&root.join("project")).expect("database");
+        connection.execute_batch(
+            "CREATE TRIGGER fail_trash BEFORE INSERT ON trash_items BEGIN SELECT RAISE(ABORT, 'test failure'); END;"
+        ).expect("failure trigger");
+    }
+
+    let result = super::commands::delete_node(super::models::NodeActionInput {
+        project_path: project_path.clone(),
+        node_id: chapter.id.clone(),
+    });
+    assert!(result.is_err());
+    assert_eq!(fs::read_to_string(&chapter_path).expect("restored chapter"), original);
+    let reopened = super::commands::open_project(project_path).expect("reopen project");
+    let restored = reopened.nodes.iter().find(|node| node.id == chapter.id).expect("restored node");
+    assert!(restored.deleted_at.is_none());
+    assert!(reopened.recovery.is_empty());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn permanent_delete_rejects_external_database_path() {
+    let root = test_root("permanent-boundary");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "路径测试".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "现代".to_string(),
+        target_words: 1000,
+    }).expect("create project");
+    let outside = root.parent().expect("temporary parent").join(format!("novelforge-external-{}", storage::new_id()));
+    fs::create_dir_all(&outside).expect("external directory");
+    let sentinel = outside.join("sentinel.txt");
+    fs::write(&sentinel, "keep").expect("external sentinel");
+    {
+        let connection = storage::open_db(&root.join("project")).expect("database");
+        connection.execute(
+            "INSERT INTO trash_items (id, ref_id, ref_kind, title, original_path, trash_path, deleted_at) VALUES (?1, ?2, 'entity', 'fake', 'notes/fake.md', ?3, ?4)",
+            rusqlite::params!["trash-id", "entity-id", outside.to_string_lossy(), storage::now()],
+        ).expect("malicious trash record");
+    }
+
+    let result = super::commands::permanent_delete(super::models::NodeActionInput {
+        project_path,
+        node_id: "trash-id".to_string(),
+    });
+    assert!(result.is_err());
+    assert_eq!(fs::read_to_string(&sentinel).expect("external sentinel remains"), "keep");
+    let _ = fs::remove_dir_all(root);
+    let _ = fs::remove_dir_all(outside);
+}

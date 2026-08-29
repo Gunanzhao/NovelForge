@@ -331,7 +331,7 @@ pub fn reorder_node(input: crate::models::ReorderNodeInput) -> Result<ProjectDat
 
 #[tauri::command]
 pub fn delete_node(input: crate::models::NodeActionInput) -> Result<ProjectData, String> {
-    let (root, connection) = project_connection(&input.project_path)?;
+    let (root, mut connection) = project_connection(&input.project_path)?;
     let node = storage::node_from_id(&connection, &input.node_id)?
         .ok_or_else(|| "节点不存在".to_string())?;
     if node.deleted_at.is_some() {
@@ -340,24 +340,36 @@ pub fn delete_node(input: crate::models::NodeActionInput) -> Result<ProjectData,
     let nodes = storage::all_nodes(&connection, false)?;
     let ids = descendant_ids(&nodes, &node.id);
     let original_path = node.file_path.clone();
-    let trash_path = storage::move_to_trash(&root, &storage::safe_relative(&root, &original_path)?, &node.id)?;
+    let original_absolute = storage::safe_relative(&root, &original_path)?;
+    let trash_path = storage::move_to_trash(&root, &original_absolute, &node.id)?;
     let deleted_at = storage::now();
-    for id in &ids {
-        connection
+    let database_result = (|| -> Result<(), String> {
+        let transaction = connection.transaction()
+            .map_err(|error| format!("无法开始删除事务：{}", error))?;
+        for id in &ids {
+            transaction
+                .execute(
+                    "UPDATE nodes SET deleted_at = ?1, deleted_path = ?2 WHERE id = ?3",
+                    params![deleted_at, if id == &node.id { Some(trash_path.clone()) } else { None::<String> }, id],
+                )
+                .map_err(|error| format!("移入回收站失败：{}", error))?;
+            transaction.execute("DELETE FROM search_index WHERE ref_id = ?1", params![id])
+                .map_err(|error| format!("删除搜索索引失败：{}", error))?;
+        }
+        transaction
             .execute(
-                "UPDATE nodes SET deleted_at = ?1, deleted_path = ?2 WHERE id = ?3",
-                params![deleted_at, if id == &node.id { Some(trash_path.clone()) } else { None::<String> }, id],
+                "INSERT INTO trash_items (id, ref_id, ref_kind, title, original_path, trash_path, deleted_at) VALUES (?1, ?2, 'node', ?3, ?4, ?5, ?6)",
+                params![storage::new_id(), node.id, node.title, original_path, trash_path, deleted_at],
             )
-            .map_err(|error| format!("移入回收站失败：{}", error))?;
-        connection.execute("DELETE FROM search_index WHERE ref_id = ?1", params![id])
-            .map_err(|error| format!("删除搜索索引失败：{}", error))?;
+            .map_err(|error| format!("记录回收站失败：{}", error))?;
+        transaction.commit().map_err(|error| format!("提交删除事务失败：{}", error))
+    })();
+    if let Err(error) = database_result {
+        return match fs::rename(Path::new(&trash_path), &original_absolute) {
+            Ok(()) => Err(format!("{}；文件已恢复到原位置", error)),
+            Err(rollback_error) => Err(format!("{}；文件回滚失败：{}", error, rollback_error)),
+        };
     }
-    connection
-        .execute(
-            "INSERT INTO trash_items (id, ref_id, ref_kind, title, original_path, trash_path, deleted_at) VALUES (?1, ?2, 'node', ?3, ?4, ?5, ?6)",
-            params![storage::new_id(), node.id, node.title, original_path, trash_path, deleted_at],
-        )
-        .map_err(|error| format!("记录回收站失败：{}", error))?;
     storage::touch_project(&root)?;
     project_data(&root, &connection)
 }
@@ -557,25 +569,37 @@ fn safe_filename(title: &str) -> String {
 
 #[tauri::command]
 pub fn delete_entity(input: crate::models::NodeActionInput) -> Result<ProjectData, String> {
-    let (root, connection) = project_connection(&input.project_path)?;
+    let (root, mut connection) = project_connection(&input.project_path)?;
     let entity = storage::entity_from_id(&connection, &input.node_id)?
         .ok_or_else(|| "资料条目不存在".to_string())?;
     if entity.deleted_at.is_some() {
         return Err("条目已经在回收站".to_string());
     }
-    let trash_path = storage::move_to_trash(&root, &storage::safe_relative(&root, &entity.file_path)?, &entity.id)?;
+    let original_absolute = storage::safe_relative(&root, &entity.file_path)?;
+    let trash_path = storage::move_to_trash(&root, &original_absolute, &entity.id)?;
     let deleted_at = storage::now();
-    connection
-        .execute("UPDATE entities SET deleted_at = ?1, deleted_path = ?2 WHERE id = ?3", params![deleted_at, trash_path, entity.id])
-        .map_err(|error| format!("移入回收站失败：{}", error))?;
-    connection.execute("DELETE FROM search_index WHERE ref_id = ?1", params![entity.id])
-        .map_err(|error| format!("删除搜索索引失败：{}", error))?;
-    connection
-        .execute(
-            "INSERT INTO trash_items (id, ref_id, ref_kind, title, original_path, trash_path, deleted_at) VALUES (?1, ?2, 'entity', ?3, ?4, ?5, ?6)",
-            params![storage::new_id(), entity.id, entity.title, entity.file_path, trash_path, deleted_at],
-        )
-        .map_err(|error| format!("记录回收站失败：{}", error))?;
+    let database_result = (|| -> Result<(), String> {
+        let transaction = connection.transaction()
+            .map_err(|error| format!("无法开始资料删除事务：{}", error))?;
+        transaction
+            .execute("UPDATE entities SET deleted_at = ?1, deleted_path = ?2 WHERE id = ?3", params![deleted_at, trash_path, entity.id])
+            .map_err(|error| format!("移入回收站失败：{}", error))?;
+        transaction.execute("DELETE FROM search_index WHERE ref_id = ?1", params![entity.id])
+            .map_err(|error| format!("删除搜索索引失败：{}", error))?;
+        transaction
+            .execute(
+                "INSERT INTO trash_items (id, ref_id, ref_kind, title, original_path, trash_path, deleted_at) VALUES (?1, ?2, 'entity', ?3, ?4, ?5, ?6)",
+                params![storage::new_id(), entity.id, entity.title, entity.file_path, trash_path, deleted_at],
+            )
+            .map_err(|error| format!("记录回收站失败：{}", error))?;
+        transaction.commit().map_err(|error| format!("提交资料删除事务失败：{}", error))
+    })();
+    if let Err(error) = database_result {
+        return match fs::rename(Path::new(&trash_path), &original_absolute) {
+            Ok(()) => Err(format!("{}；资料文件已恢复到原位置", error)),
+            Err(rollback_error) => Err(format!("{}；资料文件回滚失败：{}", error, rollback_error)),
+        };
+    }
     storage::touch_project(&root)?;
     project_data(&root, &connection)
 }
@@ -598,30 +622,46 @@ pub fn list_trash(path: String) -> Result<Vec<TrashItem>, String> {
 
 #[tauri::command]
 pub fn restore_trash(input: crate::models::NodeActionInput) -> Result<ProjectData, String> {
-    let (root, connection) = project_connection(&input.project_path)?;
+    let (root, mut connection) = project_connection(&input.project_path)?;
     let item = trash_item(&connection, &input.node_id)?;
+    if item.ref_kind != "node" && item.ref_kind != "entity" {
+        return Err("回收站项目类型无效".to_string());
+    }
+    let trash_path = storage::safe_trash_path(&root, &item.trash_path)?;
     let destination = storage::safe_relative(&root, &item.original_path)?;
     if destination.exists() {
         return Err("原位置已有同名内容，请先处理后再恢复".to_string());
     }
-    if item.ref_kind == "node" {
-        fs::create_dir_all(destination.parent().ok_or_else(|| "无法确定恢复目录".to_string())?)
-            .map_err(|error| format!("无法创建恢复目录：{}", error))?;
-        fs::rename(&item.trash_path, &destination).map_err(|error| format!("恢复节点失败：{}", error))?;
-        let nodes = storage::all_nodes(&connection, true)?;
-        for id in descendant_ids(&nodes, &item.ref_id) {
-            connection.execute("UPDATE nodes SET deleted_at = NULL, deleted_path = NULL WHERE id = ?1", params![id])
-                .map_err(|error| format!("更新恢复节点失败：{}", error))?;
-        }
+    let node_ids = if item.ref_kind == "node" {
+        Some(descendant_ids(&storage::all_nodes(&connection, true)?, &item.ref_id))
     } else {
-        fs::create_dir_all(destination.parent().ok_or_else(|| "无法确定恢复目录".to_string())?)
-            .map_err(|error| format!("无法创建恢复目录：{}", error))?;
-        fs::rename(&item.trash_path, &destination).map_err(|error| format!("恢复资料失败：{}", error))?;
-        connection.execute("UPDATE entities SET deleted_at = NULL, deleted_path = NULL WHERE id = ?1", params![item.ref_id])
-            .map_err(|error| format!("更新恢复资料失败：{}", error))?;
+        None
+    };
+    fs::create_dir_all(destination.parent().ok_or_else(|| "无法确定恢复目录".to_string())?)
+        .map_err(|error| format!("无法创建恢复目录：{}", error))?;
+    fs::rename(&trash_path, &destination).map_err(|error| format!("恢复文件失败：{}", error))?;
+    let database_result = (|| -> Result<(), String> {
+        let transaction = connection.transaction()
+            .map_err(|error| format!("无法开始恢复事务：{}", error))?;
+        if let Some(ids) = &node_ids {
+            for id in ids {
+                transaction.execute("UPDATE nodes SET deleted_at = NULL, deleted_path = NULL WHERE id = ?1", params![id])
+                    .map_err(|error| format!("更新恢复节点失败：{}", error))?;
+            }
+        } else {
+            transaction.execute("UPDATE entities SET deleted_at = NULL, deleted_path = NULL WHERE id = ?1", params![item.ref_id])
+                .map_err(|error| format!("更新恢复资料失败：{}", error))?;
+        }
+        transaction.execute("DELETE FROM trash_items WHERE id = ?1", params![item.id])
+            .map_err(|error| format!("清理回收站记录失败：{}", error))?;
+        transaction.commit().map_err(|error| format!("提交恢复事务失败：{}", error))
+    })();
+    if let Err(error) = database_result {
+        return match fs::rename(&destination, &trash_path) {
+            Ok(()) => Err(format!("{}；文件已移回回收站", error)),
+            Err(rollback_error) => Err(format!("{}；文件回滚失败：{}", error, rollback_error)),
+        };
     }
-    connection.execute("DELETE FROM trash_items WHERE id = ?1", params![item.id])
-        .map_err(|error| format!("清理回收站记录失败：{}", error))?;
     storage::touch_project(&root)?;
     storage::refresh_search_index(&root, &connection)?;
     project_data(&root, &connection)
@@ -640,30 +680,50 @@ fn trash_item(connection: &Connection, id: &str) -> Result<TrashItem, String> {
 
 #[tauri::command]
 pub fn permanent_delete(input: crate::models::NodeActionInput) -> Result<ProjectData, String> {
-    let (root, connection) = project_connection(&input.project_path)?;
+    let (root, mut connection) = project_connection(&input.project_path)?;
     let item = trash_item(&connection, &input.node_id)?;
-    let trash_path = PathBuf::from(&item.trash_path);
-    if trash_path.is_dir() {
-        fs::remove_dir_all(&trash_path).map_err(|error| format!("永久删除目录失败：{}", error))?;
-    } else if trash_path.exists() {
-        fs::remove_file(&trash_path).map_err(|error| format!("永久删除文件失败：{}", error))?;
+    if item.ref_kind != "node" && item.ref_kind != "entity" {
+        return Err("回收站项目类型无效".to_string());
     }
-    if item.ref_kind == "node" {
-        let nodes = storage::all_nodes(&connection, true)?;
-        for id in descendant_ids(&nodes, &item.ref_id) {
-            connection.execute("DELETE FROM nodes WHERE id = ?1", params![id])
-                .map_err(|error| format!("删除节点记录失败：{}", error))?;
-            connection.execute("DELETE FROM search_index WHERE ref_id = ?1", params![id])
-                .map_err(|error| format!("删除搜索索引失败：{}", error))?;
-        }
+    let trash_path = storage::safe_trash_path(&root, &item.trash_path)?;
+    let quarantine = trash_path.with_file_name(format!(".purge-{}", storage::new_id()));
+    fs::rename(&trash_path, &quarantine).map_err(|error| format!("隔离待永久删除内容失败：{}", error))?;
+    let node_ids = if item.ref_kind == "node" {
+        Some(descendant_ids(&storage::all_nodes(&connection, true)?, &item.ref_id))
     } else {
-        connection.execute("DELETE FROM entities WHERE id = ?1", params![item.ref_id])
-            .map_err(|error| format!("删除资料记录失败：{}", error))?;
+        None
+    };
+    let database_result = (|| -> Result<(), String> {
+        let transaction = connection.transaction()
+            .map_err(|error| format!("无法开始永久删除事务：{}", error))?;
+        if let Some(ids) = &node_ids {
+            for id in ids {
+                transaction.execute("DELETE FROM nodes WHERE id = ?1", params![id])
+                    .map_err(|error| format!("删除节点记录失败：{}", error))?;
+                transaction.execute("DELETE FROM search_index WHERE ref_id = ?1", params![id])
+                    .map_err(|error| format!("删除搜索索引失败：{}", error))?;
+            }
+        } else {
+            transaction.execute("DELETE FROM entities WHERE id = ?1", params![item.ref_id])
+                .map_err(|error| format!("删除资料记录失败：{}", error))?;
+        }
+        transaction.execute("DELETE FROM search_index WHERE ref_id = ?1", params![item.ref_id])
+            .map_err(|error| format!("删除搜索索引失败：{}", error))?;
+        transaction.execute("DELETE FROM trash_items WHERE id = ?1", params![item.id])
+            .map_err(|error| format!("清理回收站记录失败：{}", error))?;
+        transaction.commit().map_err(|error| format!("提交永久删除事务失败：{}", error))
+    })();
+    if let Err(error) = database_result {
+        return match fs::rename(&quarantine, &trash_path) {
+            Ok(()) => Err(format!("{}；回收站内容已恢复", error)),
+            Err(rollback_error) => Err(format!("{}；回收站内容回滚失败：{}", error, rollback_error)),
+        };
     }
-    connection.execute("DELETE FROM search_index WHERE ref_id = ?1", params![item.ref_id])
-        .map_err(|error| format!("删除搜索索引失败：{}", error))?;
-    connection.execute("DELETE FROM trash_items WHERE id = ?1", params![item.id])
-        .map_err(|error| format!("清理回收站记录失败：{}", error))?;
+    if quarantine.is_dir() {
+        fs::remove_dir_all(&quarantine).map_err(|error| format!("清理永久删除目录失败：{}", error))?;
+    } else {
+        fs::remove_file(&quarantine).map_err(|error| format!("清理永久删除文件失败：{}", error))?;
+    }
     storage::touch_project(&root)?;
     project_data(&root, &connection)
 }
