@@ -278,9 +278,9 @@
 - pnpm.cmd lint：通过，0 error / 0 warning。
 - pnpm.cmd test -- --run：通过，12 个测试文件、40 个测试。
 - cargo test --manifest-path src-tauri/Cargo.toml：通过，20 个测试，1 个大型基准 ignored。
-- 1000 章 / 100 万字基准：通过，30.83 秒。
+- 1000 章 / 100 万字基准：通过，30.37 秒。
 - pnpm.cmd build：通过；主 bundle 约 1.20 MB，保留体积提示。
-- pnpm.cmd tauri:build：通过；release EXE 15,169,536 bytes，NSIS 安装包 4,273,964 bytes。
+- pnpm.cmd tauri:build：通过；release EXE 15,173,632 bytes，NSIS 安装包 4,273,662 bytes。
 - Release smoke：独立 EXE 启动 4 秒后仍存活，测试结束后按 PID 正常退出。
 
 ### 当前剩余
@@ -301,3 +301,4 @@
 - 回收站改为保存递归节点、正文和资料快照，支持恢复、冲突保护、清空和永久删除。
 - 浏览器模式选择 DOCX/EPUB/PDF 时明确提示使用桌面版，不再返回伪成功路径。
 - 新增回归覆盖；前端测试从 40 项增至 41 项。
+- 最新 release 独立启动与 WebView2 页面加载复核通过。

@@ -132,7 +132,7 @@
 | Frontend build | pnpm.cmd build | 通过；主 bundle 约 1.20 MB，保留体积提示 |
 | Rust unit | cargo test --manifest-path src-tauri/Cargo.toml | 通过：20 个测试，1 个 ignored |
 | Data safety | 保存事务失败、损坏 SQLite 重建、日志脱敏、Wiki FTS 反向查询 | 全部通过 |
-| Large-project acceptance | 1000 chapters / 1,000,000 characters ignored benchmark | 通过：30.83 秒 |
+| Large-project acceptance | 1000 chapters / 1,000,000 characters ignored benchmark | 通过：30.37 秒 |
 | Windows package | pnpm.cmd tauri:build | 通过：release EXE 与 NSIS 安装包 |
 | Release smoke | 启动 target/release/novelforge.exe | 通过：独立进程存活 4 秒后正常退出 |
 
@@ -147,3 +147,8 @@
 - pnpm.cmd build：通过；React、CodeMirror、Markdown 和图标依赖已分包，最大 chunk 约 364 kB，未出现体积警告。
 - 浏览器 fallback 回归：路径层级、递归删除/恢复、资料快照和二进制导出边界均覆盖；前端测试总数更新为 41 项。
 - 当前仍需人工的唯一功能验收门槛是带 WebView2 的 Windows 桌面鼠标级 E2E。
+
+## 最新 release 重验（2026-08-30）
+
+- pnpm.cmd tauri:build：通过；release EXE 15,173,632 bytes，NSIS 安装包 4,273,662 bytes。
+- release EXE 独立进程存活 4 秒且响应正常；分包后的 WebView2 页面目标加载成功（标题 NovelForge，URL tauri.localhost）。
