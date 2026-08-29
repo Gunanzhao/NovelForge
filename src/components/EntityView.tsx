@@ -45,6 +45,37 @@ function isLocationDescendant(candidateId: string, ancestorId: string, locations
   return false
 }
 
+function sortLocations<T extends { id: string; title: string; content: Record<string, unknown> }>(locations: T[]) {
+  const byId = new Map(locations.map((location) => [location.id, location]))
+  const children = new Map<string, T[]>()
+  const roots: T[] = []
+  for (const location of locations) {
+    const parentId = locationParentId(location)
+    if (parentId && byId.has(parentId)) {
+      const siblings = children.get(parentId) ?? []
+      siblings.push(location)
+      children.set(parentId, siblings)
+    } else {
+      roots.push(location)
+    }
+  }
+  const compare = (left: T, right: T) => left.title.localeCompare(right.title, 'zh-CN')
+  roots.sort(compare)
+  for (const siblings of children.values()) siblings.sort(compare)
+  const result: T[] = []
+  const visiting = new Set<string>()
+  const visit = (location: T) => {
+    if (visiting.has(location.id)) return
+    visiting.add(location.id)
+    result.push(location)
+    for (const child of children.get(location.id) ?? []) visit(child)
+    visiting.delete(location.id)
+  }
+  roots.forEach(visit)
+  locations.filter((location) => !result.some((item) => item.id === location.id)).sort(compare).forEach(visit)
+  return result
+}
+
 export function EntityView({ kind }: { kind: EntityKind }) {
   const data = useAppStore((state) => state.data)
   const projectPath = useAppStore((state) => state.projectPath)
@@ -113,14 +144,14 @@ export function EntityView({ kind }: { kind: EntityKind }) {
     const filtered = query ? entities.filter((entity) => (entity.title + entity.tags.join(' ')).toLocaleLowerCase().includes(query)) : entities
     const sorted = filtered.slice()
     if (kind === 'location' && sortMode === 'created') {
-      sorted.sort((left, right) => locationDepth(left, locationEntities) - locationDepth(right, locationEntities) || left.title.localeCompare(right.title, 'zh-CN'))
+      return sortLocations(sorted)
     } else if (sortMode === 'title') {
       sorted.sort((left, right) => left.title.localeCompare(right.title, 'zh-CN'))
     } else if (sortMode === 'updated') {
       sorted.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     }
     return sorted
-  }, [entities, filter, kind, locationEntities, sortMode])
+  }, [entities, filter, kind, sortMode])
 
   if (!data || !projectPath) return null
   const currentProjectPath = projectPath
