@@ -409,3 +409,9 @@
 
 - 最新 release 通过真实 Tauri 命令生成 HTML/PDF：HTML 标题和目录各保留一份，PDF 页面不再出现 Markdown 标记。
 - DOCX 压缩包和 Word XML 结构校验通过；当前机器未安装 LibreOffice，因此无法生成 DOCX PNG 视觉中间件，已记录为环境限制。
+
+## 2026-08-30：最终全量质量门禁复核
+
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；前端 12 个测试文件 / 54 项测试。
+- cargo check、cargo test 全部通过；Rust 26 项常规测试，1 项大型基准按设计忽略。
+- 1000 章 / 100 万字大型基准再次通过，耗时 51.86 秒；release EXE 与 NSIS 安装包均已生成，工作区保持干净。

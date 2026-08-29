@@ -261,3 +261,9 @@
 
 - 最新 release 实际生成 HTML/PDF 后，HTML 标题/目录计数均为 1，PDF 渲染页无 Markdown 标题标记。
 - DOCX ZIP、word/document.xml、Heading 样式和中文文本结构校验通过；render_docx.py 因本机缺少 LibreOffice 未能生成 PNG，未将此环境限制误判为导出失败。
+
+## 最终全量质量门禁复核（2026-08-30）
+
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；12 个测试文件 / 54 项测试。
+- cargo check、cargo test 全部通过；26 项 Rust 常规测试，1 项大型基准按设计忽略。
+- 1000 章 / 100 万字大型基准通过，耗时 51.86 秒；release 产物存在且工作区干净。
