@@ -43,6 +43,10 @@ describe('browser fallback project workflow', () => {
     expect(consistency.issueCount).toBe(0)
     const exportPath = await fallbackInvoke<string>('export_project', { input: { projectPath: input.path, format: 'markdown' } })
     expect(exportPath).toContain('browser://exports')
+    for (const format of ['txt', 'docx', 'epub', 'pdf'] as const) {
+      const path = await fallbackInvoke<string>('export_project', { input: { projectPath: input.path, format } })
+      expect(path.endsWith('.' + format)).toBe(true)
+    }
   })
 
   it('moves deleted content to recoverable trash', async () => {

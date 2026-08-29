@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { projectApi } from '../lib/api'
 import type {
   DocumentData, EntityInput, EntityKind, NodeRecord, ProjectData, ProjectInput,
-  SaveState, SearchResult, Stats, ThemeMode, TrashItem, ViewId,
+  ExportFormat, SaveState, SearchResult, Stats, ThemeMode, TrashItem, ViewId,
 } from '../lib/types'
 
 export interface RecentProject {
@@ -92,7 +92,7 @@ interface AppState {
   permanentlyDelete: (trashId: string) => Promise<void>
   runSearch: (query: string, kind?: string) => Promise<void>
   refreshStats: () => Promise<void>
-  exportProject: (format: 'markdown' | 'txt') => Promise<string>
+  exportProject: (format: ExportFormat) => Promise<string>
   updateProject: (input: { title: string; author: string; description: string; genre: string; targetWords: number }) => Promise<void>
 }
 

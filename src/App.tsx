@@ -4,11 +4,12 @@ import {
   Settings, Sun, Undo2,
 } from 'lucide-react'
 import { isDesktop } from './lib/api'
-import type { NodeKind } from './lib/types'
+import type { ExportFormat, NodeKind } from './lib/types'
 import { useAppStore } from './stores/app-store'
 import { Dashboard } from './components/Dashboard'
 import { CommandPalette } from './components/CommandPalette'
 import { ConsistencyView } from './components/ConsistencyView'
+import { ExportDialog } from './components/ExportDialog'
 import { EditorPane } from './components/EditorPane'
 import { PlanningView } from './components/PlanningView'
 import { TimelineView } from './components/TimelineView'
@@ -33,7 +34,7 @@ function Welcome({ onProject }: { onProject: (mode: 'new' | 'open') => void }) {
   return <div className="welcome"><div className="welcome-card"><div className="welcome-title"><span className="brand-mark">N</span><div><h1>NovelForge</h1><p>本地优先的中文长篇小说创作工作台</p></div></div><p className="welcome-copy">把正文、人物、地点和世界观放在一个安静的工作台里。正文始终是普通 Markdown 文件，SQLite 只负责资料与搜索索引；没有账号、没有 API Key，也可以完整写作。</p><div className="welcome-actions"><Button onClick={() => onProject('new')}><Plus size={15} />新建小说</Button><Button variant="outline" onClick={() => onProject('open')}><FolderOpen size={15} />打开项目</Button></div>{recentProjects.length ? <><p className="eyebrow">RECENT PROJECTS</p><div className="recent-projects">{recentProjects.map((project) => <button className="recent-project" key={project.path} onClick={() => void openProject(project.path).catch(setError)}><BookOpen size={16} /><span><strong>{project.title}</strong><small>{project.path}</small></span></button>)}</div></> : <div className="panel empty-state"><BookOpen size={25} /><div><strong>从一部小说开始</strong><span>选择一个空文件夹，NovelForge 会创建 project.json、Markdown 正文和 .novelforge 数据目录。</span></div></div>}</div></div>
 }
 
-function TopBar({ onProject, onExport }: { onProject: (mode: 'new' | 'open') => void; onExport: (format: 'markdown' | 'txt') => void }) {
+function TopBar({ onProject, onExport }: { onProject: (mode: 'new' | 'open') => void; onExport: () => void }) {
   const data = useAppStore((state) => state.data)
   const projectPath = useAppStore((state) => state.projectPath)
   const saveState = useAppStore((state) => state.saveState)
@@ -46,7 +47,7 @@ function TopBar({ onProject, onExport }: { onProject: (mode: 'new' | 'open') => 
   const theme = useAppStore((state) => state.theme)
   const setTheme = useAppStore((state) => state.setTheme)
 
-  return <header className="topbar"><IconButton icon={Menu} label={sidebarOpen ? '收起左栏' : '展开左栏'} onClick={toggleSidebar} /><div className="brand"><span className="brand-mark">N</span><span className="brand-name">NovelForge</span><span className="brand-subtitle">写作工作台</span></div><div className="topbar-title"><strong>{data?.project.title ?? '未打开项目'}</strong><span>{projectPath ?? '本地优先 · Markdown first'}</span></div><div className="topbar-actions"><Button variant="ghost" onClick={() => onProject('new')}><Plus size={14} />新建</Button><Button variant="ghost" onClick={() => onProject('open')}><FolderOpen size={14} />打开</Button>{data ? <><span className="topbar-divider" /><Button variant="ghost" onClick={() => void saveCurrentDocument('手动保存')}><Check size={14} color={saveState === 'saved' ? 'var(--green)' : undefined} />保存</Button><Button variant="ghost" onClick={() => setView('search')}><Search size={14} />搜索</Button><Button variant="ghost" onClick={() => onExport('markdown')}><FileDown size={14} />导出</Button><span className="topbar-divider" /><IconButton icon={sidebarOpen ? Menu : PanelRight} label="切换左栏" onClick={toggleSidebar} className={sidebarOpen ? 'active' : ''} /><IconButton icon={PanelRight} label={inspectorOpen ? '收起辅助栏' : '展开辅助栏'} onClick={toggleInspector} className={inspectorOpen ? 'active' : ''} /><IconButton icon={theme === 'dark' ? Sun : Moon} label="切换主题" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} /><IconButton icon={Settings} label="项目设置" onClick={() => setView('settings')} /></> : null}</div></header>
+  return <header className="topbar"><IconButton icon={Menu} label={sidebarOpen ? '收起左栏' : '展开左栏'} onClick={toggleSidebar} /><div className="brand"><span className="brand-mark">N</span><span className="brand-name">NovelForge</span><span className="brand-subtitle">写作工作台</span></div><div className="topbar-title"><strong>{data?.project.title ?? '未打开项目'}</strong><span>{projectPath ?? '本地优先 · Markdown first'}</span></div><div className="topbar-actions"><Button variant="ghost" onClick={() => onProject('new')}><Plus size={14} />新建</Button><Button variant="ghost" onClick={() => onProject('open')}><FolderOpen size={14} />打开</Button>{data ? <><span className="topbar-divider" /><Button variant="ghost" onClick={() => void saveCurrentDocument('手动保存')}><Check size={14} color={saveState === 'saved' ? 'var(--green)' : undefined} />保存</Button><Button variant="ghost" onClick={() => setView('search')}><Search size={14} />搜索</Button><Button variant="ghost" onClick={onExport}><FileDown size={14} />导出</Button><span className="topbar-divider" /><IconButton icon={sidebarOpen ? Menu : PanelRight} label="切换左栏" onClick={toggleSidebar} className={sidebarOpen ? 'active' : ''} /><IconButton icon={PanelRight} label={inspectorOpen ? '收起辅助栏' : '展开辅助栏'} onClick={toggleInspector} className={inspectorOpen ? 'active' : ''} /><IconButton icon={theme === 'dark' ? Sun : Moon} label="切换主题" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} /><IconButton icon={Settings} label="项目设置" onClick={() => setView('settings')} /></> : null}</div></header>
 }
 
 function StatusBar() {
@@ -73,6 +74,7 @@ export default function App() {
   const clearError = useAppStore((state) => state.clearError)
   const refreshStats = useAppStore((state) => state.refreshStats)
   const [projectDialog, setProjectDialog] = useState<'new' | 'open' | null>(null)
+  const [exportOpen, setExportOpen] = useState(false)
   const [nodeDialog, setNodeDialog] = useState<{ kind: NodeKind; parentId: string | null } | null>(null)
 
   useEffect(() => { loadRecent() }, [loadRecent])
@@ -95,8 +97,13 @@ export default function App() {
     if (data) void refreshStats()
   }, [data, refreshStats])
 
-  function exportProject(format: 'markdown' | 'txt') {
-    void useAppStore.getState().exportProject(format).then((path) => window.alert('导出完成：\n' + path + (isDesktop ? '' : '\n\n当前为浏览器开发模式。'))).catch(useAppStore.getState().setError)
+  async function exportProject(format: ExportFormat) {
+    try {
+      const path = await useAppStore.getState().exportProject(format)
+      window.alert('导出完成：\n' + path + (isDesktop ? '' : '\n\n当前为浏览器开发模式。'))
+    } catch (error) {
+      useAppStore.getState().setError(error)
+    }
   }
 
   function viewContent() {
@@ -117,5 +124,5 @@ export default function App() {
   }
 
   if (!data) return <><Welcome onProject={setProjectDialog} /><CommandPalette onNewProject={() => setProjectDialog('new')} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} />{error ? <div className="toast-error"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</>
-  return <div className={'app-shell' + (focusMode ? ' focus-mode' : '')}>{focusMode ? null : <TopBar onProject={setProjectDialog} onExport={exportProject} />}<div className={'main-layout' + (focusMode ? ' sidebar-closed inspector-closed' : '') + (sidebarOpen ? '' : ' sidebar-closed') + (inspectorOpen ? '' : ' inspector-closed')}><Sidebar onAddNode={(kind, parentId) => setNodeDialog({ kind, parentId })} /><main className="workspace">{viewContent()}</main><Inspector /></div>{focusMode ? null : <StatusBar />}<CommandPalette onNewProject={() => setProjectDialog('new')} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} /><NodeDialog kind={nodeDialog?.kind ?? null} parentId={nodeDialog?.parentId ?? null} onClose={() => setNodeDialog(null)} />{error ? <div className="toast-error"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</div>
+  return <div className={'app-shell' + (focusMode ? ' focus-mode' : '')}>{focusMode ? null : <TopBar onProject={setProjectDialog} onExport={() => setExportOpen(true)} />}<div className={'main-layout' + (focusMode ? ' sidebar-closed inspector-closed' : '') + (sidebarOpen ? '' : ' sidebar-closed') + (inspectorOpen ? '' : ' inspector-closed')}><Sidebar onAddNode={(kind, parentId) => setNodeDialog({ kind, parentId })} /><main className="workspace">{viewContent()}</main><Inspector /></div>{focusMode ? null : <StatusBar />}<CommandPalette onNewProject={() => setProjectDialog('new')} /><ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} onExport={exportProject} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} /><NodeDialog kind={nodeDialog?.kind ?? null} parentId={nodeDialog?.parentId ?? null} onClose={() => setNodeDialog(null)} />{error ? <div className="toast-error"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</div>
 }

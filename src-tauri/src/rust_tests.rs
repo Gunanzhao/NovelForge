@@ -335,6 +335,43 @@ fn statistics_include_daily_series_and_chapter_breakdown() {
 }
 
 #[test]
+fn export_project_writes_all_supported_formats() {
+    let root = test_root("exports");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "导出测试".to_string(), author: "测试作者".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
+    super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(), node_id: chapter.id, content: "# 第一章\n\n林月走进雾港。".to_string(), reason: "导出测试".to_string(),
+    }).expect("save document");
+
+    for format in ["markdown", "txt", "docx", "epub", "pdf"] {
+        let output = super::commands::export_project(super::models::ExportInput { project_path: project_path.clone(), format: format.to_string() }).expect("export format");
+        let bytes = fs::read(&output).expect("read exported file");
+        match format {
+            "markdown" => assert!(String::from_utf8_lossy(&bytes).contains("导出测试")),
+            "txt" => assert!(String::from_utf8_lossy(&bytes).contains("林月走进雾港")),
+            "docx" => {
+                let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).expect("read docx zip");
+                assert!(archive.by_name("word/document.xml").is_ok());
+            }
+            "epub" => {
+                let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).expect("read epub zip");
+                assert!(archive.by_name("mimetype").is_ok());
+                assert!(archive.by_name("OEBPS/content.xhtml").is_ok());
+                assert!(archive.by_name("OEBPS/nav.xhtml").is_ok());
+            }
+            "pdf" => assert!(bytes.starts_with(b"%PDF-1.4")),
+            _ => unreachable!(),
+        }
+    }
+    assert!(super::commands::export_project(super::models::ExportInput { project_path, format: "html".to_string() }).is_err());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn restore_trash_keeps_quarantined_entity_when_destination_exists() {
     let root = test_root("entity-restore-collision");
     let project_path = root.join("project").to_string_lossy().to_string();

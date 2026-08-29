@@ -121,6 +121,30 @@
 ### 下一步
 
 - 先实现多格式导出，再接入可选 AI Provider 和显式上下文预览。
+
+## 2026-08-30：V0.2 写作规划第五阶段
+
+### 完成内容
+
+- 导出对话框支持 Markdown、TXT、DOCX、EPUB 和 PDF 五种格式。
+- Rust 生成 DOCX/EPUB ZIP 文档（含 EPUB 导航）和可分页 PDF；所有文件写入项目 `.novelforge/exports/`。
+- 对导出格式、DOCX/EPUB 文件结构和 PDF 文件头增加回归测试，浏览器 fallback 返回对应格式占位路径。
+
+### 验证结果
+
+- `pnpm typecheck`：通过。
+- `pnpm lint`：通过，0 error / 0 warning。
+- `pnpm test`：通过，7 个测试文件、24 个测试。
+- `cargo test --manifest-path src-tauri/Cargo.toml`：通过，14 个 Rust 测试。
+
+### 已知问题
+
+- PDF 使用系统标准字体，缺少字体嵌入时复杂中文字体的渲染效果需在目标阅读器复核。
+- AI Provider、桌面鼠标级 E2E 和 1000 章 / 100 万字性能验收仍待后续阶段。
+
+### 下一步
+
+- 实现可选 AI Provider、上下文预览和不依赖 API Key 的本地辅助流程。
 ## 2026-08-29：V0.2 写作规划第一阶段
 
 ### 完成内容

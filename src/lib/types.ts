@@ -3,6 +3,7 @@ export type EntityKind = 'character' | 'location' | 'world' | 'timeline' | 'fore
 export type ViewId = 'dashboard' | 'manuscript' | EntityKind | 'consistency' | 'statistics' | 'search' | 'trash' | 'settings'
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type ThemeMode = 'light' | 'dark' | 'system'
+export type ExportFormat = 'markdown' | 'txt' | 'docx' | 'epub' | 'pdf'
 
 export interface ProjectMetadata {
   formatVersion: number

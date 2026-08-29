@@ -327,7 +327,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   }
   if (command === 'export_project') {
     const exportInput = args.input as ExportInput
-    void exportText(store, exportInput.format === 'txt' ? 'txt' : 'markdown')
+    if (exportInput.format === 'markdown' || exportInput.format === 'txt') void exportText(store, exportInput.format)
     return ('browser://exports/' + store.data.project.title + '.' + exportInput.format) as T
   }
   if (command === 'update_project') {

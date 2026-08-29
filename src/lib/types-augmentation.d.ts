@@ -41,6 +41,6 @@ declare module './types' {
 
   interface ExportInput {
     projectPath: string
-    format: 'markdown' | 'txt'
+    format: ExportFormat
   }
 }
