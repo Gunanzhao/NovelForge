@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  contentNumber, filterTimelineEntities, findChapterByReference, normalizeForeshadowingStatus, reorderItems,
+  contentNumber, filterTimelineEntities, findChapterByReference, isOpenForeshadowingStatus, normalizeForeshadowingStatus, reorderItems,
   sortChapterNodes,
   sortPlanningEntities, sortTimelineEntities,
 } from '../src/lib/planning-data'
@@ -80,5 +80,8 @@ describe('timeline and foreshadowing planning helpers', () => {
     expect(normalizeForeshadowingStatus('部分回收')).toBe('partial')
     expect(normalizeForeshadowingStatus('resolved')).toBe('paid-off')
     expect(normalizeForeshadowingStatus('未知状态')).toBe('planned')
+    expect(isOpenForeshadowingStatus('部分回收')).toBe(true)
+    expect(isOpenForeshadowingStatus('已回收')).toBe(false)
+    expect(isOpenForeshadowingStatus('废弃')).toBe(false)
   })
 })

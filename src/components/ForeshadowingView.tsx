@@ -3,7 +3,7 @@ import { BookOpen, CheckCircle2, CircleDashed, GitBranch, Plus, Save, Search, Tr
 import type { EntityRecord, NodeRecord } from '../lib/types'
 import {
   chapterReferenceTokens, contentText, findChapterByReference, FORESHADOWING_STATUSES,
-  foreshadowingStatusLabel, normalizeForeshadowingStatus,
+  foreshadowingStatusLabel, isOpenForeshadowingStatus, normalizeForeshadowingStatus,
 } from '../lib/planning-data'
 import type { ForeshadowingStatus } from '../lib/planning-data'
 import { useAppStore } from '../stores/app-store'
@@ -168,7 +168,7 @@ export function ForeshadowingView() {
   return <div className="planning-special-view workspace-view">
     <div className="view-header">
       <div><p className="eyebrow">FORESHADOWING LEDGER</p><h1>伏笔</h1><p>记录伏笔的埋设、计划回收和实际回收，写作时快速检查仍未闭合的线索。</p></div>
-      <div className="special-summary"><strong>{entries.filter((entry) => normalizeForeshadowingStatus(contentText(entry, 'status')) !== 'paid-off').length}</strong><span>条待跟进</span></div>
+      <div className="special-summary"><strong>{entries.filter((entry) => isOpenForeshadowingStatus(contentText(entry, 'status'))).length}</strong><span>条待跟进</span></div>
     </div>
     <div className="foreshadowing-status-bar">{FORESHADOWING_STATUSES.map((status) => <button key={status.id} type="button" className={'foreshadowing-status-chip ' + (statusFilter === status.id ? 'active ' : '') + status.id} onClick={() => setStatusFilter(statusFilter === status.id ? 'all' : status.id)}><span>{status.label}</span><strong>{counts[status.id]}</strong></button>)}</div>
     <div className="special-toolbar">

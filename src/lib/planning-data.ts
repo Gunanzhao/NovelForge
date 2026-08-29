@@ -154,3 +154,8 @@ export function normalizeForeshadowingStatus(value: string): ForeshadowingStatus
 export function foreshadowingStatusLabel(value: string) {
   return FORESHADOWING_STATUSES.find((status) => status.id === normalizeForeshadowingStatus(value))?.label ?? '待埋设'
 }
+
+export function isOpenForeshadowingStatus(value: string) {
+  const status = normalizeForeshadowingStatus(value)
+  return status !== 'paid-off' && status !== 'abandoned'
+}
