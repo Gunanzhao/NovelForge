@@ -113,6 +113,32 @@ fn application_logs_are_levelled_and_redacted() {
 }
 
 #[test]
+fn opening_corrupt_database_rebuilds_markdown_tree() {
+    let root = test_root("database-recovery");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "数据库恢复测试".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
+    super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(), node_id: chapter.id, content: "# 第一章\n\n数据库损坏后仍应可读。".to_string(), reason: "恢复前".to_string(),
+    }).expect("save document");
+    fs::write(root.join("project/.novelforge/database.sqlite"), b"not a sqlite database").expect("corrupt database");
+
+    let reopened = super::commands::open_project(project_path.clone()).expect("open recovered project");
+    let recovered = reopened.nodes.iter().find(|node| node.kind == "chapter").expect("recovered chapter").clone();
+    let document = super::commands::get_document(super::models::NodeActionInput {
+        project_path: project_path.clone(), node_id: recovered.id,
+    }).expect("read recovered markdown");
+    assert!(document.content.contains("数据库损坏后仍应可读"));
+    let backups = fs::read_dir(root.join("project/.novelforge")).expect("read database directory")
+        .flatten().filter(|entry| entry.file_name().to_string_lossy().starts_with("database.sqlite.corrupt-")).count();
+    assert_eq!(backups, 1);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn move_and_copy_nodes_keep_markdown_files_and_tree_paths_in_sync() {
     let root = test_root("move-copy");
     let project_path = root.join("project").to_string_lossy().to_string();

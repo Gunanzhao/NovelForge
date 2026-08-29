@@ -77,6 +77,86 @@ fn descendant_ids(nodes: &[NodeRecord], root_id: &str) -> Vec<String> {
     result
 }
 
+fn directory_entries(path: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut entries = fs::read_dir(path)
+        .map_err(|error| format!("读取正文目录失败：{}", error))?
+        .map(|entry| entry.map(|item| item.path()).map_err(|error| format!("读取正文目录项失败：{}", error)))
+        .collect::<Result<Vec<_>, _>>()?;
+    entries.sort_by_key(|entry| entry.file_name().map(|name| name.to_string_lossy().to_ascii_lowercase()));
+    Ok(entries)
+}
+
+fn relative_path(root: &Path, path: &Path) -> Result<String, String> {
+    path.strip_prefix(root)
+        .map(|value| value.to_string_lossy().replace('\\', "/"))
+        .map_err(|_| format!("正文路径不在项目目录内：{}", path.display()))
+}
+
+fn markdown_title(path: &Path, fallback: &str) -> String {
+    fs::read_to_string(path).ok()
+        .and_then(|content| content.lines().find_map(|line| line.strip_prefix("# ").map(str::trim).filter(|value| !value.is_empty()).map(str::to_string)))
+        .unwrap_or_else(|| fallback.to_string())
+}
+
+fn rebuild_nodes_from_markdown(root: &Path, connection: &Connection) -> Result<(), String> {
+    let manuscript = storage::safe_relative(root, "manuscript")?;
+    if !manuscript.is_dir() { return Ok(()); }
+    let mut volume_order = 0_i64;
+    for volume_path in directory_entries(&manuscript)?.into_iter().filter(|path| path.is_dir()) {
+        let volume_name = volume_path.file_name().and_then(|name| name.to_str()).unwrap_or("Recovered Volume");
+        let volume_id = storage::new_id();
+        let volume_relative = relative_path(root, &volume_path)?;
+        let timestamp = storage::now();
+        insert_node(connection, &NodeRecord {
+            id: volume_id.clone(), kind: "volume".to_string(), parent_id: None,
+            title: volume_name.to_string(), order_index: volume_order, status: default_status().to_string(),
+            file_path: volume_relative, created_at: timestamp.clone(), updated_at: timestamp,
+            deleted_at: None, deleted_path: None,
+        })?;
+        volume_order += 1;
+        let chapter_files = directory_entries(&volume_path)?.into_iter().filter(|path| path.is_file() && path.extension().and_then(|value| value.to_str()) == Some("md")).collect::<Vec<_>>();
+        for (chapter_order, chapter_path) in chapter_files.into_iter().enumerate() {
+            let chapter_id = storage::new_id();
+            let chapter_relative = relative_path(root, &chapter_path)?;
+            let chapter_title = markdown_title(&chapter_path, chapter_path.file_stem().and_then(|name| name.to_str()).unwrap_or("Recovered Chapter"));
+            let timestamp = storage::now();
+            insert_node(connection, &NodeRecord {
+                id: chapter_id.clone(), kind: "chapter".to_string(), parent_id: Some(volume_id.clone()),
+                title: chapter_title, order_index: chapter_order as i64, status: "draft".to_string(),
+                file_path: chapter_relative.clone(), created_at: timestamp.clone(), updated_at: timestamp,
+                deleted_at: None, deleted_path: None,
+            })?;
+            let content = fs::read_to_string(&chapter_path).unwrap_or_default();
+            storage::index_record(connection, &chapter_id, "chapter", &markdown_title(&chapter_path, "Recovered Chapter"), &content, &chapter_relative)?;
+            let section_directory = chapter_path.with_extension("");
+            if !section_directory.is_dir() { continue; }
+            for (section_order, section_path) in directory_entries(&section_directory)?.into_iter().filter(|path| path.is_file() && path.extension().and_then(|value| value.to_str()) == Some("md")).enumerate() {
+                let section_id = storage::new_id();
+                let section_relative = relative_path(root, &section_path)?;
+                let section_title = markdown_title(&section_path, section_path.file_stem().and_then(|name| name.to_str()).unwrap_or("Recovered Section"));
+                let timestamp = storage::now();
+                insert_node(connection, &NodeRecord {
+                    id: section_id.clone(), kind: "section".to_string(), parent_id: Some(chapter_id.clone()),
+                    title: section_title, order_index: section_order as i64, status: "draft".to_string(),
+                    file_path: section_relative.clone(), created_at: timestamp.clone(), updated_at: timestamp,
+                    deleted_at: None, deleted_path: None,
+                })?;
+                let content = fs::read_to_string(&section_path).unwrap_or_default();
+                storage::index_record(connection, &section_id, "section", &markdown_title(&section_path, "Recovered Section"), &content, &section_relative)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn recovered_project_connection(root: &Path) -> Result<Connection, String> {
+    let backup = storage::quarantine_database(root)?;
+    let connection = storage::open_db(root)?;
+    rebuild_nodes_from_markdown(root, &connection)?;
+    if backup.is_some() { let _ = storage::append_log(root, "WARN", "database_recovered"); }
+    Ok(connection)
+}
+
 fn validate_target_parent(
     nodes: &[NodeRecord],
     node_kind: &str,
@@ -302,7 +382,18 @@ pub fn create_project(input: ProjectInput) -> Result<ProjectData, String> {
 
 #[tauri::command]
 pub fn open_project(path: String) -> Result<ProjectData, String> {
-    let (root, connection) = project_connection(&path)?;
+    let root = storage::existing_project_root(&path)?;
+    let connection = match storage::open_db(&root) {
+        Ok(connection) if storage::all_nodes(&connection, false).is_ok() && storage::all_entities(&connection, false).is_ok() => connection,
+        Ok(connection) => {
+            drop(connection);
+            recovered_project_connection(&root)?
+        }
+        Err(_) => recovered_project_connection(&root)?,
+    };
+    if storage::all_nodes(&connection, false)?.is_empty() {
+        rebuild_nodes_from_markdown(&root, &connection)?;
+    }
     storage::refresh_search_index(&root, &connection)?;
     let _ = storage::append_log(&root, "INFO", "project_opened");
     project_data(&root, &connection)
