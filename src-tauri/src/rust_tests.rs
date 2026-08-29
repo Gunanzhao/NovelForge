@@ -671,6 +671,8 @@ fn export_project_writes_all_supported_formats() {
                 let html = String::from_utf8_lossy(&bytes);
                 assert!(html.contains("<!doctype html>"));
                 assert!(html.contains("导出测试"));
+                assert_eq!(html.matches("<h1>导出测试</h1>").count(), 1);
+                assert_eq!(html.matches("<h2>目录</h2>").count(), 1);
             }
             "docx" => {
                 let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).expect("read docx zip");

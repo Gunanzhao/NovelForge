@@ -2297,7 +2297,7 @@ pub fn export_project(input: ExportInput) -> Result<String, String> {
     if format == "txt" { export_nodes(&root, &nodes, None, 1, "txt", &mut output, &options); }
     let (extension, bytes) = match format {
         "markdown" | "txt" => (format.to_string(), output.into_bytes()),
-        "html" => ("html".to_string(), html_bytes(&markdown_document, &title, &author, input.include_toc.unwrap_or(true), cover_path.as_deref())),
+        "html" => ("html".to_string(), html_bytes(&markdown, &title, &author, input.include_toc.unwrap_or(true), cover_path.as_deref())),
         "docx" => ("docx".to_string(), docx_bytes(&markdown_document)?),
         "epub" => ("epub".to_string(), epub_bytes(&markdown_document, &title, &author)?),
         "pdf" => ("pdf".to_string(), pdf_bytes(&pdf_plain_text(&format!("{}\n作者：{}\n\n{}", title, author, markdown)))),
