@@ -52,6 +52,7 @@ interface AppState {
   activeView: ViewId
   selectedEntityId: string | null
   saveState: SaveState
+  documentVersion: number
   error: string | null
   stats: Stats
   searchResults: SearchResult[]
@@ -76,7 +77,7 @@ interface AppState {
   loadRecent: () => void
   selectNode: (nodeId: string) => Promise<void>
   updateContent: (content: string) => void
-  saveCurrentDocument: (reason?: string) => Promise<void>
+  saveCurrentDocument: (reason?: string) => Promise<boolean>
   refreshData: (data: ProjectData, preserveSelection?: boolean) => Promise<void>
   createNode: (kind: NodeRecord['kind'], title: string, parentId: string | null) => Promise<void>
   renameNode: (nodeId: string, title: string) => Promise<void>
@@ -95,6 +96,8 @@ interface AppState {
   updateProject: (input: { title: string; author: string; description: string; genre: string; targetWords: number }) => Promise<void>
 }
 
+let activeSave: Promise<boolean> | null = null
+
 export const useAppStore = create<AppState>((set, get) => ({
   projectPath: null,
   data: null,
@@ -102,6 +105,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeView: 'dashboard',
   selectedEntityId: null,
   saveState: 'idle',
+  documentVersion: 0,
   error: null,
   stats: emptyStats,
   searchResults: [],
@@ -137,8 +141,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   createProject: async (input) => {
     try {
+      if (get().document && get().saveState !== 'saved') {
+        const saved = await get().saveCurrentDocument('切换项目前保存')
+        if (!saved) throw new Error('当前正文保存失败，已取消创建新项目')
+      }
       const data = await projectApi.create(input)
-      set({ projectPath: input.path, data, document: null, activeView: 'manuscript', error: null, selectedEntityId: null })
+      set((state) => ({ projectPath: input.path, data, document: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null }))
       const chapter = firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
       set({ recentProjects: rememberProject(input.path, data) })
@@ -151,8 +159,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   openProject: async (path) => {
     try {
+      if (get().document && get().saveState !== 'saved') {
+        const saved = await get().saveCurrentDocument('切换项目前保存')
+        if (!saved) throw new Error('当前正文保存失败，已取消打开其他项目')
+      }
       const data = await projectApi.open(path)
-      set({ projectPath: path, data, document: null, activeView: 'dashboard', error: null, selectedEntityId: null })
+      set((state) => ({ projectPath: path, data, document: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null }))
       const chapter = firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
       set({ recentProjects: rememberProject(path, data) })
@@ -166,6 +178,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectNode: async (nodeId) => {
     const path = get().projectPath
     if (!path) return
+    const current = get().document
+    if (current && current.node.id !== nodeId && get().saveState !== 'saved') {
+      const saved = await get().saveCurrentDocument('切换章节前保存')
+      if (!saved) return
+    }
     const selected = get().data?.nodes.find((node) => node.id === nodeId)
     if (!selected || selected.kind === 'volume') {
       set({ document: null })
@@ -173,38 +190,62 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     try {
       const document = await projectApi.getDocument({ projectPath: path, nodeId })
-      set({ document, activeView: 'manuscript', selectedEntityId: null, error: null, saveState: 'saved' })
+      if (get().projectPath !== path) return
+      set((state) => ({ document, documentVersion: state.documentVersion + 1, activeView: 'manuscript', selectedEntityId: null, error: null, saveState: 'saved' }))
     } catch (error) {
       get().setError(error)
     }
   },
 
-  updateContent: (content) => set((state) => state.document ? ({ document: { ...state.document, content }, saveState: 'idle' }) : state),
+  updateContent: (content) => set((state) => state.document ? ({ document: { ...state.document, content }, documentVersion: state.documentVersion + 1, saveState: 'idle' }) : state),
 
   saveCurrentDocument: async (reason = '自动保存') => {
-    const { projectPath, document } = get()
-    if (!projectPath || !document) return
-    set({ saveState: 'saving', error: null })
-    try {
-      const saved = await projectApi.saveDocument({
-        projectPath, nodeId: document.node.id, content: document.content, reason,
-      })
-      set((state) => ({
-        document: saved,
-        saveState: 'saved',
-        data: state.data ? { ...state.data, nodes: state.data.nodes.map((node) => node.id === saved.node.id ? saved.node : node) } : state.data,
-      }))
-      await get().refreshStats()
-    } catch (error) {
-      set({ saveState: 'error' })
-      get().setError(error)
-    }
+    if (activeSave) return activeSave
+    activeSave = (async () => {
+      while (true) {
+        const { projectPath, document, documentVersion } = get()
+        if (!projectPath || !document) return true
+        const savedProjectPath = projectPath
+        const savedNodeId = document.node.id
+        const savedContent = document.content
+        set({ saveState: 'saving', error: null })
+        try {
+          const saved = await projectApi.saveDocument({
+            projectPath: savedProjectPath, nodeId: savedNodeId, content: savedContent, reason,
+          })
+          const current = get()
+          const sameDocument = current.projectPath === savedProjectPath && current.document?.node.id === savedNodeId
+          const sameVersion = sameDocument && current.documentVersion === documentVersion && current.document?.content === savedContent
+          set((state) => ({
+            document: sameVersion && state.document ? { ...state.document, node: saved.node, content: saved.content } : state.document,
+            saveState: sameVersion ? 'saved' : state.saveState,
+            data: state.data ? { ...state.data, nodes: state.data.nodes.map((node) => node.id === saved.node.id ? saved.node : node) } : state.data,
+          }))
+          if (!sameDocument) return true
+          if (!sameVersion) {
+            set({ saveState: 'idle' })
+            continue
+          }
+          await get().refreshStats()
+          return true
+        } catch (error) {
+          set({ saveState: 'error' })
+          get().setError(error)
+          return false
+        }
+      }
+    })().finally(() => { activeSave = null })
+    return activeSave
   },
 
   refreshData: async (data, preserveSelection = true) => {
-    const currentNodeId = preserveSelection ? get().document?.node.id : undefined
-    set({ data, error: null })
-    if (currentNodeId && data.nodes.some((node) => node.id === currentNodeId)) await get().selectNode(currentNodeId)
+    const current = get().document
+    const currentNode = current ? data.nodes.find((node) => node.id === current.node.id) : undefined
+    set({
+      data,
+      error: null,
+      document: current ? (currentNode ? { ...current, node: currentNode } : preserveSelection ? null : current) : null,
+    })
   },
 
   createNode: async (kind, title, parentId) => {
@@ -243,9 +284,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     const projectPath = get().projectPath
     if (!projectPath) return
     try {
+      if (get().document && get().saveState !== 'saved') {
+        const saved = await get().saveCurrentDocument('删除节点前保存')
+        if (!saved) throw new Error('当前正文保存失败，已取消删除')
+      }
       const data = await projectApi.deleteNode({ projectPath, nodeId })
       const next = firstChapter(data)
-      set({ document: null })
+      set((state) => ({ document: null, documentVersion: state.documentVersion + 1 }))
       await get().refreshData(data, false)
       if (next) await get().selectNode(next.id)
     } catch (error) { get().setError(error); throw error }
