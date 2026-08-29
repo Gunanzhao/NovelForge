@@ -104,6 +104,23 @@ fn real_command_workflow_persists_markdown_and_recoverable_trash() {
 }
 
 #[test]
+fn get_document_surfaces_missing_file_instead_of_returning_empty_content() {
+    let root = test_root("missing-document");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "缺失正文测试".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter");
+    fs::remove_file(root.join("project").join(&chapter.file_path)).expect("remove chapter file");
+    let error = super::commands::get_document(super::models::NodeActionInput {
+        project_path, node_id: chapter.id.clone(),
+    }).expect_err("missing正文 should be reported");
+    assert!(error.contains("读取正文失败"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn application_logs_are_levelled_and_redacted() {
     let root = test_root("logs");
     storage::create_project_directories(&root).expect("project directories");

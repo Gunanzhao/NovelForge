@@ -1019,8 +1019,12 @@ fn save_document_internal(
             Err(rollback_error) => Err(format!("{}；原正文恢复失败：{}；恢复文件已保留", detail, rollback_error)),
         };
     }
-    storage::touch_project(root)?;
-    storage::remove_file_if_exists(Path::new(&recovery_path))?;
+    if storage::touch_project(root).is_err() {
+        let _ = storage::append_log(root, "WARN", "project_metadata_touch_failed");
+    }
+    if storage::remove_file_if_exists(Path::new(&recovery_path)).is_err() {
+        let _ = storage::append_log(root, "WARN", "recovery_cleanup_failed");
+    }
     let _ = storage::append_log(root, "INFO", "document_saved");
     let updated = storage::node_from_id(connection, node_id)?
         .ok_or_else(|| "保存后无法读取章节".to_string())?;
@@ -1071,7 +1075,11 @@ pub fn get_document(input: crate::models::NodeActionInput) -> Result<DocumentDat
     if node.kind == "volume" {
         return Err("卷没有正文文件".to_string());
     }
-    let content = fs::read_to_string(storage::safe_relative(&root, &node.file_path)?).unwrap_or_default();
+    if node.deleted_at.is_some() {
+        return Err("已删除的正文不能读取".to_string());
+    }
+    let content = fs::read_to_string(storage::safe_relative(&root, &node.file_path)?)
+        .map_err(|error| format!("读取正文失败：{}", error))?;
     Ok(DocumentData { node, content })
 }
 
