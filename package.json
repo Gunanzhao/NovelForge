@@ -26,7 +26,6 @@
     "@codemirror/view": "^6.36.5",
     "@tauri-apps/api": "^2.8.1",
     "@tauri-apps/plugin-dialog": "^2.4.0",
-    "@tauri-apps/plugin-opener": "^2.4.0",
     "@uiw/react-codemirror": "^4.23.10",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",

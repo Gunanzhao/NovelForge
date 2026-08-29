@@ -107,6 +107,87 @@ fn trash_path_must_stay_inside_project() {
 }
 
 #[test]
+fn restore_history_preserves_current_document() {
+    let root = test_root("history-restore");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "历史恢复测试".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "现代".to_string(),
+        target_words: 1000,
+    })
+    .expect("create project");
+    let chapter = created
+        .nodes
+        .iter()
+        .find(|node| node.kind == "chapter")
+        .expect("chapter")
+        .clone();
+
+    super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(),
+        node_id: chapter.id.clone(),
+        content: "当前稿".to_string(),
+        reason: "当前".to_string(),
+    })
+    .expect("save current");
+    super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(),
+        node_id: chapter.id.clone(),
+        content: "最新稿".to_string(),
+        reason: "最新".to_string(),
+    })
+    .expect("save latest");
+
+    let history = super::commands::list_history(super::models::NodeActionInput {
+        project_path: project_path.clone(),
+        node_id: chapter.id.clone(),
+    })
+    .expect("list history");
+    let current_revision_id = history
+        .iter()
+        .find_map(|item| {
+            let content = super::commands::read_history(super::commands::RevisionActionInput {
+                project_path: project_path.clone(),
+                revision_id: item.id.clone(),
+            })
+            .ok()?;
+            (content == "当前稿").then(|| item.id.clone())
+        })
+        .expect("current revision");
+
+    super::commands::restore_history(super::commands::RevisionActionInput {
+        project_path: project_path.clone(),
+        revision_id: current_revision_id,
+    })
+    .expect("restore history");
+
+    let document = super::commands::get_document(super::models::NodeActionInput {
+        project_path: project_path.clone(),
+        node_id: chapter.id.clone(),
+    })
+    .expect("read restored document");
+    assert_eq!(document.content, "当前稿");
+
+    let history_after = super::commands::list_history(super::models::NodeActionInput {
+        project_path: project_path.clone(),
+        node_id: chapter.id,
+    })
+    .expect("list history after restore");
+    assert!(history_after.iter().any(|item| {
+        super::commands::read_history(super::commands::RevisionActionInput {
+            project_path: project_path.clone(),
+            revision_id: item.id.clone(),
+        })
+        .map(|content| content == "最新稿")
+        .unwrap_or(false)
+    }));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn node_delete_restores_file_when_database_transaction_fails() {
     let root = test_root("delete-rollback");
     let project_path = root.join("project").to_string_lossy().to_string();

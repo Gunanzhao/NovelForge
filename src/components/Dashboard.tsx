@@ -3,7 +3,7 @@ import { BookOpen, CheckCircle2, FileClock, Flame, HardDrive, RotateCcw, Sparkle
 import { projectApi } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/utils'
 import { useAppStore } from '../stores/app-store'
-import { Button, Panel } from './ui'
+import { Button, Modal, Panel } from './ui'
 
 export function Dashboard() {
   const data = useAppStore((state) => state.data)
@@ -13,33 +13,54 @@ export function Dashboard() {
   const refreshData = useAppStore((state) => state.refreshData)
   const setError = useAppStore((state) => state.setError)
   const [recoveryBusy, setRecoveryBusy] = useState(false)
+  const [ignoredRecoveryId, setIgnoredRecoveryId] = useState<string | null>(null)
+  const [recoveryPreview, setRecoveryPreview] = useState<{ id: string; title: string; content: string } | null>(null)
 
   if (!data || !projectPath) return null
   const chapters = data.nodes.filter((node) => node.kind === 'chapter').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5)
   const progress = stats.targetWords > 0 ? Math.min(100, Math.round((stats.totalWords / stats.targetWords) * 100)) : 0
-  const recovery = data.recovery[0]
+  const recovery = data.recovery.find((item) => item.id !== ignoredRecoveryId)
   const currentProjectPath = projectPath
   const currentData = data
+
+  async function previewRecovery() {
+    if (!recovery) return
+    setRecoveryBusy(true)
+    try {
+      const content = await projectApi.readRecovery({ projectPath: currentProjectPath, recoveryId: recovery.id })
+      setRecoveryPreview({ id: recovery.id, title: recovery.nodeTitle, content })
+    } catch (error) { setError(error) } finally { setRecoveryBusy(false) }
+  }
+
+  function ignoreRecovery() {
+    if (!recovery) return
+    setIgnoredRecoveryId(recovery.id)
+    setRecoveryPreview(null)
+  }
 
   async function restoreRecovery() {
     if (!recovery) return
     setRecoveryBusy(true)
     try {
       await refreshData(await projectApi.restoreRecovery({ projectPath: currentProjectPath, recoveryId: recovery.id }), false)
+      setIgnoredRecoveryId(null)
+      setRecoveryPreview(null)
     } catch (error) { setError(error) } finally { setRecoveryBusy(false) }
   }
 
   async function discardRecovery() {
-    if (!recovery) return
+    if (!recovery || !window.confirm('删除这份恢复数据？删除后无法从 NovelForge 恢复。')) return
     setRecoveryBusy(true)
     try {
       const remaining = await projectApi.discardRecovery({ projectPath: currentProjectPath, recoveryId: recovery.id })
       await refreshData({ project: currentData.project, nodes: currentData.nodes, entities: currentData.entities, recovery: remaining }, true)
+      setIgnoredRecoveryId(null)
+      setRecoveryPreview(null)
     } catch (error) { setError(error) } finally { setRecoveryBusy(false) }
   }
 
   return <div className="workspace-view">
-    {recovery ? <div className="recovery-banner"><RotateCcw size={15} /><strong>检测到未恢复的写作内容：{recovery.nodeTitle}</strong><span>来自 {recovery.createdAt}</span><div className="banner-actions"><Button variant="outline" disabled={recoveryBusy} onClick={() => void discardRecovery()}>忽略</Button><Button disabled={recoveryBusy} onClick={() => void restoreRecovery()}>恢复</Button></div></div> : null}
+    {recovery ? <div className="recovery-banner"><RotateCcw size={15} /><strong>检测到未恢复的写作内容：{recovery.nodeTitle}</strong><span>来自 {recovery.createdAt}</span><div className="banner-actions"><Button variant="ghost" disabled={recoveryBusy} onClick={() => void previewRecovery()}>查看</Button><Button variant="outline" disabled={recoveryBusy} onClick={ignoreRecovery}>稍后处理</Button><Button variant="danger" disabled={recoveryBusy} onClick={() => void discardRecovery()}>删除</Button><Button disabled={recoveryBusy} onClick={() => void restoreRecovery()}>恢复</Button></div></div> : null}
     <div className="view-header"><div><p className="eyebrow">PROJECT DASHBOARD</p><h1>{data.project.title}</h1><p>{data.project.description || '把设定、结构和每一次落笔，收拢在同一个安静的工作台。'}</p></div><div className="view-actions"><Button variant="outline" onClick={() => void selectNode(chapters[0]?.id ?? '')}><BookOpen size={15} />继续写作</Button></div></div>
     <div className="dashboard-grid">
       <Panel className="metric-card"><span className="metric-label">总字数</span><div className="metric-value">{formatNumber(stats.totalWords)}</div><span className="metric-sub">跨 {formatNumber(stats.chapterCount)} 个章节</span></Panel>
@@ -58,5 +79,6 @@ export function Dashboard() {
       <Panel className="dashboard-panel"><div className="panel-title"><h3>下一步</h3><Sparkles size={15} color="var(--accent)" /></div><div className="inspector-actions"><Button variant="outline" onClick={() => useAppStore.getState().setView('character')}>建立人物</Button><Button variant="outline" onClick={() => useAppStore.getState().setView('world')}>补充世界观</Button><Button variant="outline" onClick={() => useAppStore.getState().setView('search')}>搜索全文</Button></div></Panel>
       <Panel className="dashboard-panel"><div className="panel-title"><h3>安全提醒</h3><Trash2 size={15} color="var(--muted)" /></div><p className="metric-sub" style={{ lineHeight: 1.7 }}>删除内容不会立即永久消失，会先进入项目内的 <code>trash/</code> 目录。</p></Panel>
     </div>
+    {recoveryPreview ? <Modal open title={`恢复内容 · ${recoveryPreview.title}`} onClose={() => setRecoveryPreview(null)} footer={<Button variant="outline" onClick={() => setRecoveryPreview(null)}>关闭</Button>}><pre className="history-preview" style={{ maxHeight: '60vh' }}>{recoveryPreview.content}</pre></Modal> : null}
   </div>
 }
