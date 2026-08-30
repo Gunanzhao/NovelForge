@@ -892,6 +892,59 @@ fn consistency_check_ignores_wiki_inside_fenced_code() {
 }
 
 #[test]
+fn consistency_check_reports_structured_character_and_timeline_conflicts() {
+    let root = test_root("consistency-structured");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "结构化一致性测试".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let entries = [
+        ("character", "林月", serde_json::json!({"age": 18, "ageAtChapter": {"first": 25}, "birthday": "2000-01-01", "birthDate": "2001-02-02", "gender": "女", "sex": "男", "status": "dead", "deathDate": "2024-01-15"})),
+        ("character", "林玥", serde_json::json!({})),
+        ("location", "雾港", serde_json::json!({})),
+        ("location", "雾巷", serde_json::json!({})),
+        ("timeline", "死亡事件", serde_json::json!({"date": "2024-01-15", "characters": "c1", "status": "dead"})),
+        ("timeline", "异常活动", serde_json::json!({"date": "2024-02-01", "characters": "c1", "age": 30, "status": "active", "startDate": "2024-04-01", "endDate": "2024-03-01"})),
+        ("timeline", "更早事件", serde_json::json!({"date": "2023-12-01", "characters": "c1"})),
+    ];
+    let mut character_id = String::new();
+    for (kind, title, content) in entries {
+        let saved = super::commands::upsert_entity(super::models::EntityInput {
+            project_path: project_path.clone(), kind: kind.to_string(), id: None, title: title.to_string(),
+            content, tags: Vec::new(),
+        }).expect("save structured entity");
+        if title == "林月" {
+            character_id = saved.entities.iter().find(|entity| entity.title == title).expect("character").id.clone();
+        }
+    }
+    let mut replacement = String::new();
+    let events = super::commands::open_project(project_path.clone()).expect("open project");
+    for entity in events.entities.iter().filter(|entity| entity.kind == "timeline") {
+        let mut content = entity.content.clone();
+        if let Some(object) = content.as_object_mut() {
+            if object.get("characters").and_then(serde_json::Value::as_str) == Some("c1") {
+                object.insert("characters".to_string(), serde_json::Value::String(character_id.clone()));
+            }
+        }
+        if content != entity.content {
+            replacement = entity.id.clone();
+            super::commands::upsert_entity(super::models::EntityInput {
+                project_path: project_path.clone(), kind: entity.kind.clone(), id: Some(entity.id.clone()), title: entity.title.clone(),
+                content, tags: entity.tags.clone(),
+            }).expect("replace character reference");
+        }
+    }
+    assert!(!replacement.is_empty());
+    let report = super::commands::check_consistency(project_path.clone()).expect("consistency report");
+    let codes: Vec<&str> = report.issues.iter().map(|issue| issue.code.as_str()).collect();
+    for expected in ["character-age-conflict", "character-birthday-conflict", "character-gender-conflict", "posthumous-appearance", "similar-character-name", "similar-location-name", "timeline-range", "timeline-order"] {
+        assert!(codes.contains(&expected), "missing consistency code: {}", expected);
+    }
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn consistency_check_accepts_global_chapter_numbers_across_volumes() {
     let root = test_root("consistency-multi-volume");
     let project_path = root.join("project").to_string_lossy().to_string();

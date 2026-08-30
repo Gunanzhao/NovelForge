@@ -4,8 +4,180 @@ import type { ConsistencyIssue, ConsistencyReport, EntityRecord, NodeRecord, Pro
 
 function entityValue(entity: EntityRecord, key: string) {
   const value = entity.content[key]
+  return valueText(value)
+}
+
+function valueText(value: unknown): string {
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) return value.map((item) => valueText(item)).filter(Boolean).join('、')
   return ''
+}
+
+function normalizedKey(value: string) {
+  return value.replace(/[\s_-]+/gu, '').toLocaleLowerCase()
+}
+
+function fieldValues(entity: EntityRecord, keys: string[]) {
+  const expected = new Set(keys.map(normalizedKey))
+  return Object.entries(entity.content)
+    .filter(([key]) => expected.has(normalizedKey(key)))
+    .map(([, value]) => value)
+}
+
+function nestedValues(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value.flatMap((item) => nestedValues(item))
+  if (value && typeof value === 'object') return Object.values(value).flatMap((item) => nestedValues(item))
+  return [value]
+}
+
+function numericValues(values: unknown[]) {
+  return values.flatMap((value) => nestedValues(value)).flatMap((value) => {
+    if (typeof value === 'number' && Number.isFinite(value)) return [value]
+    if (typeof value !== 'string') return []
+    return [...value.matchAll(/-?\d+(?:\.\d+)?/gu)].map((match) => Number(match[0])).filter(Number.isFinite)
+  })
+}
+
+function distinctNumbers(values: number[]) {
+  return [...new Set(values.map((value) => Math.round(value * 100) / 100))]
+}
+
+function normalizedText(value: string) {
+  return value.trim().toLocaleLowerCase()
+}
+
+function splitStructuredText(value: unknown) {
+  return valueText(value).split(/[,，、;；/|]+/u).map((item) => item.trim()).filter(Boolean)
+}
+
+function entityAliases(entity: EntityRecord) {
+  return [entity.id, entity.title, ...fieldValues(entity, ['alias', 'aliases']).flatMap(splitStructuredText)]
+    .map((value) => value.trim())
+    .filter(Boolean)
+}
+
+function mentionsEntity(value: unknown, entity: EntityRecord) {
+  const text = valueText(value).trim()
+  if (!text) return false
+  const normalized = normalizedText(text)
+  return entityAliases(entity).some((alias) => normalizedText(alias) === normalized || normalized.includes(normalizedText(alias)))
+}
+
+function parseChronology(value: unknown): number | null {
+  const text = valueText(value).trim()
+  if (!text) return null
+  const parsed = Date.parse(text)
+  if (Number.isFinite(parsed)) return parsed
+  const numbers = [...text.matchAll(/\d+/gu)].map((match) => Number(match[0]))
+  if (!numbers.length) return null
+  if (numbers.length >= 3 && numbers[0] >= 1000 && numbers[1] >= 1 && numbers[1] <= 12 && numbers[2] >= 1 && numbers[2] <= 31) {
+    return Date.UTC(numbers[0], numbers[1] - 1, numbers[2])
+  }
+  return Number.isFinite(numbers[0]) ? numbers[0] : null
+}
+
+function timelineDate(entity: EntityRecord) {
+  const values = fieldValues(entity, ['date', 'startDate', 'time'])
+  return values.map(parseChronology).find((value): value is number => value !== null) ?? null
+}
+
+function fieldDate(entity: EntityRecord, keys: string[]) {
+  return fieldValues(entity, keys).map(parseChronology).find((value): value is number => value !== null) ?? null
+}
+
+function timelineRange(entity: EntityRecord) {
+  const start = fieldDate(entity, ['startDate', 'startTime', 'beginDate'])
+  const end = fieldDate(entity, ['endDate', 'endTime', 'finishDate'])
+  return { start, end }
+}
+
+function timelineAgeValues(event: EntityRecord, character: EntityRecord) {
+  const values: unknown[] = []
+  for (const value of fieldValues(event, ['age', 'characterAge'])) {
+    if (mentionsEntity(fieldValues(event, ['character', 'characterId', 'characters', 'participants']), character)) values.push(value)
+  }
+  for (const value of fieldValues(event, ['ages', 'ageAt', 'ageHistory', 'ageTimeline', 'ageByChapter', 'characterAges'])) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [key, nested] of Object.entries(value)) {
+        if (entityAliases(character).some((alias) => normalizedText(alias) === normalizedText(key))) values.push(nested)
+      }
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (!item || typeof item !== 'object') continue
+        const record = item as Record<string, unknown>
+        if (mentionsEntity(record.character ?? record.characterId ?? record.name ?? record.person, character)) values.push(record.age ?? record.value)
+      }
+    }
+  }
+  return numericValues(values)
+}
+
+function characterAgeValues(character: EntityRecord, timelines: EntityRecord[]) {
+  const own = numericValues(fieldValues(character, ['age', 'currentAge', 'ages', 'ageAt', 'ageAtChapter', 'ageHistory', 'ageTimeline', 'ageByChapter']))
+  const fromTimeline = timelines.flatMap((event) => timelineAgeValues(event, character))
+  return distinctNumbers([...own, ...fromTimeline])
+}
+
+function characterBirthdayValues(character: EntityRecord, timelines: EntityRecord[]) {
+  const values = fieldValues(character, ['birthday', 'birthDate', 'dateOfBirth', 'birthDay', 'birthdays', 'birthdayHistory'])
+    .flatMap((value) => nestedValues(value))
+    .map(valueText)
+    .map((value) => value.trim().replace(/[\s./年月日]+/gu, '-').replace(/-+/gu, '-').replace(/^-|-$/gu, ''))
+    .filter(Boolean)
+  const timelineValues = timelines
+    .filter((event) => mentionsEntity(fieldValues(event, ['character', 'characterId', 'characters', 'participants']), character))
+    .flatMap((event) => fieldValues(event, ['birthday', 'birthDate', 'dateOfBirth']))
+    .flatMap((value) => nestedValues(value))
+    .map(valueText)
+    .map((value) => value.trim().replace(/[\s./年月日]+/gu, '-').replace(/-+/gu, '-').replace(/^-|-$/gu, ''))
+    .filter(Boolean)
+  return [...new Set([...values, ...timelineValues].map(normalizedText))]
+}
+
+function normalizedGender(value: unknown) {
+  const text = normalizedText(valueText(value))
+  if (!text) return ''
+  if (['男', '男性', 'male', 'man', 'm'].includes(text)) return 'male'
+  if (['女', '女性', 'female', 'woman', 'f'].includes(text)) return 'female'
+  if (['非二元', '非二元性别', 'nonbinary', 'non-binary', 'other', '其他'].includes(text)) return 'other'
+  return text
+}
+
+function characterGenderValues(character: EntityRecord) {
+  return [...new Set(fieldValues(character, ['gender', 'sex', 'genderIdentity', 'genderHistory'])
+    .flatMap((value) => nestedValues(value))
+    .map(normalizedGender)
+    .filter(Boolean))]
+}
+
+function isDeadStatus(value: unknown) {
+  return ['死亡', '已死亡', 'dead', 'deceased'].includes(normalizedText(valueText(value)))
+}
+
+function isDeathEvent(event: EntityRecord) {
+  return fieldValues(event, ['status', 'state', 'activity', 'eventType', 'type'])
+    .flatMap((value) => nestedValues(value))
+    .some((value) => isDeadStatus(value) || ['死亡', 'death', 'dead'].includes(normalizedText(valueText(value))))
+}
+
+function isSimilarName(left: string, right: string) {
+  const a = left.trim().replace(/[\s·。、“”"'’‘\-—_]+/gu, '').toLocaleLowerCase()
+  const b = right.trim().replace(/[\s·。、“”"'’‘\-—_]+/gu, '').toLocaleLowerCase()
+  if (a.length < 2 || b.length < 2 || a === b || Math.abs(a.length - b.length) > 1) return false
+  const previous = Array.from({ length: b.length + 1 }, (_, index) => index)
+  for (let row = 1; row <= a.length; row += 1) {
+    let diagonal = previous[0]
+    previous[0] = row
+    for (let column = 1; column <= b.length; column += 1) {
+      const next = previous[column]
+      previous[column] = a[row - 1] === b[column - 1]
+        ? diagonal
+        : Math.min(diagonal + 1, previous[column] + 1, previous[column - 1] + 1)
+      diagonal = next
+    }
+  }
+  return previous[b.length] <= 1
 }
 
 function issue(
@@ -81,6 +253,86 @@ export function analyzeConsistency(data: ProjectData, documents: Record<string, 
         issues.push(issue('warning', 'foreshadowing-status', '伏笔状态未标记为已回收', '已经填写实际回收章节，但当前状态仍未标记为“已回收”。', entity.id, entity.kind, entity.filePath))
       }
     }
+  }
+
+  const characters = activeEntities.filter((entity) => entity.kind === 'character')
+  const timelines = activeEntities.filter((entity) => entity.kind === 'timeline')
+  for (const character of characters) {
+    const ages = characterAgeValues(character, timelines)
+    if (ages.length > 1 && Math.max(...ages) - Math.min(...ages) >= 2) {
+      issues.push(issue('warning', 'character-age-conflict', '可能存在年龄冲突', '人物“' + character.title + '”的结构化年龄记录为 ' + ages.join('、') + '，差异较大，请确认时间线或年龄设定。', character.id, character.kind, character.filePath))
+    }
+    const birthdays = characterBirthdayValues(character, timelines)
+    if (birthdays.length > 1) {
+      issues.push(issue('warning', 'character-birthday-conflict', '生日描述可能冲突', '人物“' + character.title + '”存在多个结构化生日记录：' + birthdays.join('、') + '。', character.id, character.kind, character.filePath))
+    }
+    const genders = characterGenderValues(character)
+    if (genders.length > 1) {
+      issues.push(issue('warning', 'character-gender-conflict', '性别描述可能冲突', '人物“' + character.title + '”的结构化性别字段出现不一致值：' + genders.join('、') + '。', character.id, character.kind, character.filePath))
+    }
+
+    const dead = fieldValues(character, ['status', 'state', 'lifeStatus']).flatMap((value) => nestedValues(value)).some(isDeadStatus)
+    let deathAt = fieldDate(character, ['deathDate', 'dateOfDeath', 'deceasedAt', 'deathTime'])
+    if (deathAt === null) {
+      for (const event of timelines) {
+        if (!mentionsEntity(fieldValues(event, ['character', 'characterId', 'characters', 'participants']), character) || !isDeathEvent(event)) continue
+        const date = timelineDate(event)
+        if (date !== null && (deathAt === null || date < deathAt)) deathAt = date
+      }
+    }
+    if (dead && deathAt !== null) {
+      const laterAppearance = timelines.find((event) => {
+        const date = timelineDate(event)
+        return date !== null && date > deathAt! && mentionsEntity(fieldValues(event, ['character', 'characterId', 'characters', 'participants']), character) && !isDeathEvent(event)
+      })
+      if (laterAppearance) {
+        issues.push(issue('warning', 'posthumous-appearance', '人物可能在死亡事件之后继续出现', '人物“' + character.title + '”在结构化死亡时间之后仍出现在时间线事件“' + laterAppearance.title + '”中，请确认是否为回忆、幻象或时间线误记。', character.id, character.kind, character.filePath))
+      }
+    }
+  }
+
+  const characterGroups = new Map<string, EntityRecord[]>()
+  for (const character of characters) {
+    const key = normalizedText(character.title)
+    const group = characterGroups.get(key) ?? []
+    group.push(character)
+    characterGroups.set(key, group)
+  }
+  for (const group of characterGroups.values()) {
+    if (group.length < 2) continue
+    const genders = [...new Set(group.flatMap(characterGenderValues))]
+    if (genders.length > 1) {
+      issues.push(issue('warning', 'character-gender-conflict', '性别描述可能冲突', '同名人物资料的结构化性别字段出现不一致值：' + genders.join('、') + '。', group[0].id, group[0].kind, group[0].filePath))
+    }
+  }
+
+  for (let left = 0; left < characters.length; left += 1) {
+    for (let right = left + 1; right < characters.length; right += 1) {
+      if (!isSimilarName(characters[left].title, characters[right].title)) continue
+      issues.push(issue('warning', 'similar-character-name', '名称可能相似', '人物“' + characters[left].title + '”与“' + characters[right].title + '”名称相似，请确认是否为不同人物或同一人物的拼写变化。', characters[right].id, characters[right].kind, characters[right].filePath))
+    }
+  }
+
+  const locations = activeEntities.filter((entity) => entity.kind === 'location')
+  for (let left = 0; left < locations.length; left += 1) {
+    for (let right = left + 1; right < locations.length; right += 1) {
+      if (!isSimilarName(locations[left].title, locations[right].title)) continue
+      issues.push(issue('warning', 'similar-location-name', '地点名称可能相似', '地点“' + locations[left].title + '”与“' + locations[right].title + '”名称相似，请确认层级或拼写。', locations[right].id, locations[right].kind, locations[right].filePath))
+    }
+  }
+
+  let previousTimeline: { entity: EntityRecord; date: number } | null = null
+  for (const event of timelines) {
+    const range = timelineRange(event)
+    if (range.start !== null && range.end !== null && range.end < range.start) {
+      issues.push(issue('warning', 'timeline-range', '时间线结束时间早于开始时间', '事件“' + event.title + '”的结束时间早于开始时间，请确认时间范围。', event.id, event.kind, event.filePath))
+    }
+    const date = timelineDate(event)
+    if (date === null) continue
+    if (previousTimeline && date < previousTimeline.date) {
+      issues.push(issue('warning', 'timeline-order', '时间线日期可能逆序', '事件“' + event.title + '”的日期早于前一个结构化事件“' + previousTimeline.entity.title + '”，请确认时间线顺序。', event.id, event.kind, event.filePath))
+    }
+    previousTimeline = { entity: event, date }
   }
 
   const errors = issues.filter((item) => item.severity === 'error').length

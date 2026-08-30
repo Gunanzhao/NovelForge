@@ -64,4 +64,29 @@ describe('consistency analyzer', () => {
     const report = analyzeConsistency(project([thread]), {})
     expect(report.issues.some((item) => item.code === 'foreshadowing-status')).toBe(false)
   })
+
+  it('reports structured character, location and timeline contradictions', () => {
+    const character = entity('c1', 'character', '林月', {
+      age: 18, ageAtChapter: { first: 25 }, birthday: '2000-01-01', birthDate: '2001-02-02',
+      gender: '女', sex: '男', status: 'dead', deathDate: '2024-01-15',
+    })
+    const similarCharacter = entity('c2', 'character', '林玥', {})
+    const location = entity('l1', 'location', '雾港', {})
+    const similarLocation = entity('l2', 'location', '雾巷', {})
+    const firstEvent = entity('t1', 'timeline', '死亡事件', {
+      date: '2024-01-15', characters: 'c1', status: 'dead',
+    })
+    const laterEvent = entity('t2', 'timeline', '异常活动', {
+      date: '2024-02-01', characters: 'c1', age: 30, status: 'active',
+      startDate: '2024-04-01', endDate: '2024-03-01',
+    })
+    const reversedEvent = entity('t3', 'timeline', '更早事件', { date: '2023-12-01', characters: 'c1' })
+    const report = analyzeConsistency(project([character, similarCharacter, location, similarLocation, firstEvent, laterEvent, reversedEvent]), {})
+    const codes = report.issues.map((item) => item.code)
+    expect(codes).toEqual(expect.arrayContaining([
+      'character-age-conflict', 'character-birthday-conflict', 'character-gender-conflict',
+      'posthumous-appearance', 'similar-character-name', 'similar-location-name',
+      'timeline-range', 'timeline-order',
+    ]))
+  })
 })

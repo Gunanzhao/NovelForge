@@ -450,3 +450,12 @@
 - 前后端 Wiki 解析均忽略 fenced code block，避免代码示例触发误报。
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；12 个测试文件 / 57 项测试。
 - cargo check、cargo test 全部通过；30 项 Rust 常规测试，1 个大型基准按设计忽略。
+
+## 2026-08-30：P1-05 结构化一致性规则
+
+- 一致性检查新增人物年龄/生日/性别结构化字段冲突提示，支持人物资料与时间线中的年龄、生日记录。
+- 新增基于人物状态、死亡日期和时间线参与人的死亡后出现提醒；不扫描普通正文字符串，不把剧情文本强行判错。
+- 新增人物与地点的安全相似名称提示（不自动合并），以及时间线可解析日期逆序、结束早于开始检查。
+- 前后端继续共用相同 issue 字段（severity、code、title、detail、refId、refKind、path），所有新问题可从一致性页面定位。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；12 个测试文件 / 58 项测试。
+- cargo check、cargo test 全部通过；31 项 Rust 常规测试，1 个大型基准按设计忽略。
