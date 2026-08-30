@@ -1,7 +1,88 @@
 const WIKI_LINK = /\[\[([^[\]]+)\]\]/g
+export const WIKI_LINK_HREF_PREFIX = 'novelforge-wiki:'
+
+export interface WikiRange {
+  from: number
+  to: number
+  target: string
+}
+
+/**
+ * Locate Wiki links outside fenced code blocks.
+ *
+ * CodeMirror positions are UTF-16 offsets, which are also the offsets returned
+ * by JavaScript string operations, so the ranges can be shared by the editor
+ * decoration and preview renderer.
+ */
+export function wikiRanges(markdown: string): WikiRange[] {
+  const ranges: WikiRange[] = []
+  let offset = 0
+  let fenced = false
+  let fenceCharacter = ''
+  const lines = markdown.split(/\r\n|\n|\r/u)
+
+  for (const line of lines) {
+    const fence = line.match(/^\s*(~{3,})/u) || line.match(new RegExp('^\\s*(' + String.fromCharCode(96) + '{3,})', 'u'))
+    if (fence) {
+      if (!fenced) {
+        fenced = true
+        fenceCharacter = fence[1][0]
+      } else if (fence[1][0] === fenceCharacter) {
+        fenced = false
+        fenceCharacter = ''
+      }
+    } else if (!fenced) {
+      for (const match of line.matchAll(WIKI_LINK)) {
+        const target = match[1].trim()
+        if (!target || match.index === undefined) continue
+        ranges.push({
+          from: offset + match.index,
+          to: offset + match.index + match[0].length,
+          target,
+        })
+      }
+    }
+    offset += line.length
+    if (markdown.slice(offset, offset + 2) === '\r\n') offset += 2
+    else if (markdown[offset] === '\r' || markdown[offset] === '\n') offset += 1
+  }
+  return ranges
+}
 
 export function wikiTargets(markdown: string) {
-  return [...markdown.matchAll(WIKI_LINK)].map((match) => match[1].trim()).filter(Boolean)
+  return wikiRanges(markdown).map((range) => range.target)
+}
+
+export function wikiLinkHref(target: string) {
+  return WIKI_LINK_HREF_PREFIX + encodeURIComponent(target.trim())
+}
+
+export function wikiTargetFromHref(href: string | undefined) {
+  if (!href || !href.startsWith(WIKI_LINK_HREF_PREFIX)) return null
+  try {
+    const target = decodeURIComponent(href.slice(WIKI_LINK_HREF_PREFIX.length)).trim()
+    return target || null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Convert the author-facing [[Target]] syntax to a normal Markdown link.
+ * ReactMarkdown can then render it with its regular link pipeline while the
+ * application handles the private href scheme as an in-app navigation event.
+ */
+export function wikiMarkdown(markdown: string) {
+  const ranges = wikiRanges(markdown)
+  if (!ranges.length) return markdown
+  let cursor = 0
+  let result = ''
+  for (const range of ranges) {
+    const label = markdown.slice(range.from + 2, range.to - 2).trim()
+    result += markdown.slice(cursor, range.from) + '[' + label + '](' + wikiLinkHref(range.target) + ')'
+    cursor = range.to
+  }
+  return result + markdown.slice(cursor)
 }
 
 export function highlightWikiLinks(markdown: string) {

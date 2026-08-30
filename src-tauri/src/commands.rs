@@ -2306,13 +2306,37 @@ fn json_text(value: &serde_json::Value, key: &str) -> String {
 
 fn wiki_targets(content: &str) -> Vec<String> {
     let mut targets = Vec::new();
-    let mut rest = content;
-    while let Some(start) = rest.find("[[") {
-        let after_start = &rest[start + 2..];
-        let Some(end) = after_start.find("]]" ) else { break };
-        let target = after_start[..end].trim();
-        if !target.is_empty() { targets.push(target.to_string()); }
-        rest = &after_start[end + 2..];
+    let mut fenced = false;
+    let mut fence_character = 0u8;
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        let bytes = trimmed.as_bytes();
+        let marker = if bytes.starts_with(&[96, 96, 96]) {
+            Some(96u8)
+        } else if bytes.starts_with(b"~~~") {
+            Some(b'~')
+        } else {
+            None
+        };
+        if let Some(character) = marker {
+            if !fenced {
+                fenced = true;
+                fence_character = character;
+            } else if character == fence_character {
+                fenced = false;
+                fence_character = 0;
+            }
+            continue;
+        }
+        if fenced { continue; }
+        let mut rest = line;
+        while let Some(start) = rest.find("[[") {
+            let after_start = &rest[start + 2..];
+            let Some(end) = after_start.find("]]") else { break };
+            let target = after_start[..end].trim();
+            if !target.is_empty() { targets.push(target.to_string()); }
+            rest = &after_start[end + 2..];
+        }
     }
     targets
 }

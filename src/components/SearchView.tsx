@@ -30,6 +30,21 @@ export function SearchView() {
     return () => window.removeEventListener('novelforge:search-scope', onScope)
   }, [])
 
+  useEffect(() => {
+    const onWikiSearch = (event: Event) => {
+      const target = (event as CustomEvent<unknown>).detail
+      if (typeof target !== 'string' || !target.trim()) return
+      setQuery(target.trim())
+      setKind('all')
+      setScope('project')
+      setVolumePath('')
+      setTag('')
+      setCaseSensitive(false)
+    }
+    window.addEventListener('novelforge:search-query', onWikiSearch)
+    return () => window.removeEventListener('novelforge:search-query', onWikiSearch)
+  }, [])
+
   const volumes = useMemo(() => (data?.nodes ?? [])
     .filter((node) => node.kind === 'volume')
     .sort((left, right) => left.orderIndex - right.orderIndex), [data?.nodes])

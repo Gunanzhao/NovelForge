@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { applyMarkdownCommand, convertPunctuation, wikiTargets, writingHints } from '../src/lib/markdown'
+import {
+  applyMarkdownCommand, convertPunctuation, wikiLinkHref, wikiMarkdown, wikiTargetFromHref,
+  wikiTargets, writingHints,
+} from '../src/lib/markdown'
 import {
   categoryEntityKind, generateNames, readFavoriteNames, toggleFavoriteName, writeFavoriteNames,
 } from '../src/lib/name-generator'
@@ -8,6 +11,14 @@ import { countWords, debounce } from '../src/lib/utils'
 describe('Markdown writing helpers', () => {
   it('extracts wiki targets without changing ordinary text', () => {
     expect(wikiTargets('她走进[[雾港]]，看见[[林月]]。')).toEqual(['雾港', '林月'])
+  })
+
+  it('turns Wiki syntax into navigable links and leaves fenced code untouched', () => {
+    const source = '她走进[[雾港]]。\n\n~~~md\n[[不是资料链接]]\n~~~'
+    expect(wikiMarkdown(source)).toBe('她走进[雾港](' + wikiLinkHref('雾港') + ')。\n\n~~~md\n[[不是资料链接]]\n~~~')
+    expect(wikiTargets(source)).toEqual(['雾港'])
+    expect(wikiTargetFromHref(wikiLinkHref('雾港'))).toBe('雾港')
+    expect(wikiTargetFromHref('https://example.com')).toBeNull()
   })
 
   it('reports potentially unsafe formatting without mutating content', () => {

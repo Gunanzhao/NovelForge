@@ -442,3 +442,11 @@
 - 新增 Unicode 单选区、空光标、多行选区和快捷键注册回归。
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；12 个测试文件 / 56 项测试。
 - cargo check、cargo test 全部通过；29 项 Rust 常规测试，1 项大型基准按设计忽略。
+## 2026-08-30：P1-04 Wiki 正文链接
+
+- Wiki 语法转换为带内部 href 的标准 Markdown 链接，预览点击可打开唯一匹配的资料条目。
+- 同名资料不再静默选择首个条目，预览会展示候选；编辑器通过 CodeMirror 装饰显示 Wiki 链接并支持 Ctrl/Cmd 点击。
+- 缺失资料提供“去搜索”操作；搜索视图支持接收 Wiki 目标并预填全项目查询，辅助栏芯片也不再静默选择同名首项。
+- 前后端 Wiki 解析均忽略 fenced code block，避免代码示例触发误报。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；12 个测试文件 / 57 项测试。
+- cargo check、cargo test 全部通过；30 项 Rust 常规测试，1 个大型基准按设计忽略。

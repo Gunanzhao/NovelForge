@@ -875,6 +875,23 @@ fn consistency_check_reports_missing_wiki_and_broken_relationship() {
 }
 
 #[test]
+fn consistency_check_ignores_wiki_inside_fenced_code() {
+    let root = test_root("consistency-wiki-fence");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "Wiki 围栏测试".to_string(), author: "测试".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
+    super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(), node_id: chapter.id, content: "~~~md\n[[代码示例]]\n~~~".to_string(), reason: "围栏测试".to_string(),
+    }).expect("save document");
+    let report = super::commands::check_consistency(project_path).expect("consistency report");
+    assert!(!report.issues.iter().any(|issue| issue.code == "missing-wiki"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn consistency_check_accepts_global_chapter_numbers_across_volumes() {
     let root = test_root("consistency-multi-volume");
     let project_path = root.join("project").to_string_lossy().to_string();

@@ -289,3 +289,10 @@
 - Ctrl+B/Ctrl+I 已进入可重绑定命令注册表；普通输入框不会被编辑器快捷键拦截。
 - 前端回归：12 个测试文件 / 56 项测试全部通过；包含 Unicode、多行和取消格式测试。
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；cargo check、cargo test 全部通过（29 项常规 + 1 项 ignored）。
+## P1-04 Wiki 正文链接验证（2026-08-30）
+
+- Wiki 双括号条目会转换为可拦截的内部 Markdown href；预览支持唯一条目跳转、同名候选选择和缺失目标搜索。
+- 编辑模式通过 CodeMirror mark 装饰显示 Wiki 链接，Ctrl/Cmd 点击进入同一解析流程；辅助栏对同名条目不再静默取首个。
+- 前后端解析均跳过 fenced code block；前端 helper 回归覆盖编码 href 往返、代码围栏和目标提取，Rust 回归覆盖一致性检查。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：通过，12 个测试文件 / 57 项测试。
+- cargo check、cargo test：通过，30 项 Rust 常规测试，1 个大型基准按设计忽略。
