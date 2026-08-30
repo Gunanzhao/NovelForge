@@ -23,3 +23,4 @@ tauri-plugin-dialog = "2"
 thiserror = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
+printpdf = { version = "0.12.7", default-features = false, features = ["images", "jpeg", "png"] }

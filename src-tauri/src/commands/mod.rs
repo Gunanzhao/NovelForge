@@ -8,10 +8,15 @@ use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Deserialize;
 
+use printpdf::{
+    Mm, Op, ParsedFont, PdfDocument, PdfFontHandle, PdfPage, PdfSaveOptions, Point, Pt, RawImage,
+    TextItem, XObjectTransform,
+};
 use std::fs;
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
 use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 use uuid::Uuid;
@@ -3412,7 +3417,7 @@ fn pdf_hex_bytes(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{:02X}", byte)).collect()
 }
 
-fn pdf_bytes(text: &str, cover: Option<&ExportCover>) -> Vec<u8> {
+fn pdf_bytes_legacy(text: &str, cover: Option<&ExportCover>) -> Vec<u8> {
     let jpeg = cover.and_then(|asset| pdf_jpeg_dimensions(&asset.bytes).map(|dimensions| (dimensions, asset)));
     let mut lines = Vec::new();
     for source in text.lines() {
@@ -3470,6 +3475,127 @@ fn pdf_bytes(text: &str, cover: Option<&ExportCover>) -> Vec<u8> {
     for offset in offsets { pdf.extend_from_slice(format!("{:010} 00000 n \n", offset).as_bytes()); }
     pdf.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n", objects.len() + 1, xref).as_bytes());
     pdf
+}
+
+static PDF_FONT: OnceLock<Option<ParsedFont>> = OnceLock::new();
+
+fn pdf_font_candidates() -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(path) = std::env::var_os("NOVELFORGE_PDF_FONT") {
+        candidates.push(PathBuf::from(path));
+    }
+    #[cfg(windows)]
+    {
+        candidates.extend([
+            PathBuf::from(r"C:\Windows\Fonts\simhei.ttf"),
+            PathBuf::from(r"C:\Windows\Fonts\Deng.ttf"),
+            PathBuf::from(r"C:\Windows\Fonts\NotoSansSC-VF.ttf"),
+            PathBuf::from(r"C:\Windows\Fonts\NotoSerifSC-VF.ttf"),
+            PathBuf::from(r"C:\Windows\Fonts\simsun.ttc"),
+        ]);
+    }
+    #[cfg(not(windows))]
+    {
+        candidates.extend([
+            PathBuf::from("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+            PathBuf::from("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+            PathBuf::from("/usr/share/fonts/opentype/noto/NotoSansSC-Regular.otf"),
+        ]);
+    }
+    candidates
+}
+
+fn load_pdf_font() -> Option<ParsedFont> {
+    for path in pdf_font_candidates() {
+        let Ok(bytes) = fs::read(&path) else { continue };
+        let mut warnings = Vec::new();
+        let Some(font) = ParsedFont::from_bytes(&bytes, 0, &mut warnings) else { continue };
+        let has_cjk = font.lookup_glyph_index('中' as u32).is_some()
+            || font.lookup_glyph_index('雾' as u32).is_some()
+            || font.lookup_glyph_index('测' as u32).is_some();
+        if has_cjk {
+            return Some(font);
+        }
+    }
+    None
+}
+
+fn shared_pdf_font() -> Option<&'static ParsedFont> {
+    PDF_FONT.get_or_init(load_pdf_font).as_ref()
+}
+
+fn pdf_text_lines(text: &str) -> Vec<String> {
+    let mut lines = Vec::new();
+    for source in text.lines() {
+        let mut current = String::new();
+        for character in source.chars() {
+            current.push(character);
+            if current.chars().count() >= 92 {
+                lines.push(std::mem::take(&mut current));
+            }
+        }
+        lines.push(current);
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
+}
+
+fn pdf_bytes_embedded(text: &str, cover: Option<&ExportCover>, font: &ParsedFont) -> Vec<u8> {
+    let mut document = PdfDocument::new("NovelForge");
+    let font_id = document.add_font(font);
+    let mut image_warnings = Vec::new();
+    let cover_image = cover.and_then(|asset| RawImage::decode_from_bytes(&asset.bytes, &mut image_warnings).ok());
+    let cover_id = cover_image.as_ref().map(|image| document.add_image(image));
+    let lines = pdf_text_lines(text);
+    let chunks: Vec<Vec<String>> = lines.chunks(48).map(|chunk| chunk.to_vec()).collect();
+    let mut pages = Vec::new();
+    for (page_index, chunk) in chunks.iter().enumerate() {
+        let mut operations = Vec::new();
+        if page_index == 0 {
+            if let (Some(image), Some(image_id)) = (cover_image.as_ref(), cover_id.as_ref()) {
+                let width_pt = image.width.max(1) as f32 * 72.0 / 96.0;
+                let height_pt = image.height.max(1) as f32 * 72.0 / 96.0;
+                let scale = (120.0 / width_pt).min(180.0 / height_pt);
+                operations.push(Op::UseXobject {
+                    id: image_id.clone(),
+                    transform: XObjectTransform {
+                        translate_x: Some(Pt(400.0)),
+                        translate_y: Some(Pt((842.0 - 60.0 - height_pt * scale).max(20.0))),
+                        scale_x: Some(scale),
+                        scale_y: Some(scale),
+                        dpi: Some(96.0),
+                        ..Default::default()
+                    },
+                });
+            }
+        }
+        operations.push(Op::StartTextSection);
+        operations.push(Op::SetFont { font: PdfFontHandle::External(font_id.clone()), size: Pt(11.0) });
+        operations.push(Op::SetLineHeight { lh: Pt(15.0) });
+        operations.push(Op::SetTextCursor { pos: Point::new(Pt(50.0).into(), Pt(790.0).into()) });
+        for (line_index, line) in chunk.iter().enumerate() {
+            if line_index > 0 {
+                operations.push(Op::AddLineBreak);
+            }
+            operations.push(Op::ShowText { items: vec![TextItem::Text(line.clone())] });
+        }
+        operations.push(Op::EndTextSection);
+        pages.push(PdfPage::new(Mm(210.0), Mm(297.0), operations));
+    }
+    let mut save_warnings = Vec::new();
+    let mut bytes = document.with_pages(pages).save(&PdfSaveOptions::default(), &mut save_warnings);
+    if bytes.starts_with(b"%PDF-1.3") {
+        bytes[7] = b'4';
+    }
+    bytes
+}
+
+fn pdf_bytes(text: &str, cover: Option<&ExportCover>) -> Vec<u8> {
+    shared_pdf_font()
+        .map(|font| pdf_bytes_embedded(text, cover, font))
+        .unwrap_or_else(|| pdf_bytes_legacy(text, cover))
 }
 
 #[tauri::command]
