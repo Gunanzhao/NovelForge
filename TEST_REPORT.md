@@ -324,3 +324,11 @@
 | Release smoke | 独立启动 release EXE 4 秒 | 通过：进程保持运行且 Responding=True，检查后正常退出 |
 
 已复核 TODO、PROGRESS、TEST_REPORT 和 DESKTOP_E2E_CHECKLIST；真实桌面鼠标级 WebView2 E2E 仍需人工按清单执行，未将进程级冒烟冒充鼠标级验收。
+
+## P2-01 AI 上下文增强验证（2026-08-30）
+
+- CodeMirror 选区同步到 AppState，当前选区和当前段落均可作为独立上下文项。
+- 最近 1/3/5/10 章按真实卷/章节顺序选择；手动正文节点和人物、地点、世界观、笔记资料继续可选。
+- 上下文预算显示字符数和预计 Token，超过 80,000 字符会在发送前明确阻止并提示。
+- 选区任务结果支持复制、替换选区、插入选区后，不提供隐式整章覆盖。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：通过，12 个测试文件 / 61 项测试。

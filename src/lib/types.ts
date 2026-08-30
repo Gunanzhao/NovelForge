@@ -80,6 +80,13 @@ export interface DocumentData {
   content: string
 }
 
+export interface EditorSelection {
+  nodeId: string
+  from: number
+  to: number
+  text: string
+}
+
 export interface Stats {
   totalWords: number
   currentVolumeWords?: number

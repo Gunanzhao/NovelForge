@@ -67,6 +67,7 @@ export function EditorPane() {
   const toggleFocusMode = useAppStore((state) => state.toggleFocusMode)
   const selectEntity = useAppStore((state) => state.selectEntity)
   const setView = useAppStore((state) => state.setView)
+  const setEditorSelection = useAppStore((state) => state.setEditorSelection)
   const editorViewRef = useRef<EditorView | null>(null)
   const [wikiResolution, setWikiResolution] = useState<{ target: string; candidates: EntityRecord[] } | null>(null)
 
@@ -86,6 +87,18 @@ export function EditorPane() {
     setView('search')
     window.setTimeout(() => window.dispatchEvent(new CustomEvent('novelforge:search-query', { detail: target })), 0)
   }, [setView])
+
+  const reportEditorSelection = useCallback((update: ViewUpdate) => {
+    const nodeId = document?.node.id
+    if (!nodeId) return
+    const selection = update.state.selection.main
+    setEditorSelection({
+      nodeId,
+      from: selection.from,
+      to: selection.to,
+      text: update.state.sliceDoc(selection.from, selection.to),
+    })
+  }, [document?.node.id, setEditorSelection])
 
   const extensions = useMemo(() => [
     markdown(),
@@ -159,7 +172,7 @@ export function EditorPane() {
       </div>
     </div>
     <div className={'editor-body mode-' + editorMode}>
-      {editorMode !== 'preview' ? <div className="editor-pane"><CodeMirror value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={(view) => { editorViewRef.current = view }} onChange={(value) => updateContent(value)} /></div> : null}
+      {editorMode !== 'preview' ? <div className="editor-pane"><CodeMirror value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={(view) => { editorViewRef.current = view; reportEditorSelection({ state: view.state } as ViewUpdate) }} onUpdate={reportEditorSelection} onChange={(value) => updateContent(value)} /></div> : null}
       {editorMode !== 'markdown' ? <div className="editor-pane"><article className="preview"><ReactMarkdown remarkPlugins={[remarkGfm]} components={previewComponents} urlTransform={(url) => url}>{preview}</ReactMarkdown></article></div> : null}
     </div>
     {wikiResolution ? <div className="wiki-resolution" role="status">

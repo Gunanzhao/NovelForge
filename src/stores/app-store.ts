@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { projectApi } from '../lib/api'
 import type {
-  DocumentData, EntityInput, EntityKind, NodeRecord, ProjectData, ProjectInput,
+  DocumentData, EditorSelection, EntityInput, EntityKind, NodeRecord, ProjectData, ProjectInput,
   ExportFormat, ExportInput, SaveState, SearchResult, Stats, ThemeMode, TrashItem, ViewId,
 } from '../lib/types'
 import {
@@ -54,6 +54,7 @@ interface AppState {
   projectPath: string | null
   data: ProjectData | null
   document: DocumentData | null
+  editorSelection: EditorSelection | null
   activeView: ViewId
   selectedEntityId: string | null
   saveState: SaveState
@@ -84,6 +85,7 @@ interface AppState {
   closeProject: () => Promise<boolean>
   loadRecent: () => void
   selectNode: (nodeId: string) => Promise<void>
+  setEditorSelection: (selection: EditorSelection | null) => void
   updateContent: (content: string) => void
   saveCurrentDocument: (reason?: string) => Promise<boolean>
   refreshData: (data: ProjectData, preserveSelection?: boolean) => Promise<void>
@@ -113,6 +115,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   projectPath: null,
   data: null,
   document: null,
+  editorSelection: null,
   activeView: 'dashboard',
   selectedEntityId: null,
   saveState: 'idle',
@@ -174,7 +177,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (!saved) throw new Error('当前正文保存失败，已取消创建新项目')
       }
       const data = await projectApi.create(input)
-      set((state) => ({ projectPath: input.path, data, document: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null }))
+      set((state) => ({ projectPath: input.path, data, document: null, editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null }))
       const chapter = firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
       set({ recentProjects: rememberProject(input.path, data) })
@@ -192,7 +195,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (!saved) throw new Error('当前正文保存失败，已取消打开其他项目')
       }
       const data = await projectApi.open(path)
-      set((state) => ({ projectPath: path, data, document: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null }))
+      set((state) => ({ projectPath: path, data, document: null, editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null }))
       const chapter = firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
       set({ recentProjects: rememberProject(path, data) })
@@ -212,6 +215,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       projectPath: null,
       data: null,
       document: null,
+      editorSelection: null,
       documentVersion: state.documentVersion + 1,
       activeView: 'dashboard',
       selectedEntityId: null,
@@ -241,13 +245,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const document = await projectApi.getDocument({ projectPath: path, nodeId })
       if (get().projectPath !== path) return
-      set((state) => ({ document, documentVersion: state.documentVersion + 1, activeView: 'manuscript', selectedEntityId: null, error: null, saveState: 'saved' }))
+      set((state) => ({ document, editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', selectedEntityId: null, error: null, saveState: 'saved' }))
     } catch (error) {
       get().setError(error)
     }
   },
 
   updateContent: (content) => set((state) => state.document ? ({ document: { ...state.document, content }, documentVersion: state.documentVersion + 1, saveState: 'idle' }) : state),
+  setEditorSelection: (selection) => set({ editorSelection: selection }),
 
   saveCurrentDocument: async (reason = '自动保存') => {
     if (activeSave) return activeSave
