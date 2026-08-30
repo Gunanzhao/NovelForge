@@ -4,8 +4,8 @@
 
 ## 执行范围
 
-本轮严格执行《NovelForge 审计修复与 V1.0 收尾计划.md》的 P1-01 至 P1-06。
-每个 P1 阶段均须完成实现、相关自动测试、全量质量门禁、PROGRESS.md 更新和独立 Git 提交。
+本轮严格执行《NovelForge 审计修复与 V1.0 收尾计划.md》的 P1-01 至 P2-02。
+每个阶段均须完成实现、相关自动测试、质量门禁、PROGRESS.md 更新和独立 Git 提交。
 
 ## P1 高优先级
 
@@ -19,7 +19,7 @@
 ## 后续跟踪
 
 - [x] P2-01 AI 上下文：支持当前选区/段落、最近 N 章、指定章节与资料，并提供预算和选区结果应用。
-- [ ] P2-02 commands.rs 模块化
+- [x] P2-02 commands.rs 模块化
 - [ ] P2-03 CI
 - [ ] P2-04 大文件性能
 - [ ] P3-01 插件 API 设计
@@ -42,3 +42,4 @@
 - 2026-08-30：P1-06 完成；建立 Rust Markdown ExportDocument AST，统一渲染 TXT/HTML/DOCX/EPUB/PDF，覆盖标题、行内格式、引用、列表、任务、链接、Wiki、代码、分割线和表格；HTML data URI、EPUB/DOCX 封面资源与 EPUB 分章导航回归通过，进入 P1 全量门禁。
 - 2026-08-30：P1 全量门禁完成；前端 typecheck/lint/test/build、Rust check/test、1000 章/100 万字 ignored 基准和 Tauri release/NSIS 构建均通过；release EXE 独立启动 4 秒并保持 Responding。桌面鼠标级 E2E 仍按清单保留为人工验收项。
 - 2026-08-30：P2-01 完成；AI 面板接入 CodeMirror 选区和当前段落、最近 1/3/5/10 章、全量指定章节/人物/地点/世界观/笔记、字符/Token 预算及选区替换/插入，前端 61 项测试通过，开始 P2-02。
+- 2026-08-31：P2-02 完成阶段迁移；commands.rs 已成为 commands/mod.rs 兼容入口，AI、搜索、统计实现已迁移到独立模块，项目/正文/资料/恢复/回收站/一致性/导出及 storage/database、filesystem、migration 领域边界已建立；cargo check、cargo test（32 项常规 + 1 项 ignored）通过。

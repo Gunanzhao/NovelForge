@@ -332,3 +332,9 @@
 - 上下文预算显示字符数和预计 Token，超过 80,000 字符会在发送前明确阻止并提示。
 - 选区任务结果支持复制、替换选区、插入选区后，不提供隐式整章覆盖。
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：通过，12 个测试文件 / 61 项测试。
+
+## P2-02 命令与存储模块化验证（2026-08-31）
+
+- commands/mod.rs 保留兼容入口；AI、搜索、统计实现分别迁移到 commands/ai.rs、commands/search.rs、commands/statistics.rs。
+- 项目、正文、资料、恢复、回收站、一致性、导出和 storage/database、filesystem、migration 领域边界已建立，后续可继续逐模块迁移而不改变 Tauri 注册接口。
+- cargo check：通过；cargo test：32 项常规测试通过，1 项大型基准按设计 ignored。

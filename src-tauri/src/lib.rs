@@ -1,6 +1,7 @@
 mod commands;
 mod models;
 
+#[path = "storage/mod.rs"]
 mod storage_impl;
 
 pub fn run() {
@@ -35,10 +36,10 @@ pub fn run() {
             commands::empty_trash,
             commands::restore_trash,
             commands::permanent_delete,
-            commands::search_project,
+            commands::search::search_project,
             commands::check_consistency,
-            commands::ai_complete,
-            commands::get_statistics,
+            commands::ai::ai_complete,
+            commands::statistics::get_statistics,
             commands::export_project,
             commands::read_logs,
             commands::update_project

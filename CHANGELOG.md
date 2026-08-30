@@ -47,6 +47,7 @@
 - 审计 P1-06：导出改为统一 Markdown AST，TXT/HTML/DOCX/EPUB/PDF 保留语义结构；TXT 纯文本清理、EPUB 分章导航、DOCX 编号/封面资源和 HTML data URI 封面均已覆盖回归。
 - P1 全量门禁：前端 58 项测试、Rust 32 项常规测试、1000 章/100 万字基准、Tauri release/NSIS 构建和独立 EXE 冒烟全部通过；仅保留真实 WebView2 桌面鼠标级 E2E 人工验收。
 - P2-01：AI 上下文支持当前选区/段落、最近 1/3/5/10 章、指定正文与资料，显示字符/Token 预算；选区任务仅可替换选区或插入选区后。
+- P2-02：commands.rs 迁移为 commands/mod.rs，AI/搜索/统计实现进入独立模块，并建立项目、正文、资料、恢复、回收站、一致性、导出及 storage 子模块边界；保持现有命令调用兼容。
 - 清理 Rust 非阻塞 dead-code 警告，保留回收站数据库字段的明确模型语义。
 - 为 React、CodeMirror、Markdown 和图标依赖增加生产分包；最大输出 chunk 降至约 364 kB，构建不再出现体积警告。
 - 修复浏览器 fallback 的卷/章/节路径、递归回收站快照恢复和二进制导出提示，并补充回归测试。

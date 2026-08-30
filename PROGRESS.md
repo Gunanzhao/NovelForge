@@ -483,3 +483,10 @@
 - 显示上下文字符数与预计 Token，超过 80,000 字符安全阈值时阻止发送并提示减少选择。
 - 润色、改写、扩写、缩写任务的结果只允许替换选区或插入选区后；普通任务仍可显式追加/替换正文。
 - 新增选区/段落/最近章节/预算/结果应用回归；pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过，前端 12 个测试文件 / 61 项测试。
+
+## 2026-08-31：P2-02 命令与存储模块化
+
+- src-tauri/src/commands.rs 移为 commands/mod.rs，保留现有命令导出以避免前端和 Rust 集成调用路径变化。
+- AI、搜索和统计命令实现已迁移到 commands/ai.rs、commands/search.rs、commands/statistics.rs；项目、正文、资料、恢复、回收站、一致性和导出边界均有独立领域模块。
+- storage_impl.rs 移为 storage/mod.rs，并建立 database、filesystem、migration 子模块边界；领域 facade 为后续无行为变化迁移提供稳定入口。
+- cargo check、cargo test 全部通过；32 项 Rust 常规测试通过，1 项大型基准按设计 ignored。
