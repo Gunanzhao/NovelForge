@@ -66,6 +66,49 @@ async function waitForPage(address = '127.0.0.1:' + port) {
   throw new Error('等待 WebView2 CDP 页面超时，地址：' + address)
 }
 
+async function waitForNoPage(address = '127.0.0.1:' + port) {
+  const base = address.startsWith('http://') ? address : 'http://' + address
+  const deadline = Date.now() + 10_000
+  let noPageChecks = 0
+  while (Date.now() < deadline) {
+    try {
+      const pages = await fetch(base + '/json/list').then((response) => response.json())
+      if (!pages.some((item) => item.type === 'page' && item.url.startsWith('http://tauri.localhost'))) {
+        noPageChecks += 1
+        if (noPageChecks >= 3) return
+      } else {
+        noPageChecks = 0
+      }
+    } catch {
+      noPageChecks += 1
+      if (noPageChecks >= 3) return
+    }
+    await sleep(200)
+  }
+  throw new Error('旧 WebView2 页面未退出：' + address)
+}
+
+function stopProcessTree(child) {
+  if (!child?.pid) return
+  if (process.platform === 'win32') {
+    try {
+      execFileSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' })
+      return
+    } catch {
+      // 进程可能已自然退出，继续走兼容的 kill。
+    }
+  }
+  if (!child.killed) child.kill()
+}
+
+async function waitForProcessExit(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return
+  await Promise.race([
+    new Promise((resolvePromise) => child.once('exit', resolvePromise)),
+    sleep(5_000),
+  ])
+}
+
 class CdpPage {
   constructor(page, handleDialogs = false) {
     this.socket = new WebSocket(page.webSocketDebuggerUrl)
@@ -135,11 +178,11 @@ async function requestJson(url, options = {}) {
   return payload
 }
 
-async function startWebDriver() {
+async function startWebDriver(resetProfile = true) {
   const driverPath = process.env.TAURI_DRIVER_PATH || resolve(homedir(), '.cargo/bin/tauri-driver.exe')
   if (!existsSync(driverPath)) throw new Error('未找到 tauri-driver.exe：' + driverPath)
   const nativeDriverPath = findNativeDriver()
-  rmSync(profile, { recursive: true, force: true })
+  if (resetProfile) rmSync(profile, { recursive: true, force: true })
   const driver = spawn(driverPath, [
     '--port', String(webdriverPort),
     '--native-port', String(nativeDriverPort),
@@ -380,10 +423,90 @@ async function chooseNativeDialog(page, mode, title, targetPath, triggerText = '
 async function waitForText(page, text) {
   const deadline = Date.now() + 10_000
   while (Date.now() < deadline) {
-    if ((await bodyText(page)).includes(text)) return
+    try {
+      if ((await bodyText(page)).includes(text)) return
+    } catch {
+      // A WebView2 navigation can briefly invalidate the execution context.
+    }
     await sleep(200)
   }
   throw new Error('页面未出现文本：' + text + '\n当前页面：\n' + await bodyText(page))
+}
+
+function findManuscriptFile(directory) {
+  let entries = []
+  try { entries = readdirSync(directory, { withFileTypes: true }) } catch { return null }
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue
+    const child = resolve(directory, entry.name)
+    if (entry.isDirectory()) {
+      const nested = findManuscriptFile(child)
+      if (nested && nested.includes('\\manuscript\\')) return nested
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md') && directory.toLowerCase().includes('\\manuscript')) {
+      return child
+    }
+  }
+  return null
+}
+
+async function runRecoveryFlow(page, projectPath, projectTitle, restartPage) {
+  const target = findManuscriptFile(projectPath)
+  if (!target) throw new Error('找不到用于保存失败验收的正文文件')
+  let lockProcess
+  if (process.platform === 'win32') {
+    const escapedTarget = target.replaceAll("'", "''")
+    const lockScript = "$stream=[IO.File]::Open('" + escapedTarget + "',[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read);try{Start-Sleep -Seconds 120}finally{$stream.Dispose()}"
+    lockProcess = spawn(process.env.NOVELFORGE_POWERSHELL || 'pwsh', ['-NoProfile', '-Command', lockScript], {
+      windowsHide: true,
+      stdio: 'ignore',
+    })
+    await sleep(350)
+    if (lockProcess.exitCode !== null) throw new Error('无法锁定正文文件用于保存失败验收')
+  }
+  try {
+    await replaceEditor(page, '# 第一章\n\n恢复验收内容')
+    await clickExact(page, '保存')
+    await waitForCondition(page, "document.body.innerText.includes('保存失败') && document.body.innerText.includes('恢复数据已保留')", '保存失败与恢复文件保留')
+    const recoveryDirectory = resolve(projectPath, '.novelforge', 'recovery')
+    if (!existsSync(recoveryDirectory) || !readdirSync(recoveryDirectory).some((name) => name.endsWith('.md'))) {
+      throw new Error('保存失败后未生成恢复文件')
+    }
+  } finally {
+    if (lockProcess && lockProcess.exitCode === null) lockProcess.kill()
+    await sleep(150)
+  }
+
+  page = await restartPage()
+  await waitForText(page, '新建小说')
+  const recentProjectVisible = await page.evaluate("(function(){return Array.from(document.querySelectorAll('button')).some((button)=>(button.textContent||'').includes(" + jsString(projectTitle) + "))})()")
+  if (recentProjectVisible) {
+    await clickText(page, projectTitle)
+  } else {
+    await clickText(page, '打开项目')
+    await waitForText(page, '打开小说项目')
+    if (nativeDialogMode) await chooseNativeDialog(page, 'folder', '选择项目文件夹', projectPath)
+    else await setField(page, '选择项目文件夹', projectPath)
+    await clickModalButton(page, '打开项目')
+  }
+  await waitForText(page, 'MANUSCRIPT / CHAPTER')
+  await clickExact(page, '总览')
+  await waitForText(page, '检测到未恢复的写作内容')
+  await clickExact(page, '查看')
+  await waitForText(page, '恢复验收内容')
+  await clickModalButton(page, '关闭')
+  await clickSelector(page, '.recovery-banner button', '恢复')
+  await waitForCondition(page, "document.querySelector('.recovery-banner') === null", '恢复提示清除')
+  await clickExact(page, '正文')
+  await ensureEditor(page, '恢复后')
+  if (!readFileSync(target, 'utf8').includes('恢复验收内容')) throw new Error('恢复文件内容未写回正文')
+  const recoveryDirectory = resolve(projectPath, '.novelforge', 'recovery')
+  if (existsSync(recoveryDirectory) && readdirSync(recoveryDirectory).some((name) => name.endsWith('.md'))) {
+    throw new Error('恢复完成后仍残留恢复文件')
+  }
+  await replaceEditor(page, '# 第一章\n\n[[林月]] 来到雾港。\n\n**关键线索**\n\n- 第一项\n- 第二项')
+  await clickExact(page, '保存')
+  await waitForText(page, '已保存')
+  console.log('RECOVERY_FAILURE_OK')
 }
 
 async function waitForExport(projectPath, extension) {
@@ -418,7 +541,7 @@ async function run() {
   let webdriver
   try {
     if (webdriverMode) {
-      webdriver = await startWebDriver()
+      webdriver = await startWebDriver(true)
       page = new CdpPage(await waitForPage(webdriver.debuggerAddress), true)
     } else {
       app = spawn(executable, [], {
@@ -434,6 +557,39 @@ async function run() {
     }
     await page.connect()
     if (!webdriverMode) await page.evaluate("window.confirm=()=>true; window.prompt=(_message, defaultValue)=>defaultValue || ''")
+    const restartPage = async () => {
+      page?.close()
+      if (webdriver?.sessionId) {
+        await requestJson('http://127.0.0.1:' + webdriverPort + '/session/' + webdriver.sessionId, { method: 'DELETE' }).catch(() => {})
+        webdriver.sessionId = null
+      }
+      const oldDriver = webdriver?.driver
+      const oldApp = app
+      stopProcessTree(oldDriver)
+      stopProcessTree(oldApp)
+      await Promise.all([waitForProcessExit(oldDriver), waitForProcessExit(oldApp)])
+      if (!webdriverMode) await waitForNoPage()
+      await sleep(700)
+      if (webdriverMode) {
+        webdriver = await startWebDriver(false)
+        page = new CdpPage(await waitForPage(webdriver.debuggerAddress), true)
+      } else {
+        const restartPort = port + 1
+        app = spawn(executable, [], {
+          env: {
+            ...process.env,
+            WEBVIEW2_USER_DATA_FOLDER: profile,
+            WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=' + restartPort,
+          },
+          windowsHide: true,
+          stdio: 'ignore',
+        })
+        page = new CdpPage(await waitForPage('127.0.0.1:' + restartPort), false)
+      }
+      await page.connect()
+      if (!webdriverMode) await page.evaluate("window.confirm=()=>true; window.prompt=(_message, defaultValue)=>defaultValue || ''")
+      return page
+    }
     if (process.env.NOVELFORGE_E2E_VERBOSE === '1') {
       console.log('INITIAL_PAGE')
       console.log(await bodyText(page))
@@ -649,6 +805,8 @@ async function run() {
     await waitForCondition(page, "document.querySelector('.command-palette') === null", '关闭命令面板')
     console.log('SETTINGS_COMMANDS_OK')
 
+    await runRecoveryFlow(page, projectPath, 'CDP 桌面验收', restartPage)
+
     if (nativeDialogMode) {
       writeFileSync(attachmentSource, 'NovelForge 原生文件选择器验收附件。\n', 'utf8')
       await clickExact(page, '资料附件')
@@ -750,8 +908,8 @@ async function run() {
     if (webdriver?.sessionId) {
       await requestJson('http://127.0.0.1:' + webdriverPort + '/session/' + webdriver.sessionId, { method: 'DELETE' }).catch(() => {})
     }
-    if (webdriver?.driver && !webdriver.driver.killed) webdriver.driver.kill()
-    if (app && !app.killed) app.kill()
+    stopProcessTree(webdriver?.driver)
+    stopProcessTree(app)
     await sleep(500)
     rmSync(profile, { recursive: true, force: true })
     rmSync(projectPath, { recursive: true, force: true })
