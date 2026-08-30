@@ -49,3 +49,10 @@
 - 影响：P3-02 仍保留人工收尾门禁；量化 rAF/overflow 采样可以作为 FPS 补充证据，但不能把它、进程 Responding、命令层耗时或结构化导出断言标记为滚动体感/阅读器视觉验收。
 - 日期：2026-08-31
 - 补充：使用可选的测试封面夹具和保留项目目录提高外部阅读器复核的可重复性；加载、UI Automation 文本和归档结构仍不等同于逐页视觉验收。
+
+## ADR-007：PDF 中文字体嵌入与无字体回退
+
+- 问题：旧版 PDF 使用 STSong-Light 外部字体声明，Edge 和 SumatraPDF 在本机实际打开时出现中文乱码。
+- 最终选择：使用 printpdf 将可用的 Windows CJK TrueType/OpenType 字体子集嵌入 PDF；支持 NOVELFORGE_PDF_FONT 覆盖路径，无可用字体时回退旧版生成器以保持跨平台测试可用。
+- 验证：commit e9ed8f3 的 release PDF 在 Edge、SumatraPDF 3.6.1 和 Poppler 中均显示正确中文与封面。
+- 日期：2026-08-31

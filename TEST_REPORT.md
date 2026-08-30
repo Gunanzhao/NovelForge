@@ -395,13 +395,13 @@
 - 代码提交 83fe730 后，前端 typecheck、lint、test -- --run、build 全部通过（13 个测试文件 / 63 项测试）。
 - Rust cargo check、cargo test 全部通过（33 项常规测试）；1000 章 / 100 万字 ignored 基准通过，耗时 52.72 秒。
 - pnpm.cmd tauri:build 通过并重新生成 release EXE/NSIS；独立进程启动 4 秒保持 Responding=True 后精确关闭。
-- 直连 CDP 和官方 WebDriver + 原生 UI Automation 两种 E2E 模式均通过全部阶段标记；剩余人工门禁仅为 CodeMirror FPS/滚动体感和外部阅读器视觉确认。
+- 直连 CDP 和官方 WebDriver + 原生 UI Automation 两种 E2E 模式均通过全部阶段标记；剩余人工门禁为 CodeMirror FPS/滚动体感和 Markdown/TXT/HTML/DOCX/EPUB 五种导出物的逐页视觉确认，PDF 已在 Edge/SumatraPDF 中完成视觉复核。
 
 ## 外部阅读器冒烟补充（2026-08-31）
 
 - Markdown/TXT 已由 Windows 记事本打开并通过 UI Automation 读取中文正文；HTML/PDF 已由独立 Edge 窗口打开。
 - DOCX 已由 LibreOffice Portable Writer 26.2.4 以只读窗口打开，且 soffice --convert-to pdf 返回 0；EPUB 已由 Calibre Portable eBook Viewer 9.14.0 打开并读取目录；SumatraPDF 3.6.1 已安装。
-- 这些是外部阅读器加载冒烟和文本/转换证据，尚未完成逐页视觉签核；CodeMirror FPS/滚动体感与导出视觉细节仍保持人工未完成状态。
+- 这些是外部阅读器加载冒烟和文本/转换证据；PDF 的中文、封面和页面布局已另行完成 Edge/SumatraPDF 视觉复核，其余五种格式仍保持逐页人工签核状态。
 
 ## 大文档 WebView2 FPS 采样（2026-08-31）
 
@@ -414,4 +414,11 @@
 
 - commit 0710bbd 增加 NOVELFORGE_E2E_COVER=1 和 NOVELFORGE_E2E_KEEP_PROJECT=1；直连 release E2E 通过全部阶段标记，FPS 为 286 帧、约 142.9 FPS，并保留项目 C:\Users\Jiang\AppData\Local\Temp\novelforge-desktop-e2e-project-30116。
 - 六种导出均生成；HTML 在独立 Edge 中加载并通过 UI Automation 读取标题、目录和中文正文；Markdown/TXT 在记事本中读取；DOCX 在 LibreOffice Portable Writer 中打开；EPUB 在 Calibre Portable 中打开并显示目录；PDF 在 Edge 与 SumatraPDF 中均显示 1 页加载状态。
-- 7-Zip 归档检查确认 DOCX 的 word/media/cover.png 与 EPUB 的 OEBPS/images/cover.png 存在。该结果是封面资源与阅读器加载证据，不替代截图/逐页视觉签核；当前视觉后端不可用。
+- 7-Zip 归档检查确认 DOCX 的 word/media/cover.png 与 EPUB 的 OEBPS/images/cover.png 存在。该结果是封面资源与阅读器加载证据，不替代五种非 PDF 格式的逐页视觉签核；PDF 视觉核对见下一节。
+
+## PDF 中文字体嵌入与跨阅读器视觉复核（2026-08-31）
+
+- commit e9ed8f3 将 Windows 系统中文字体（优先 C:\Windows\Fonts\simhei.ttf，可由 NOVELFORGE_PDF_FONT 覆盖）通过 printpdf 子集嵌入 PDF；无可用 CJK 字体时保留旧实现回退。
+- 最新 release 重新生成的 PDF 为 C:\Users\Jiang\AppData\Local\Temp\novelforge-desktop-e2e-project-33364\.novelforge\exports\CDP桌面验收-20260830220250089.pdf，大小约 5.1 MB，Poppler pdftotext/pdftohtml -xml 可读中文并识别封面图像。
+- Edge 与 SumatraPDF 3.6.1 实际窗口均显示 1 页；标题、作者、卷章标题、中文正文和测试封面均清晰，无此前 STSong-Light 未嵌入导致的乱码。
+- 因此 PDF 的跨阅读器视觉问题已关闭；剩余仍是 Markdown/TXT/HTML/DOCX/EPUB 的逐页视觉签核，以及 CodeMirror 100,000 字单章滚动/输入主观体感。

@@ -23,7 +23,7 @@
 - [x] P2-03 CI
 - [x] P2-04 大文件性能
 - [x] P3-01 插件 API 设计
-- [~] P3-02 桌面 E2E（release、官方 WebDriver 与原生对话框自动化已通过；FPS 和外部阅读器仍待人工确认）
+- [~] P3-02 桌面 E2E（release、官方 WebDriver、原生对话框和量化 FPS 已通过；PDF 跨阅读器视觉已通过，其余五种导出视觉与滚动/输入体感仍待人工确认）
 
 ## 质量门禁
 
@@ -31,7 +31,7 @@
 - [x] P1 全部完成后运行 pnpm.cmd tauri:build
 - [x] P1 全部完成后复核 DESKTOP_E2E_CHECKLIST.md、TODO.md、PROGRESS.md、TEST_REPORT.md
 - [x] P2/P3 自动门禁：前端 63 项测试、Rust 33 项常规测试、1000 章/100 万字基准、release/NSIS 构建和启动冒烟
-- [~] P3-02 人工门禁：CodeMirror FPS/滚动体感和六种导出文件在对应阅读器中的实际打开确认
+- [~] P3-02 人工门禁：CodeMirror 滚动/输入体感和 Markdown/TXT/HTML/DOCX/EPUB 五种导出文件的逐页视觉确认；PDF 已完成 Edge/SumatraPDF 实际复核
 
 ## 记录
 
@@ -56,3 +56,4 @@
 - 2026-08-31：阅读器冒烟补充；使用 Windows 记事本打开 Markdown/TXT、Edge 打开 HTML/PDF、LibreOffice Portable Writer 打开 DOCX、Calibre Portable eBook Viewer 打开 EPUB，并记录窗口标题、可访问文本或转换结果；逐页视觉核对与 CodeMirror FPS/滚动体感仍保留为人工签核，不将冒烟证据标记为完成。
 - 2026-08-31：新增可选大文档桌面采样；直连 release WebView2 2 秒 286 帧（约 142.8 FPS），官方 WebDriver + 原生对话框模式 2 秒 278 帧（约 139.0 FPS），均确认真实 editor-pane overflow 容器和 100,000 字以上分块注入/保存；滚动输入主观体感及逐页导出视觉仍待人工签核。
 - 2026-08-31：新增带测试封面的可复现导出夹具（commit 0710bbd）；直连 E2E 保留项目目录并由记事本、Edge、LibreOffice Portable、Calibre Portable、SumatraPDF 完成加载复核，DOCX/EPUB 归档确认封面资源存在；截图不可用，视觉门禁仍保持未完成。
+- 2026-08-31：PDF 跨阅读器视觉修复（commit e9ed8f3）；引入 printpdf 与 Windows CJK 字体子集嵌入，最新 release PDF 在 Edge、SumatraPDF 3.6.1 和 Poppler 中均确认中文、章节文本与测试封面可读，关闭 PDF 乱码门禁；Markdown/TXT/HTML/DOCX/EPUB 逐页视觉及 CodeMirror 主观体感仍保留人工门禁。

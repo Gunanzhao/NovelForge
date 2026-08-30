@@ -51,4 +51,4 @@
 
 - [x] Windows x64 release EXE 与 NSIS 安装包构建、启动冒烟
 - [x] P2/P3 代码收尾：AI 上下文增强、命令与存储模块边界、GitHub Actions CI、10 万字单章验收、内部插件 API
-- [~] 真实桌面验收收尾（直连 CDP、官方 Tauri WebDriver、原生文件选择器/确认框/提示框、恢复重启自动化、两种模式量化 FPS 和带测试封面的六种导出阅读器加载均已通过；仍需滚动/输入主观体感及六种导出文件逐页视觉人工确认）
+- [~] 真实桌面验收收尾（直连 CDP、官方 Tauri WebDriver、原生文件选择器/确认框/提示框、恢复重启自动化、两种模式量化 FPS 和带测试封面的六种导出阅读器加载均已通过；PDF 已在 Edge/SumatraPDF 完成视觉复核，仍需滚动/输入主观体感及 Markdown/TXT/HTML/DOCX/EPUB 五种导出文件逐页视觉人工确认）

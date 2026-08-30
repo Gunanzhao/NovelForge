@@ -60,7 +60,7 @@ src-tauri/target/release/novelforge.exe
 - 自动化结果（2026-08-31）：CORE_EDITOR_TREE_OK、DRAG_DROP_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、WIKI_NAVIGATION_OK、SETTINGS_COMMANDS_OK、RECOVERY_FAILURE_OK、NATIVE_DIALOGS_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK。
 - 性能采样结果（2026-08-31）：直连模式 2 秒 286 帧（约 142.8 FPS），WebDriver + 原生对话框模式 2 秒 278 帧（约 139.0 FPS）；真实 editor-pane 内容约 57,030 / 58,140 px、视口 670 px，替换约 655 / 715 ms、保存约 260 / 292 ms。
 - 覆盖说明：脚本在隔离 WebView2 用户目录中启动 release EXE；官方 tauri-driver + WebDriver 覆盖真实会话，UI Automation 覆盖原生文件夹/文件选择器，WebDriver 对话框事件覆盖确认/提示框。恢复流程会关闭并重新启动应用，验证恢复提示、预览、恢复写回和恢复目录清理。
-- 仍需人工记录：CodeMirror 在 100,000 字单章中的滚动输入体感，以及六种导出物的视觉细节（中文、粗体、列表、标题、目录、封面与章节顺序）。上述 FPS 是真实 WebView2 rAF/overflow 容器的量化补充，不能替代主观体感；本轮已准备官方/便携阅读器并完成外部打开冒烟，但尚未把这类证据等同于逐页人工视觉签核。
+- 仍需人工记录：CodeMirror 在 100,000 字单章中的滚动输入体感，以及 Markdown/TXT/HTML/DOCX/EPUB 五种导出物的逐页视觉细节（中文、粗体、列表、标题、目录、封面与章节顺序）。PDF 已在本机 Edge 与 SumatraPDF 中完成中文、封面和页面显示核对。上述 FPS 是真实 WebView2 rAF/overflow 容器的量化补充，不能替代主观体感。
 
 ### 阅读器冒烟记录（2026-08-31）
 
@@ -69,12 +69,12 @@ src-tauri/target/release/novelforge.exe
 - HTML：独立 Edge 窗口标题为导出文件名，页面已加载。
 - DOCX：LibreOffice Portable Writer 窗口标题为导出文件名并标记“只读”；无界面 soffice --convert-to pdf 返回 0 并生成 PDF。
 - EPUB：Calibre Portable 窗口标题为“CDP 桌面验收 [EPUB] — 电子书阅读器”，UI Automation 读取到目录和中文阅读器界面。
-- PDF：独立 Edge PDF 窗口显示“PDF Document”、1 页和第 1 页内容；SumatraPDF 3.6.1 已安装备用。
+- PDF：commit e9ed8f3 生成的嵌入中文字体版本已在独立 Edge 与 SumatraPDF 3.6.1 中实际打开；两者均显示 1 页，标题、作者、章节中文和测试封面清晰可读，Poppler 文本/图像提取同步通过。
 
 ### 带测试封面复核（2026-08-31）
 
-- commit 0710bbd 的 NOVELFORGE_E2E_COVER=1 + NOVELFORGE_E2E_KEEP_PROJECT=1 直连运行通过全部 E2E 标记和 FPS 采样（约 142.9 FPS），保留项目目录：C:\Users\Jiang\AppData\Local\Temp\novelforge-desktop-e2e-project-30116。
+- commit 0710bbd 的 NOVELFORGE_E2E_COVER=1 + NOVELFORGE_E2E_KEEP_PROJECT=1 直连运行通过全部 E2E 标记和 FPS 采样（约 142.9 FPS），最新保留项目目录：C:\Users\Jiang\AppData\Local\Temp\novelforge-desktop-e2e-project-33364。
 - 该项目生成六种导出物；HTML 的 Edge UI Automation 文本包含标题、目录、中文正文和图片占位，说明页面及封面资源已加载。
 - DOCX 的 LibreOffice Portable Writer 窗口已打开；7-Zip 检查到 word/media/cover.png。EPUB 的 Calibre Portable 窗口已打开并显示目录；7-Zip 检查到 OEBPS/images/cover.png。
-- Markdown/TXT 记事本 UI Automation 读取到标题、目录、卷章顺序和中文正文；PDF 在 Edge 与 SumatraPDF 中均显示 1 页加载状态。
-- 以上是带真实封面夹具的加载/结构证据；截图后端当前不可用，六种导出逐页视觉细节和编辑器滚动/输入体感仍需人工签核。
+- Markdown/TXT 记事本 UI Automation 读取到标题、目录、卷章顺序和中文正文；PDF 在 Edge 与 SumatraPDF 中均显示 1 页，中文与封面视觉核对通过。
+- 以上是带真实封面夹具的加载/结构证据；PDF 视觉门禁已完成，Markdown/TXT/HTML/DOCX/EPUB 的逐页视觉细节和编辑器滚动/输入体感仍需人工签核。

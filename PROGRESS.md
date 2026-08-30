@@ -562,3 +562,9 @@
 - 直连 release E2E 通过全部阶段标记和 FPS 采样（286 帧、约 142.9 FPS），本次保留目录为 C:\Users\Jiang\AppData\Local\Temp\novelforge-desktop-e2e-project-30116；六种导出均生成。
 - 真实阅读器复核：记事本读取 Markdown/TXT；Edge 加载 HTML/PDF；LibreOffice Portable Writer 打开 DOCX；Calibre Portable eBook Viewer 打开 EPUB；DOCX/EPUB 归档分别包含 word/media/cover.png 与 OEBPS/images/cover.png。
 - 该轮仍只证明加载、可访问文本和导出归档结构；当前无法取得可靠桌面截图，逐页视觉细节与滚动/输入主观体感不标记为完成。
+
+## 2026-08-31：PDF 中文字体嵌入与阅读器视觉修复
+
+- commit e9ed8f3 为 PDF 导出引入 printpdf，并优先嵌入 C:\Windows\Fonts\simhei.ttf 等本机 CJK 字体；支持 NOVELFORGE_PDF_FONT 覆盖字体路径，无字体时保留旧版回退。
+- 最新 release E2E 保留项目 C:\Users\Jiang\AppData\Local\Temp\novelforge-desktop-e2e-project-33364 的 PDF 约 5.1 MB；Poppler 文本/图像提取正常，Edge 和 SumatraPDF 3.6.1 实际窗口均显示正确中文、章节内容及测试封面。
+- 此前 Edge/Sumatra 的 STSong-Light 未嵌入乱码已修复；PDF 视觉门禁完成。剩余发布收尾为 Markdown/TXT/HTML/DOCX/EPUB 五种格式逐页视觉确认，以及 CodeMirror 100,000 字单章滚动/输入主观体感。
