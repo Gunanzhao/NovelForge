@@ -490,3 +490,9 @@
 - AI、搜索和统计命令实现已迁移到 commands/ai.rs、commands/search.rs、commands/statistics.rs；项目、正文、资料、恢复、回收站、一致性和导出边界均有独立领域模块。
 - storage_impl.rs 移为 storage/mod.rs，并建立 database、filesystem、migration 子模块边界；领域 facade 为后续无行为变化迁移提供稳定入口。
 - cargo check、cargo test 全部通过；32 项 Rust 常规测试通过，1 项大型基准按设计 ignored。
+
+## 2026-08-31：P2-03 GitHub Actions CI
+
+- 新增 .github/workflows/ci.yml，针对 main push 和 pull request 运行前端与 Rust 两个 job。
+- 前端 job 固定 pnpm 11.19.0 / Node 22，执行 frozen-lockfile 安装、typecheck、lint、test 和 production build。
+- Rust job 使用 stable toolchain 和缓存，执行 cargo check 与 cargo test；工作流不依赖本地生成产物。

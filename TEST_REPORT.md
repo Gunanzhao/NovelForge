@@ -338,3 +338,9 @@
 - commands/mod.rs 保留兼容入口；AI、搜索、统计实现分别迁移到 commands/ai.rs、commands/search.rs、commands/statistics.rs。
 - 项目、正文、资料、恢复、回收站、一致性、导出和 storage/database、filesystem、migration 领域边界已建立，后续可继续逐模块迁移而不改变 Tauri 注册接口。
 - cargo check：通过；cargo test：32 项常规测试通过，1 项大型基准按设计 ignored。
+
+## P2-03 GitHub Actions CI 验证（2026-08-31）
+
+- 已检查 .github/workflows/ci.yml 的触发器、权限、pnpm 版本、锁文件安装和 Rust 工作目录。
+- CI 在 main push / pull_request 上执行 pnpm install --frozen-lockfile、pnpm typecheck、pnpm lint、pnpm test、pnpm build、cargo check 和 cargo test。
+- GitHub 云端运行结果需在首次 push/PR 后由远程 Actions 提供；本地等价命令已在本轮各阶段通过。
