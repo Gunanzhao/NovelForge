@@ -476,11 +476,27 @@ fn validate_target_parent(
     }
 }
 
-fn next_node_location(
+fn node_path_available(
+    root: &Path,
+    nodes: &[NodeRecord],
+    relative: &str,
+    kind: &str,
+    ignored_ids: &HashSet<String>,
+) -> Result<bool, String> {
+    if nodes.iter().any(|node| !ignored_ids.contains(&node.id) && node.file_path == relative) {
+        return Ok(false);
+    }
+    let absolute = storage::safe_relative(root, relative)?;
+    let sidecar_occupied = kind == "chapter" && absolute.with_extension("").exists();
+    Ok(!absolute.exists() && !sidecar_occupied)
+}
+
+fn next_node_location_excluding(
     root: &Path,
     nodes: &[NodeRecord],
     kind: &str,
     parent: Option<&NodeRecord>,
+    ignored_ids: &HashSet<String>,
 ) -> Result<(String, i64), String> {
     let prefix = match kind {
         "volume" => "manuscript/volume_".to_string(),
@@ -500,13 +516,10 @@ fn next_node_location(
         } else {
             format!("{}{:03}.md", prefix, index)
         };
-        let occupied_in_db = nodes.iter().any(|node| node.file_path == relative);
-        let absolute = storage::safe_relative(root, &relative)?;
-        let sidecar_occupied = kind == "chapter" && absolute.with_extension("").exists();
-        if !occupied_in_db && !absolute.exists() && !sidecar_occupied {
+        if node_path_available(root, nodes, &relative, kind, ignored_ids)? {
             let sibling_order = nodes
                 .iter()
-                .filter(|node| node.parent_id.as_deref() == parent.map(|item| item.id.as_str()))
+                .filter(|node| node.deleted_at.is_none() && !ignored_ids.contains(&node.id) && node.parent_id.as_deref() == parent.map(|item| item.id.as_str()))
                 .map(|node| node.order_index)
                 .max()
                 .unwrap_or(-1)
@@ -515,6 +528,15 @@ fn next_node_location(
         }
     }
     Err("无法为节点分配新的文件路径".to_string())
+}
+
+fn next_node_location(
+    root: &Path,
+    nodes: &[NodeRecord],
+    kind: &str,
+    parent: Option<&NodeRecord>,
+) -> Result<(String, i64), String> {
+    next_node_location_excluding(root, nodes, kind, parent, &HashSet::new())
 }
 
 fn replace_path_prefix(path: &str, old_prefix: &str, new_prefix: &str) -> String {
@@ -602,6 +624,47 @@ fn rollback_node_move(source: &Path, target: &Path, kind: &str, sidecar_moved: b
     if kind == "chapter" {
         let _ = fs::create_dir_all(source.parent().unwrap_or_else(|| Path::new(".")));
     }
+}
+
+fn move_node_to_trash(
+    root: &Path,
+    original: &Path,
+    kind: &str,
+    ref_id: &str,
+) -> Result<(String, bool), String> {
+    let trash_path = storage::move_to_trash(root, original, ref_id)?;
+    if kind != "chapter" {
+        return Ok((trash_path, false));
+    }
+    let sidecar_source = original.with_extension("");
+    if !sidecar_source.exists() {
+        return Ok((trash_path, false));
+    }
+    let sidecar_target = PathBuf::from(&trash_path).with_extension("");
+    if let Err(error) = fs::rename(&sidecar_source, &sidecar_target) {
+        let _ = fs::rename(Path::new(&trash_path), original);
+        return Err(format!("移动章节小节目录到回收站失败：{}", error));
+    }
+    Ok((trash_path, true))
+}
+
+fn restore_node_from_trash(
+    original: &Path,
+    trash_path: &Path,
+    kind: &str,
+    sidecar_moved: bool,
+) -> Result<(), String> {
+    fs::rename(trash_path, original)
+        .map_err(|error| format!("恢复节点文件失败：{}", error))?;
+    if kind == "chapter" && sidecar_moved {
+        let trash_sidecar = trash_path.with_extension("");
+        let original_sidecar = original.with_extension("");
+        if let Err(error) = fs::rename(&trash_sidecar, &original_sidecar) {
+            let _ = fs::rename(original, trash_path);
+            return Err(format!("恢复章节小节目录失败：{}", error));
+        }
+    }
+    Ok(())
 }
 
 fn default_status() -> &'static str {
@@ -811,27 +874,18 @@ pub fn create_node(input: NodeInput) -> Result<ProjectData, String> {
     if !expected_parent_kind.is_empty() && parent.kind != expected_parent_kind {
         return Err(format!("{}只能创建在{}下面", input.kind, expected_parent_kind));
     }
-    let order_index: i64 = connection
-        .query_row(
-            "SELECT COALESCE(MAX(order_index), -1) + 1 FROM nodes WHERE parent_id IS ?1 AND deleted_at IS NULL",
-            params![input.parent_id],
-            |row| row.get(0),
-        )
-        .map_err(|error| format!("计算节点顺序失败：{}", error))?;
+    if parent.deleted_at.is_some() {
+        return Err("父节点不存在或已在回收站".to_string());
+    }
+    let allocation_nodes = storage::all_nodes(&connection, true)?;
     let node_id = storage::new_id();
     let timestamp = storage::now();
-    let file_path = match input.kind.as_str() {
-        "volume" => format!("manuscript/volume_{:03}", order_index + 1),
-        "chapter" => format!("{}/chapter_{:03}.md", parent.file_path, order_index + 1),
-        "section" => {
-            let chapter_directory = Path::new(&parent.file_path)
-                .with_extension("")
-                .to_string_lossy()
-                .replace('\\', "/");
-            format!("{}/section_{:03}.md", chapter_directory, order_index + 1)
-        }
-        _ => return Err("节点类型无效".to_string()),
-    };
+    let (file_path, order_index) = next_node_location(
+        &root,
+        &allocation_nodes,
+        &input.kind,
+        input.parent_id.as_ref().map(|_| &parent),
+    )?;
     let absolute_path = storage::safe_relative(&root, &file_path)?;
     if input.kind == "volume" {
         fs::create_dir_all(&absolute_path).map_err(|error| format!("创建卷目录失败：{}", error))?;
@@ -1052,6 +1106,7 @@ pub fn reorder_node(input: crate::models::ReorderNodeInput) -> Result<ProjectDat
 pub fn move_node(input: MoveNodeInput) -> Result<ProjectData, String> {
     let (root, mut connection) = project_connection(&input.project_path)?;
     let nodes = storage::all_nodes(&connection, false)?;
+    let allocation_nodes = storage::all_nodes(&connection, true)?;
     let current = nodes
         .iter()
         .find(|node| node.id == input.node_id)
@@ -1113,7 +1168,7 @@ pub fn move_node(input: MoveNodeInput) -> Result<ProjectData, String> {
         return project_data(&root, &connection);
     }
 
-    let (target_path, _) = next_node_location(&root, &nodes, &current.kind, target_parent.as_ref())?;
+    let (target_path, _) = next_node_location(&root, &allocation_nodes, &current.kind, target_parent.as_ref())?;
     let source_absolute = storage::safe_relative(&root, &current.file_path)?;
     let target_absolute = storage::safe_relative(&root, &target_path)?;
     let sidecar_moved = move_node_files(&source_absolute, &target_absolute, &current.kind)?;
@@ -1192,6 +1247,7 @@ pub fn move_node(input: MoveNodeInput) -> Result<ProjectData, String> {
 pub fn copy_node(input: CopyNodeInput) -> Result<ProjectData, String> {
     let (root, mut connection) = project_connection(&input.project_path)?;
     let nodes = storage::all_nodes(&connection, false)?;
+    let allocation_nodes = storage::all_nodes(&connection, true)?;
     let current = nodes
         .iter()
         .find(|node| node.id == input.node_id)
@@ -1203,7 +1259,7 @@ pub fn copy_node(input: CopyNodeInput) -> Result<ProjectData, String> {
     if target_parent_id.is_some_and(|id| descendants.iter().any(|item| item == id)) {
         return Err("不能将节点复制到自己的后代下面".to_string());
     }
-    let (target_path, target_order) = next_node_location(&root, &nodes, &current.kind, target_parent.as_ref())?;
+    let (target_path, target_order) = next_node_location(&root, &allocation_nodes, &current.kind, target_parent.as_ref())?;
     let source_absolute = storage::safe_relative(&root, &current.file_path)?;
     let target_absolute = storage::safe_relative(&root, &target_path)?;
     copy_path_recursive(&source_absolute, &target_absolute)?;
@@ -1363,7 +1419,7 @@ pub fn delete_node(input: crate::models::NodeActionInput) -> Result<ProjectData,
     let ids = descendant_ids(&nodes, &node.id);
     let original_path = node.file_path.clone();
     let original_absolute = storage::safe_relative(&root, &original_path)?;
-    let trash_path = storage::move_to_trash(&root, &original_absolute, &node.id)?;
+    let (trash_path, sidecar_moved) = move_node_to_trash(&root, &original_absolute, &node.kind, &node.id)?;
     let deleted_at = storage::now();
     let database_result = (|| -> Result<(), String> {
         let transaction = connection.transaction()
@@ -1387,7 +1443,7 @@ pub fn delete_node(input: crate::models::NodeActionInput) -> Result<ProjectData,
         transaction.commit().map_err(|error| format!("提交删除事务失败：{}", error))
     })();
     if let Err(error) = database_result {
-        return match fs::rename(Path::new(&trash_path), &original_absolute) {
+        return match restore_node_from_trash(&original_absolute, Path::new(&trash_path), &node.kind, sidecar_moved) {
             Ok(()) => Err(format!("{}；文件已恢复到原位置", error)),
             Err(rollback_error) => Err(format!("{}；文件回滚失败：{}", error, rollback_error)),
         };
@@ -1904,39 +1960,136 @@ pub fn restore_trash(input: crate::models::NodeActionInput) -> Result<ProjectDat
         return Err("回收站项目类型无效".to_string());
     }
     let trash_path = storage::safe_trash_path(&root, &item.trash_path)?;
-    let destination = storage::safe_relative(&root, &item.original_path)?;
-    if destination.exists() {
-        return Err("原位置已有同名内容，请先处理后再恢复".to_string());
-    }
-    let node_ids = if item.ref_kind == "node" {
-        Some(descendant_ids(&storage::all_nodes(&connection, true)?, &item.ref_id))
-    } else {
-        None
-    };
-    fs::create_dir_all(destination.parent().ok_or_else(|| "无法确定恢复目录".to_string())?)
-        .map_err(|error| format!("无法创建恢复目录：{}", error))?;
-    fs::rename(&trash_path, &destination).map_err(|error| format!("恢复文件失败：{}", error))?;
-    let database_result = (|| -> Result<(), String> {
-        let transaction = connection.transaction()
-            .map_err(|error| format!("无法开始恢复事务：{}", error))?;
-        if let Some(ids) = &node_ids {
-            for id in ids {
-                transaction.execute("UPDATE nodes SET deleted_at = NULL, deleted_path = NULL WHERE id = ?1", params![id])
-                    .map_err(|error| format!("更新恢复节点失败：{}", error))?;
-            }
-        } else {
+    if item.ref_kind == "entity" {
+        let destination = storage::safe_relative(&root, &item.original_path)?;
+        if destination.exists() {
+            return Err("原位置已有同名内容，请先处理后再恢复".to_string());
+        }
+        fs::create_dir_all(destination.parent().ok_or_else(|| "无法确定恢复目录".to_string())?)
+            .map_err(|error| format!("无法创建恢复目录：{}", error))?;
+        fs::rename(&trash_path, &destination).map_err(|error| format!("恢复文件失败：{}", error))?;
+        let database_result = (|| -> Result<(), String> {
+            let transaction = connection.transaction()
+                .map_err(|error| format!("无法开始恢复事务：{}", error))?;
             transaction.execute("UPDATE entities SET deleted_at = NULL, deleted_path = NULL WHERE id = ?1", params![item.ref_id])
                 .map_err(|error| format!("更新恢复资料失败：{}", error))?;
+            transaction.execute("DELETE FROM trash_items WHERE id = ?1", params![item.id])
+                .map_err(|error| format!("清理回收站记录失败：{}", error))?;
+            transaction.commit().map_err(|error| format!("提交恢复事务失败：{}", error))
+        })();
+        if let Err(error) = database_result {
+            return match fs::rename(&destination, &trash_path) {
+                Ok(()) => Err(format!("{}；文件已移回回收站", error)),
+                Err(rollback_error) => Err(format!("{}；文件回滚失败：{}", error, rollback_error)),
+            };
         }
-        transaction.execute("DELETE FROM trash_items WHERE id = ?1", params![item.id])
-            .map_err(|error| format!("清理回收站记录失败：{}", error))?;
-        transaction.commit().map_err(|error| format!("提交恢复事务失败：{}", error))
-    })();
-    if let Err(error) = database_result {
-        return match fs::rename(&destination, &trash_path) {
-            Ok(()) => Err(format!("{}；文件已移回回收站", error)),
-            Err(rollback_error) => Err(format!("{}；文件回滚失败：{}", error, rollback_error)),
+    } else {
+        let all_nodes = storage::all_nodes(&connection, true)?;
+        let node = all_nodes
+            .iter()
+            .find(|candidate| candidate.id == item.ref_id)
+            .cloned()
+            .ok_or_else(|| "待恢复节点不存在".to_string())?;
+        if node.deleted_at.is_none() {
+            return Err("节点不在回收站".to_string());
+        }
+        let active_nodes = storage::all_nodes(&connection, false)?;
+        let parent = node
+            .parent_id
+            .as_deref()
+            .and_then(|id| active_nodes.iter().find(|candidate| candidate.id == id))
+            .cloned();
+        if node.kind != "volume" && parent.is_none() {
+            return Err("恢复节点的父节点不存在或仍在回收站".to_string());
+        }
+        let mut ignored_ids = HashSet::new();
+        ignored_ids.insert(node.id.clone());
+        let preferred_available = node_path_available(
+            &root,
+            &all_nodes,
+            &item.original_path,
+            &node.kind,
+            &ignored_ids,
+        )?;
+        let sibling_count = active_nodes
+            .iter()
+            .filter(|candidate| candidate.parent_id == node.parent_id)
+            .count() as i64;
+        let (target_path, target_order) = if preferred_available {
+            (
+                item.original_path.clone(),
+                node.order_index.clamp(0, sibling_count),
+            )
+        } else {
+            next_node_location_excluding(
+                &root,
+                &all_nodes,
+                &node.kind,
+                parent.as_ref(),
+                &ignored_ids,
+            )?
         };
+        let destination = storage::safe_relative(&root, &target_path)?;
+        fs::create_dir_all(destination.parent().ok_or_else(|| "无法确定恢复目录".to_string())?)
+            .map_err(|error| format!("无法创建恢复目录：{}", error))?;
+        let sidecar_moved = node.kind == "chapter" && trash_path.with_extension("").is_dir();
+        restore_node_from_trash(&destination, &trash_path, &node.kind, sidecar_moved)?;
+        let timestamp = storage::now();
+        let current_prefix = node_path_prefix(&node);
+        let target_node = NodeRecord {
+            id: node.id.clone(),
+            kind: node.kind.clone(),
+            parent_id: node.parent_id.clone(),
+            title: node.title.clone(),
+            order_index: target_order,
+            status: node.status.clone(),
+            file_path: target_path.clone(),
+            created_at: node.created_at.clone(),
+            updated_at: timestamp.clone(),
+            deleted_at: None,
+            deleted_path: None,
+        };
+        let target_prefix = node_path_prefix(&target_node);
+        if let Err(error) = rewrite_node_mirror(
+            &root,
+            &node,
+            &target_path,
+            node.parent_id.as_deref(),
+            &node.title,
+            &timestamp,
+        ) {
+            let _ = restore_node_from_trash(&trash_path, &destination, &node.kind, sidecar_moved);
+            return Err(error);
+        }
+        let node_ids = descendant_ids(&all_nodes, &node.id);
+        let database_result = (|| -> Result<(), String> {
+            let transaction = connection.transaction()
+                .map_err(|error| format!("无法开始恢复事务：{}", error))?;
+            transaction.execute(
+                "UPDATE nodes SET order_index = order_index + 1, updated_at = ?1 WHERE parent_id IS ?2 AND order_index >= ?3 AND deleted_at IS NULL",
+                params![timestamp, node.parent_id, target_order],
+            ).map_err(|error| format!("整理恢复节点顺序失败：{}", error))?;
+            transaction.execute(
+                "UPDATE nodes SET parent_id = ?1, order_index = ?2, file_path = ?3, updated_at = ?4, deleted_at = NULL, deleted_path = NULL WHERE id = ?5",
+                params![node.parent_id, target_order, target_path, timestamp, node.id],
+            ).map_err(|error| format!("更新恢复节点失败：{}", error))?;
+            for child in all_nodes.iter().filter(|candidate| candidate.id != node.id && node_ids.iter().any(|id| id == &candidate.id)) {
+                let next_path = replace_path_prefix(&child.file_path, &current_prefix, &target_prefix);
+                transaction.execute(
+                    "UPDATE nodes SET file_path = ?1, updated_at = ?2, deleted_at = NULL, deleted_path = NULL WHERE id = ?3",
+                    params![next_path, timestamp, child.id],
+                ).map_err(|error| format!("更新恢复子节点失败：{}", error))?;
+            }
+            transaction.execute("DELETE FROM trash_items WHERE id = ?1", params![item.id])
+                .map_err(|error| format!("清理回收站记录失败：{}", error))?;
+            transaction.commit().map_err(|error| format!("提交恢复事务失败：{}", error))
+        })();
+        if let Err(error) = database_result {
+            return match restore_node_from_trash(&trash_path, &destination, &node.kind, sidecar_moved) {
+                Ok(()) => Err(format!("{}；文件已移回回收站", error)),
+                Err(rollback_error) => Err(format!("{}；文件回滚失败：{}", error, rollback_error)),
+            };
+        }
     }
     storage::touch_project(&root)?;
     storage::refresh_search_index(&root, &connection)?;
@@ -1962,8 +2115,31 @@ pub fn permanent_delete(input: crate::models::NodeActionInput) -> Result<Project
         return Err("回收站项目类型无效".to_string());
     }
     let trash_path = storage::safe_trash_path(&root, &item.trash_path)?;
-    let quarantine = trash_path.with_file_name(format!(".purge-{}", storage::new_id()));
+    let purge_id = storage::new_id();
+    let quarantine = trash_path.with_file_name(format!(".purge-{}", purge_id));
+    let node_kind = if item.ref_kind == "node" {
+        storage::all_nodes(&connection, true)?
+            .into_iter()
+            .find(|node| node.id == item.ref_id)
+            .map(|node| node.kind)
+    } else {
+        None
+    };
+    let trash_sidecar = node_kind
+        .as_deref()
+        .filter(|kind| *kind == "chapter")
+        .map(|_| trash_path.with_extension(""))
+        .filter(|path| path.is_dir());
+    let quarantine_sidecar = trash_sidecar
+        .as_ref()
+        .map(|_| trash_path.with_file_name(format!(".purge-{}-sidecar", purge_id)));
     fs::rename(&trash_path, &quarantine).map_err(|error| format!("隔离待永久删除内容失败：{}", error))?;
+    if let (Some(sidecar), Some(quarantine_sidecar)) = (trash_sidecar.as_ref(), quarantine_sidecar.as_ref()) {
+        if let Err(error) = fs::rename(sidecar, quarantine_sidecar) {
+            let _ = fs::rename(&quarantine, &trash_path);
+            return Err(format!("隔离章节小节目录失败：{}", error));
+        }
+    }
     let node_ids = if item.ref_kind == "node" {
         Some(descendant_ids(&storage::all_nodes(&connection, true)?, &item.ref_id))
     } else {
@@ -1990,15 +2166,26 @@ pub fn permanent_delete(input: crate::models::NodeActionInput) -> Result<Project
         transaction.commit().map_err(|error| format!("提交永久删除事务失败：{}", error))
     })();
     if let Err(error) = database_result {
-        return match fs::rename(&quarantine, &trash_path) {
-            Ok(()) => Err(format!("{}；回收站内容已恢复", error)),
-            Err(rollback_error) => Err(format!("{}；回收站内容回滚失败：{}", error, rollback_error)),
+        let sidecar_result = match (quarantine_sidecar.as_ref(), trash_sidecar.as_ref()) {
+            (Some(source), Some(target)) if source.exists() => fs::rename(source, target)
+                .map_err(|error| format!("章节小节目录回滚失败：{}", error)),
+            _ => Ok(()),
+        };
+        let file_result = fs::rename(&quarantine, &trash_path)
+            .map_err(|error| format!("回收站内容回滚失败：{}", error));
+        return match (sidecar_result, file_result) {
+            (Ok(()), Ok(())) => Err(format!("{}；回收站内容已恢复", error)),
+            (Err(sidecar_error), _) => Err(format!("{}；{}；回收站文件可能已恢复", error, sidecar_error)),
+            (_, Err(file_error)) => Err(format!("{}；{}", error, file_error)),
         };
     }
     if quarantine.is_dir() {
         fs::remove_dir_all(&quarantine).map_err(|error| format!("清理永久删除目录失败：{}", error))?;
     } else {
         fs::remove_file(&quarantine).map_err(|error| format!("清理永久删除文件失败：{}", error))?;
+    }
+    if let Some(quarantine_sidecar) = quarantine_sidecar.filter(|path| path.exists()) {
+        fs::remove_dir_all(&quarantine_sidecar).map_err(|error| format!("清理永久删除小节目录失败：{}", error))?;
     }
     storage::touch_project(&root)?;
     project_data(&root, &connection)

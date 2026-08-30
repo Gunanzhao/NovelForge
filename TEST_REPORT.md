@@ -275,3 +275,10 @@
 - 无 frontmatter 的旧项目仍可恢复，生成新 UUID，并在项目日志写入 database_recovery_legacy_metadata WARN。
 - cargo test：28 项常规测试通过，1 项大型基准按设计忽略；新增稳定关联和旧格式兼容测试均通过。
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：12 个测试文件 / 54 项测试全部通过。
+
+## P1-02 回收站路径复用验证（2026-08-30）
+
+- 路径分配同时检查活动/删除节点记录、实际文件和章节 sidecar；创建替代章节不会复用已删除原路径。
+- 删除、恢复和永久删除章节时 sidecar 与正文保持一致；恢复冲突时路径和兄弟顺序均保持唯一。
+- cargo test：29 项常规测试通过，1 项大型基准按设计忽略；新增路径复用集成测试通过。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：12 个测试文件 / 54 项测试全部通过。

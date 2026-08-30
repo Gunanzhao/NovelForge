@@ -499,6 +499,119 @@ fn move_and_copy_nodes_keep_markdown_files_and_tree_paths_in_sync() {
 }
 
 #[test]
+fn trash_path_reuse_allocates_unique_path_and_restores_sidecar() {
+    let root = test_root("trash-path-reuse");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "回收站路径复用".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "现代".to_string(),
+        target_words: 1000,
+    })
+    .expect("create project");
+    let volume = created.nodes.iter().find(|node| node.kind == "volume").expect("volume").clone();
+    let first_chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("first chapter").clone();
+    let second_data = super::commands::create_node(super::models::NodeInput {
+        project_path: project_path.clone(),
+        kind: "chapter".to_string(),
+        title: "第二章".to_string(),
+        parent_id: Some(volume.id.clone()),
+    })
+    .expect("create second chapter");
+    let second = second_data.nodes.iter().find(|node| node.title == "第二章").expect("second chapter").clone();
+    let section_data = super::commands::create_node(super::models::NodeInput {
+        project_path: project_path.clone(),
+        kind: "section".to_string(),
+        title: "第二章·节".to_string(),
+        parent_id: Some(second.id.clone()),
+    })
+    .expect("create section");
+    let section = section_data.nodes.iter().find(|node| node.kind == "section").expect("section").clone();
+    super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(),
+        node_id: second.id.clone(),
+        content: "# 第二章\n\n旧章节正文".to_string(),
+        reason: "路径复用测试".to_string(),
+    })
+    .expect("save second chapter");
+    super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(),
+        node_id: section.id.clone(),
+        content: "# 第二章·节\n\n小节正文".to_string(),
+        reason: "路径复用测试".to_string(),
+    })
+    .expect("save section");
+    let second_absolute = root.join("project").join(&second.file_path);
+    let second_sidecar = second_absolute.with_extension("");
+    assert!(second_sidecar.is_dir());
+    super::commands::delete_node(super::models::NodeActionInput {
+        project_path: project_path.clone(),
+        node_id: second.id.clone(),
+    })
+    .expect("delete second chapter");
+    assert!(!second_absolute.exists());
+    assert!(!second_sidecar.exists());
+    let trash = super::commands::list_trash(project_path.clone()).expect("list trash");
+    let trash_item = trash.iter().find(|item| item.ref_id == second.id).expect("second trash item").clone();
+    let trash_file = std::path::PathBuf::from(&trash_item.trash_path);
+    assert!(trash_file.is_file());
+    assert!(trash_file.with_extension("").is_dir());
+
+    let new_data = super::commands::create_node(super::models::NodeInput {
+        project_path: project_path.clone(),
+        kind: "chapter".to_string(),
+        title: "新章节".to_string(),
+        parent_id: Some(volume.id.clone()),
+    })
+    .expect("create replacement chapter");
+    let replacement = new_data.nodes.iter().find(|node| node.title == "新章节").expect("replacement").clone();
+    assert_ne!(replacement.file_path, second.file_path);
+    assert!(replacement.file_path.ends_with("chapter_003.md"));
+    let restored = super::commands::restore_trash(super::models::NodeActionInput {
+        project_path: project_path.clone(),
+        node_id: trash_item.id.clone(),
+    })
+    .expect("restore second chapter");
+    let restored_chapter = restored.nodes.iter().find(|node| node.id == second.id).expect("restored chapter");
+    let restored_section = restored.nodes.iter().find(|node| node.id == section.id).expect("restored section");
+    assert_eq!(restored_chapter.file_path, second.file_path);
+    assert_eq!(restored_section.file_path, section.file_path);
+    assert_eq!(restored_section.parent_id.as_deref(), Some(second.id.as_str()));
+    assert_eq!(
+        storage::strip_markdown_frontmatter(&fs::read_to_string(root.join("project").join(&restored_chapter.file_path)).expect("restored chapter file")),
+        "# 第二章\n\n旧章节正文"
+    );
+    assert_eq!(
+        storage::strip_markdown_frontmatter(&fs::read_to_string(root.join("project").join(&restored_section.file_path)).expect("restored section file")),
+        "# 第二章·节\n\n小节正文"
+    );
+    let sibling_orders: Vec<i64> = restored.nodes.iter()
+        .filter(|node| node.parent_id.as_deref() == Some(volume.id.as_str()))
+        .map(|node| node.order_index)
+        .collect();
+    assert_eq!(sibling_orders.len(), 3);
+    assert_eq!(sibling_orders.iter().collect::<std::collections::HashSet<_>>().len(), sibling_orders.len());
+
+    super::commands::delete_node(super::models::NodeActionInput {
+        project_path: project_path.clone(),
+        node_id: second.id.clone(),
+    })
+    .expect("delete restored chapter");
+    let restored_trash = super::commands::list_trash(project_path.clone()).expect("list restored trash");
+    let restored_item = restored_trash.iter().find(|item| item.ref_id == second.id).expect("restored trash item").clone();
+    super::commands::permanent_delete(super::models::NodeActionInput {
+        project_path: project_path.clone(),
+        node_id: restored_item.id,
+    })
+    .expect("permanently delete restored chapter");
+    assert!(!second_sidecar.exists());
+    let _ = fs::remove_file(root.join("project").join(&first_chapter.file_path));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn trash_path_must_stay_inside_project() {
     let root = test_root("trash-boundary");
     storage::create_project_directories(&root).expect("project directories");
