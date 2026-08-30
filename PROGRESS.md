@@ -502,3 +502,10 @@
 - 新增 single_chapter_100k_chinese_acceptance_covers_edit_search_and_reopen Rust 测试，使用超过 100,000 个中文字符，执行打开、编辑、插入、删除、搜索、保存和重新打开。
 - 定向 cargo test 通过（1 passed，约 0.13 秒）；既有 1,000 章 / 1,000,000 字 ignored 基准继续保留。
 - CodeMirror 在真实 WebView2 中的帧率和滚动体感无法由当前 Rust/浏览器单测替代，已在 DESKTOP_E2E_CHECKLIST.md 增加人工记录项。
+
+## 2026-08-31：P3-01 插件 API 与内部 Registry
+
+- 新增 docs/PLUGIN_API.md，定义 NovelForgePlugin、PluginContext 及 command/sidebar tool/menu/generator/exporter/panel 六类扩展点。
+- 新增 src/lib/plugin-registry.ts，提供进程内 PluginRegistry、唯一 ID 校验、暂存后原子合并和内置插件清单。
+- builtin.name-generator 复用本地规则名字生成器，builtin.consistency 复用结构化一致性检查；当前不从磁盘加载或执行任意外部 JavaScript。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；13 个测试文件 / 63 项测试。

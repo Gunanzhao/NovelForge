@@ -50,7 +50,7 @@ pnpm tauri build
 
 正文不进入数据库专有格式，而是保存在项目 manuscript/ 下的普通 Markdown 文件。SQLite 数据库位于 .novelforge/database.sqlite，恢复文件位于 .novelforge/recovery/，历史位于 .novelforge/history/。删除内容先移动到 trash/，不会直接永久删除。
 
-详细产品范围见 SPEC.md，任务状态见 TODO.md 和 PROGRESS.md。
+详细产品范围见 SPEC.md，任务状态见 TODO.md 和 PROGRESS.md；插件扩展协议见 docs/PLUGIN_API.md，审计收尾记录见 AUDIT_FIX_PLAN.md。
 
 ## 当前范围
 

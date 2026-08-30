@@ -22,7 +22,7 @@
 - [x] P2-02 commands.rs 模块化
 - [x] P2-03 CI
 - [x] P2-04 大文件性能
-- [ ] P3-01 插件 API 设计
+- [x] P3-01 插件 API 设计
 - [ ] P3-02 桌面 E2E
 
 ## 质量门禁
@@ -45,3 +45,4 @@
 - 2026-08-31：P2-02 完成阶段迁移；commands.rs 已成为 commands/mod.rs 兼容入口，AI、搜索、统计实现已迁移到独立模块，项目/正文/资料/恢复/回收站/一致性/导出及 storage/database、filesystem、migration 领域边界已建立；cargo check、cargo test（32 项常规 + 1 项 ignored）通过。
 - 2026-08-31：P2-03 完成；新增 .github/workflows/ci.yml，在 main 的 push/PR 上执行 pnpm install --frozen-lockfile、typecheck、lint、test、build 及 cargo check/test。
 - 2026-08-31：P2-04 完成；新增 10 万中文单章真实命令链测试，覆盖打开、编辑、插入、删除、搜索、保存和重开，定向测试通过 1/1（约 0.13 秒）；WebView2/CodeMirror FPS 仍列入桌面人工清单。
+- 2026-08-31：P3-01 完成；新增 docs/PLUGIN_API.md、进程内 PluginRegistry 和六类扩展点，内置名字生成器与一致性检查通过注册协议接入；明确 V1.0 不加载或执行任意外部 JavaScript，前端 63 项测试通过。

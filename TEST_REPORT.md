@@ -350,3 +350,9 @@
 - 新增真实命令链：生成超过 100,000 个中文字符的单章，打开、插入、删除、搜索、保存、重开并核对最终正文。
 - cargo test --manifest-path src-tauri/Cargo.toml single_chapter_100k_chinese_acceptance_covers_edit_search_and_reopen -- --nocapture：通过，1 passed，约 0.13 秒。
 - WebView2/CodeMirror 的 FPS、滚动和输入体感属于桌面人工验收，已补入 DESKTOP_E2E_CHECKLIST.md；未将命令层耗时冒充 UI 帧率结论。
+
+## P3-01 插件 API 与内部 Registry 验证（2026-08-31）
+
+- PluginRegistry 测试覆盖两个内置插件、六类扩展点、唯一 ID 冲突和注册失败原子性。
+- 前端门禁：pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；13 个测试文件 / 63 项测试。
+- API 文档明确 V1.0 只允许源码显式注册，不加载或执行任意外部 JavaScript；V1.x 加载器需另行完成 manifest、权限和沙箱设计。
