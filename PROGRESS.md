@@ -415,3 +415,12 @@
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；前端 12 个测试文件 / 54 项测试。
 - cargo check、cargo test 全部通过；Rust 26 项常规测试，1 项大型基准按设计忽略。
 - 1000 章 / 100 万字大型基准再次通过，耗时 51.86 秒；release EXE 与 NSIS 安装包均已生成，工作区保持干净。
+
+## 2026-08-30：P1-01 数据库恢复 UUID
+
+- 正文节点和资料 Markdown 镜像新增轻量 NovelForge frontmatter；编辑器、统计、搜索、历史和导出均剥离内部元数据，正文仍保持普通可读 Markdown。
+- 新建、保存、重命名、移动和复制会同步稳定 ID、类型、父级、状态和时间；卷使用隐藏的 .novelforge.md 元数据镜像。
+- 损坏 SQLite 后按镜像恢复节点、资料、历史快照索引及原有关系；缺少元数据的旧项目继续恢复并写入明确 WARN。
+- 新增关系、地点树、章节大纲/场景和历史关联恢复测试，以及旧项目兼容测试。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；12 个测试文件 / 54 项测试。
+- cargo check、cargo test 全部通过；28 项 Rust 常规测试，1 项大型基准按设计忽略。

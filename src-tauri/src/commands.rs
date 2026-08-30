@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::collections::{HashMap, HashSet};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
+use uuid::Uuid;
 
 fn project_connection(path: &str) -> Result<(PathBuf, Connection), String> {
     let root = storage::existing_project_root(path)?;
@@ -94,63 +95,227 @@ fn relative_path(root: &Path, path: &Path) -> Result<String, String> {
 
 fn markdown_title(path: &Path, fallback: &str) -> String {
     fs::read_to_string(path).ok()
+        .map(|content| storage::strip_markdown_frontmatter(&content))
         .and_then(|content| content.lines().find_map(|line| line.strip_prefix("# ").map(str::trim).filter(|value| !value.is_empty()).map(str::to_string)))
         .unwrap_or_else(|| fallback.to_string())
 }
 
-fn rebuild_nodes_from_markdown(root: &Path, connection: &Connection) -> Result<(), String> {
-    let manuscript = storage::safe_relative(root, "manuscript")?;
-    if !manuscript.is_dir() { return Ok(()); }
-    let mut volume_order = 0_i64;
-    for volume_path in directory_entries(&manuscript)?.into_iter().filter(|path| path.is_dir()) {
-        let volume_name = volume_path.file_name().and_then(|name| name.to_str()).unwrap_or("Recovered Volume");
-        let volume_id = storage::new_id();
-        let volume_relative = relative_path(root, &volume_path)?;
-        let timestamp = storage::now();
-        insert_node(connection, &NodeRecord {
-            id: volume_id.clone(), kind: "volume".to_string(), parent_id: None,
-            title: volume_name.to_string(), order_index: volume_order, status: default_status().to_string(),
-            file_path: volume_relative, created_at: timestamp.clone(), updated_at: timestamp,
-            deleted_at: None, deleted_path: None,
-        })?;
-        volume_order += 1;
-        let chapter_files = directory_entries(&volume_path)?.into_iter().filter(|path| path.is_file() && path.extension().and_then(|value| value.to_str()) == Some("md")).collect::<Vec<_>>();
-        for (chapter_order, chapter_path) in chapter_files.into_iter().enumerate() {
-            let chapter_id = storage::new_id();
-            let chapter_relative = relative_path(root, &chapter_path)?;
-            let chapter_title = markdown_title(&chapter_path, chapter_path.file_stem().and_then(|name| name.to_str()).unwrap_or("Recovered Chapter"));
-            let timestamp = storage::now();
-            insert_node(connection, &NodeRecord {
-                id: chapter_id.clone(), kind: "chapter".to_string(), parent_id: Some(volume_id.clone()),
-                title: chapter_title, order_index: chapter_order as i64, status: "draft".to_string(),
-                file_path: chapter_relative.clone(), created_at: timestamp.clone(), updated_at: timestamp,
-                deleted_at: None, deleted_path: None,
-            })?;
-            let content = fs::read_to_string(&chapter_path).unwrap_or_default();
-            storage::index_record(connection, &chapter_id, "chapter", &markdown_title(&chapter_path, "Recovered Chapter"), &content, &chapter_relative)?;
-            let section_directory = chapter_path.with_extension("");
-            if !section_directory.is_dir() { continue; }
-            for (section_order, section_path) in directory_entries(&section_directory)?.into_iter().filter(|path| path.is_file() && path.extension().and_then(|value| value.to_str()) == Some("md")).enumerate() {
-                let section_id = storage::new_id();
-                let section_relative = relative_path(root, &section_path)?;
-                let section_title = markdown_title(&section_path, section_path.file_stem().and_then(|name| name.to_str()).unwrap_or("Recovered Section"));
-                let timestamp = storage::now();
-                insert_node(connection, &NodeRecord {
-                    id: section_id.clone(), kind: "section".to_string(), parent_id: Some(chapter_id.clone()),
-                    title: section_title, order_index: section_order as i64, status: "draft".to_string(),
-                    file_path: section_relative.clone(), created_at: timestamp.clone(), updated_at: timestamp,
-                    deleted_at: None, deleted_path: None,
-                })?;
-                let content = fs::read_to_string(&section_path).unwrap_or_default();
-                storage::index_record(connection, &section_id, "section", &markdown_title(&section_path, "Recovered Section"), &content, &section_relative)?;
+fn recovered_id(
+    metadata: Option<&storage::MirrorMetadata>,
+    expected_kind: &str,
+    used_ids: &mut HashSet<String>,
+) -> (String, bool) {
+    if let Some(metadata) = metadata {
+        if metadata.kind.as_deref().is_none_or(|kind| kind == expected_kind) {
+            if let Some(candidate) = metadata.id.as_deref().filter(|value| Uuid::parse_str(value).is_ok()) {
+                if used_ids.insert(candidate.to_string()) {
+                    return (candidate.to_string(), false);
+                }
             }
         }
     }
-    Ok(())
+    let id = loop {
+        let candidate = storage::new_id();
+        if used_ids.insert(candidate.clone()) {
+            break candidate;
+        }
+    };
+    (id, true)
 }
 
-fn parse_entity_mirror(path: &Path, fallback_title: &str) -> Option<(String, Vec<String>, serde_json::Value)> {
+fn metadata_timestamp(value: Option<&String>, fallback: &str) -> String {
+    value.cloned().filter(|value| !value.trim().is_empty()).unwrap_or_else(|| fallback.to_string())
+}
+
+fn metadata_parent_id(metadata: Option<&storage::MirrorMetadata>) -> Option<String> {
+    metadata.and_then(|value| value.parent_id.clone()).filter(|value| !value.trim().is_empty())
+}
+
+fn should_skip_mirror(path: &Path) -> bool {
+    path.file_name().and_then(|value| value.to_str()) == Some(".novelforge.md")
+}
+
+fn rebuild_nodes_from_markdown(root: &Path, connection: &Connection) -> Result<usize, String> {
+    let manuscript = storage::safe_relative(root, "manuscript")?;
+    if !manuscript.is_dir() {
+        return Ok(0);
+    }
+    let mut volume_order = 0_i64;
+    let mut legacy_count = 0_usize;
+    let mut used_ids = HashSet::new();
+    let mut id_map = HashMap::new();
+    for volume_path in directory_entries(&manuscript)?.into_iter().filter(|path| path.is_dir()) {
+        let volume_meta_path = volume_path.join(".novelforge.md");
+        let (volume_metadata, _volume_body) = if volume_meta_path.is_file() {
+            let raw = fs::read_to_string(&volume_meta_path)
+                .map_err(|error| format!("读取卷元数据失败：{}", error))?;
+            storage::parse_markdown_mirror(&raw)
+        } else {
+            (None, String::new())
+        };
+        let (volume_id, volume_legacy) = recovered_id(volume_metadata.as_ref(), "volume", &mut used_ids);
+        if volume_legacy {
+            legacy_count += 1;
+        }
+        if let Some(old_id) = volume_metadata.as_ref().and_then(|metadata| metadata.id.as_ref()) {
+            id_map.insert(old_id.clone(), volume_id.clone());
+        }
+        let volume_name = volume_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.title.clone())
+            .filter(|title| !title.trim().is_empty())
+            .or_else(|| volume_meta_path.is_file().then(|| markdown_title(&volume_meta_path, "")))
+            .filter(|title| !title.trim().is_empty())
+            .unwrap_or_else(|| volume_path.file_name().and_then(|name| name.to_str()).unwrap_or("Recovered Volume").to_string());
+        let timestamp = storage::now();
+        let volume_status = volume_metadata
+            .as_ref()
+            .and_then(|metadata| metadata.status.as_deref())
+            .unwrap_or(default_status())
+            .to_string();
+        let volume_created = metadata_timestamp(volume_metadata.as_ref().and_then(|metadata| metadata.created_at.as_ref()), &timestamp);
+        let volume_updated = metadata_timestamp(volume_metadata.as_ref().and_then(|metadata| metadata.updated_at.as_ref()), &timestamp);
+        let volume_mirror = storage::markdown_volume(&volume_id, &volume_name, &volume_status, &volume_created, &volume_updated);
+        if !volume_meta_path.is_file() || volume_metadata.is_none() {
+            let _ = storage::atomic_write(&volume_meta_path, volume_mirror.as_bytes());
+        }
+        let volume_relative = relative_path(root, &volume_path)?;
+        insert_node(connection, &NodeRecord {
+            id: volume_id.clone(), kind: "volume".to_string(), parent_id: None,
+            title: volume_name, order_index: volume_order, status: volume_status,
+            file_path: volume_relative, created_at: volume_created, updated_at: volume_updated,
+            deleted_at: None, deleted_path: None,
+        })?;
+        volume_order += 1;
+        let chapter_files = directory_entries(&volume_path)?
+            .into_iter()
+            .filter(|path| path.is_file() && !should_skip_mirror(path) && path.extension().and_then(|value| value.to_str()) == Some("md"))
+            .collect::<Vec<_>>();
+        for (chapter_order, chapter_path) in chapter_files.into_iter().enumerate() {
+            let raw = fs::read_to_string(&chapter_path)
+                .map_err(|error| format!("读取章节正文失败：{}", error))?;
+            let (metadata, body) = storage::parse_markdown_mirror(&raw);
+            let (chapter_id, chapter_legacy) = recovered_id(metadata.as_ref(), "chapter", &mut used_ids);
+            if chapter_legacy {
+                legacy_count += 1;
+            }
+            if let Some(old_id) = metadata.as_ref().and_then(|value| value.id.as_ref()) {
+                id_map.insert(old_id.clone(), chapter_id.clone());
+            }
+            let parent_id = metadata_parent_id(metadata.as_ref())
+                .and_then(|old_id| id_map.get(&old_id).cloned())
+                .or_else(|| Some(volume_id.clone()));
+            let fallback_title = chapter_path.file_stem().and_then(|name| name.to_str()).unwrap_or("Recovered Chapter");
+            let chapter_title = metadata
+                .as_ref()
+                .and_then(|value| value.title.clone())
+                .filter(|title| !title.trim().is_empty())
+                .unwrap_or_else(|| markdown_title(&chapter_path, fallback_title));
+            let timestamp = storage::now();
+            let chapter_status = metadata
+                .as_ref()
+                .and_then(|value| value.status.as_deref())
+                .unwrap_or("draft")
+                .to_string();
+            let chapter_created = metadata_timestamp(metadata.as_ref().and_then(|value| value.created_at.as_ref()), &timestamp);
+            let chapter_updated = metadata_timestamp(metadata.as_ref().and_then(|value| value.updated_at.as_ref()), &timestamp);
+            let chapter_body = replace_markdown_title(&body, &chapter_title);
+            let canonical = storage::markdown_node(
+                &chapter_id,
+                "chapter",
+                parent_id.as_deref(),
+                &chapter_status,
+                &chapter_created,
+                &chapter_updated,
+                &chapter_body,
+            );
+            if canonical != raw {
+                let _ = storage::atomic_write(&chapter_path, canonical.as_bytes());
+            }
+            let chapter_relative = relative_path(root, &chapter_path)?;
+            insert_node(connection, &NodeRecord {
+                id: chapter_id.clone(), kind: "chapter".to_string(), parent_id,
+                title: chapter_title.clone(), order_index: chapter_order as i64, status: chapter_status,
+                file_path: chapter_relative.clone(), created_at: chapter_created, updated_at: chapter_updated,
+                deleted_at: None, deleted_path: None,
+            })?;
+            storage::index_record(&connection, &chapter_id, "chapter", &chapter_title, &chapter_body, &chapter_relative)?;
+            let section_directory = chapter_path.with_extension("");
+            if !section_directory.is_dir() {
+                continue;
+            }
+            for (section_order, section_path) in directory_entries(&section_directory)?
+                .into_iter()
+                .filter(|path| path.is_file() && !should_skip_mirror(path) && path.extension().and_then(|value| value.to_str()) == Some("md"))
+                .enumerate()
+            {
+                let raw = fs::read_to_string(&section_path)
+                    .map_err(|error| format!("读取小节正文失败：{}", error))?;
+                let (metadata, body) = storage::parse_markdown_mirror(&raw);
+                let (section_id, section_legacy) = recovered_id(metadata.as_ref(), "section", &mut used_ids);
+                if section_legacy {
+                    legacy_count += 1;
+                }
+                if let Some(old_id) = metadata.as_ref().and_then(|value| value.id.as_ref()) {
+                    id_map.insert(old_id.clone(), section_id.clone());
+                }
+                let parent_id = metadata_parent_id(metadata.as_ref())
+                    .and_then(|old_id| id_map.get(&old_id).cloned())
+                    .or_else(|| Some(chapter_id.clone()));
+                let fallback_title = section_path.file_stem().and_then(|name| name.to_str()).unwrap_or("Recovered Section");
+                let section_title = metadata
+                    .as_ref()
+                    .and_then(|value| value.title.clone())
+                    .filter(|title| !title.trim().is_empty())
+                    .unwrap_or_else(|| markdown_title(&section_path, fallback_title));
+                let timestamp = storage::now();
+                let section_status = metadata
+                    .as_ref()
+                    .and_then(|value| value.status.as_deref())
+                    .unwrap_or("draft")
+                    .to_string();
+                let section_created = metadata_timestamp(metadata.as_ref().and_then(|value| value.created_at.as_ref()), &timestamp);
+                let section_updated = metadata_timestamp(metadata.as_ref().and_then(|value| value.updated_at.as_ref()), &timestamp);
+                let section_body = replace_markdown_title(&body, &section_title);
+                let canonical = storage::markdown_node(
+                    &section_id,
+                    "section",
+                    parent_id.as_deref(),
+                    &section_status,
+                    &section_created,
+                    &section_updated,
+                    &section_body,
+                );
+                if canonical != raw {
+                    let _ = storage::atomic_write(&section_path, canonical.as_bytes());
+                }
+                let section_relative = relative_path(root, &section_path)?;
+                insert_node(connection, &NodeRecord {
+                    id: section_id.clone(), kind: "section".to_string(), parent_id,
+                    title: section_title.clone(), order_index: section_order as i64, status: section_status,
+                    file_path: section_relative.clone(), created_at: section_created, updated_at: section_updated,
+                    deleted_at: None, deleted_path: None,
+                })?;
+                storage::index_record(&connection, &section_id, "section", &section_title, &section_body, &section_relative)?;
+            }
+        }
+    }
+    Ok(legacy_count)
+}
+
+fn parse_entity_value(value: String) -> serde_json::Value {
+    let trimmed = value.trim();
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        if !matches!(parsed, serde_json::Value::String(_)) {
+            return parsed;
+        }
+    }
+    serde_json::Value::String(value)
+}
+
+fn parse_entity_mirror(path: &Path, fallback_title: &str) -> Option<(String, Vec<String>, serde_json::Value, Option<storage::MirrorMetadata>)> {
     let raw = fs::read_to_string(path).ok()?;
+    let (metadata, body) = storage::parse_markdown_mirror(&raw);
     let mut title = fallback_title.to_string();
     let mut tags = Vec::new();
     let mut fields = serde_json::Map::new();
@@ -160,11 +325,11 @@ fn parse_entity_mirror(path: &Path, fallback_title: &str) -> Option<(String, Vec
     let mut flush_section = |key: &mut Option<String>, lines: &mut Vec<String>| {
         if let Some(name) = key.take() {
             let value = lines.join("\n").trim().to_string();
-            if !value.is_empty() { fields.insert(name, serde_json::Value::String(value)); }
+            if !value.is_empty() { fields.insert(name, parse_entity_value(value)); }
         }
         lines.clear();
     };
-    for line in raw.lines() {
+    for line in body.lines() {
         if let Some(value) = line.strip_prefix("# ").map(str::trim).filter(|value| !value.is_empty()) {
             title = value.to_string();
         } else if let Some(value) = line.strip_prefix("标签：") {
@@ -184,39 +349,105 @@ fn parse_entity_mirror(path: &Path, fallback_title: &str) -> Option<(String, Vec
     if !trailing_lines.is_empty() && !fields.contains_key("description") {
         fields.insert("description".to_string(), serde_json::Value::String(trailing_lines.join("\n").trim().to_string()));
     }
-    Some((title, tags, serde_json::Value::Object(fields)))
+    Some((title, tags, serde_json::Value::Object(fields), metadata))
 }
 
-fn rebuild_entities_from_markdown(root: &Path, connection: &Connection) -> Result<(), String> {
+fn rebuild_entities_from_markdown(root: &Path, connection: &Connection) -> Result<usize, String> {
+    let mut legacy_count = 0_usize;
+    let mut used_ids = HashSet::new();
     for (kind, directory) in [
         ("character", "characters"), ("location", "locations"), ("world", "world"),
         ("timeline", "timeline"), ("outline", "outlines"), ("scene", "scenes"),
         ("foreshadowing", "foreshadowing"), ("relationship", "relationships"), ("note", "notes"),
     ] {
         let directory_path = storage::safe_relative(root, directory)?;
-        if !directory_path.is_dir() { continue; }
+        if !directory_path.is_dir() {
+            continue;
+        }
         for path in directory_entries(&directory_path)?.into_iter().filter(|path| path.is_file() && path.extension().and_then(|value| value.to_str()) == Some("md")) {
             let fallback = path.file_stem().and_then(|name| name.to_str()).unwrap_or("Recovered Entry");
-            let Some((title, tags, content)) = parse_entity_mirror(&path, fallback) else { continue };
-            let id = storage::new_id();
+            let Some((title, tags, content, metadata)) = parse_entity_mirror(&path, fallback) else { continue };
+            let (id, legacy) = recovered_id(metadata.as_ref(), kind, &mut used_ids);
+            if legacy {
+                legacy_count += 1;
+            }
             let relative = relative_path(root, &path)?;
             let timestamp = storage::now();
+            let created_at = metadata_timestamp(metadata.as_ref().and_then(|value| value.created_at.as_ref()), &timestamp);
+            let updated_at = metadata_timestamp(metadata.as_ref().and_then(|value| value.updated_at.as_ref()), &timestamp);
+            let canonical = storage::markdown_entity_with_metadata(
+                &id,
+                kind,
+                &created_at,
+                &updated_at,
+                &title,
+                &content,
+                &tags,
+            );
+            let raw = fs::read_to_string(&path).map_err(|error| format!("读取资料镜像失败：{}", error))?;
+            if canonical != raw {
+                let _ = storage::atomic_write(&path, canonical.as_bytes());
+            }
             connection.execute(
                 "INSERT INTO entities (id, kind, title, content_json, tags_json, file_path, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                rusqlite::params![id, kind, title, content.to_string(), serde_json::to_string(&tags).map_err(|error| format!("恢复资料标签失败：{}", error))?, relative, timestamp.clone(), timestamp],
+                rusqlite::params![id, kind, title, content.to_string(), serde_json::to_string(&tags).map_err(|error| format!("恢复资料标签失败：{}", error))?, relative, created_at, updated_at],
             ).map_err(|error| format!("恢复资料条目失败：{}", error))?;
             storage::index_record(connection, &id, kind, &title, &content.to_string(), &relative)?;
         }
     }
-    Ok(())
+    Ok(legacy_count)
+}
+
+fn rebuild_history_from_files(root: &Path, connection: &Connection) -> Result<usize, String> {
+    let history_root = storage::safe_relative(root, ".novelforge/history")?;
+    if !history_root.is_dir() {
+        return Ok(0);
+    }
+    let nodes = storage::all_nodes(connection, false)?;
+    let mut restored = 0_usize;
+    for node_directory in directory_entries(&history_root)?.into_iter().filter(|path| path.is_dir()) {
+        let node_id = node_directory.file_name().and_then(|value| value.to_str()).unwrap_or_default();
+        let Some(node) = nodes.iter().find(|candidate| candidate.id == node_id && candidate.kind != "volume") else {
+            continue;
+        };
+        for path in directory_entries(&node_directory)?.into_iter().filter(|path| path.is_file() && path.extension().and_then(|value| value.to_str()) == Some("md")) {
+            let revision_id = path.file_stem().and_then(|value| value.to_str()).unwrap_or_default();
+            if Uuid::parse_str(revision_id).is_err() {
+                continue;
+            }
+            let raw = fs::read_to_string(&path)
+                .map_err(|error| format!("读取历史快照失败：{}", error))?;
+            let content = storage::strip_markdown_frontmatter(&raw);
+            let relative = relative_path(root, &path)?;
+            let created_at = storage::now();
+            let changed = connection.execute(
+                "INSERT OR IGNORE INTO revisions (id, node_id, node_title, reason, word_count, created_at, file_path) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    revision_id,
+                    node.id,
+                    node.title,
+                    "恢复的历史快照",
+                    storage::word_count(&content) as i64,
+                    created_at,
+                    relative,
+                ],
+            ).map_err(|error| format!("恢复历史快照索引失败：{}", error))?;
+            restored += changed as usize;
+        }
+    }
+    Ok(restored)
 }
 
 fn recovered_project_connection(root: &Path) -> Result<Connection, String> {
     let backup = storage::quarantine_database(root)?;
     let connection = storage::open_db(root)?;
-    rebuild_nodes_from_markdown(root, &connection)?;
-    rebuild_entities_from_markdown(root, &connection)?;
+    let legacy_nodes = rebuild_nodes_from_markdown(root, &connection)?;
+    let legacy_entities = rebuild_entities_from_markdown(root, &connection)?;
+    let _ = rebuild_history_from_files(root, &connection)?;
     if backup.is_some() { let _ = storage::append_log(root, "WARN", "database_recovered"); }
+    if legacy_nodes > 0 || legacy_entities > 0 {
+        let _ = storage::append_log(root, "WARN", "database_recovery_legacy_metadata");
+    }
     Ok(connection)
 }
 
@@ -384,11 +615,46 @@ fn touch_project_best_effort(root: &Path, event: &str) {
 }
 
 fn replace_markdown_title(content: &str, title: &str) -> String {
+    let content = storage::strip_markdown_frontmatter(content);
     if content.starts_with("# ") {
         let end = content.find('\n').unwrap_or(content.len());
         return format!("# {}{}", title, &content[end..]);
     }
     format!("# {}\n\n{}", title, content)
+}
+
+fn rewrite_node_mirror(
+    root: &Path,
+    node: &NodeRecord,
+    file_path: &str,
+    parent_id: Option<&str>,
+    title: &str,
+    updated_at: &str,
+) -> Result<(), String> {
+    let path = storage::safe_relative(root, file_path)?;
+    if node.kind == "volume" {
+        let mirror = storage::markdown_volume(
+            &node.id,
+            title,
+            &node.status,
+            &node.created_at,
+            updated_at,
+        );
+        return storage::atomic_write(&path.join(".novelforge.md"), mirror.as_bytes());
+    }
+    let raw = fs::read_to_string(&path)
+        .map_err(|error| format!("读取节点正文失败：{}", error))?;
+    let body = replace_markdown_title(&raw, title);
+    let mirror = storage::markdown_node(
+        &node.id,
+        &node.kind,
+        parent_id,
+        &node.status,
+        &node.created_at,
+        updated_at,
+        &body,
+    );
+    storage::atomic_write(&path, mirror.as_bytes())
 }
 
 #[tauri::command]
@@ -415,8 +681,18 @@ pub fn create_project(input: ProjectInput) -> Result<ProjectData, String> {
 
     let volume_id = storage::new_id();
     let volume_path = "manuscript/volume_001".to_string();
-    fs::create_dir_all(storage::safe_relative(&root, &volume_path)?)
+    let volume_absolute = storage::safe_relative(&root, &volume_path)?;
+    fs::create_dir_all(&volume_absolute)
         .map_err(|error| format!("无法创建初始卷：{}", error))?;
+    let volume_status = default_status().to_string();
+    let volume_mirror = storage::markdown_volume(
+        &volume_id,
+        "第一卷",
+        &volume_status,
+        &timestamp,
+        &timestamp,
+    );
+    storage::atomic_write(&volume_absolute.join(".novelforge.md"), volume_mirror.as_bytes())?;
     insert_node(
         &connection,
         &NodeRecord {
@@ -425,7 +701,7 @@ pub fn create_project(input: ProjectInput) -> Result<ProjectData, String> {
             parent_id: None,
             title: "第一卷".to_string(),
             order_index: 0,
-            status: default_status().to_string(),
+            status: volume_status,
             file_path: volume_path,
             created_at: timestamp.clone(),
             updated_at: timestamp.clone(),
@@ -436,8 +712,6 @@ pub fn create_project(input: ProjectInput) -> Result<ProjectData, String> {
 
     let chapter_id = storage::new_id();
     let chapter_path = "manuscript/volume_001/chapter_001.md".to_string();
-    let starter = "# 第一章\n\n从这里开始你的故事。\n";
-    storage::atomic_write(&storage::safe_relative(&root, &chapter_path)?, starter.as_bytes())?;
     let chapter = NodeRecord {
         id: chapter_id.clone(),
         kind: "chapter".to_string(),
@@ -451,8 +725,19 @@ pub fn create_project(input: ProjectInput) -> Result<ProjectData, String> {
         deleted_at: None,
         deleted_path: None,
     };
+    let starter_body = "# 第一章\n\n从这里开始你的故事。\n";
+    let starter = storage::markdown_node(
+        &chapter.id,
+        &chapter.kind,
+        chapter.parent_id.as_deref(),
+        &chapter.status,
+        &chapter.created_at,
+        &chapter.updated_at,
+        starter_body,
+    );
+    storage::atomic_write(&storage::safe_relative(&root, &chapter_path)?, starter.as_bytes())?;
     insert_node(&connection, &chapter)?;
-    storage::index_record(&connection, &chapter.id, &chapter.kind, &chapter.title, starter, &chapter.file_path)?;
+    storage::index_record(&connection, &chapter.id, &chapter.kind, &chapter.title, starter_body, &chapter.file_path)?;
     let _ = storage::append_log(&root, "INFO", "project_created");
     project_data(&root, &connection)
 }
@@ -470,6 +755,7 @@ pub fn open_project(path: String) -> Result<ProjectData, String> {
     };
     if storage::all_nodes(&connection, false)?.is_empty() {
         rebuild_nodes_from_markdown(&root, &connection)?;
+        rebuild_history_from_files(&root, &connection)?;
     }
     if storage::all_entities(&connection, false)?.is_empty() {
         rebuild_entities_from_markdown(&root, &connection)?;
@@ -549,9 +835,6 @@ pub fn create_node(input: NodeInput) -> Result<ProjectData, String> {
     let absolute_path = storage::safe_relative(&root, &file_path)?;
     if input.kind == "volume" {
         fs::create_dir_all(&absolute_path).map_err(|error| format!("创建卷目录失败：{}", error))?;
-    } else {
-        let content = format!("# {}\n\n", input.title.trim());
-        storage::atomic_write(&absolute_path, content.as_bytes())?;
     }
     let node = NodeRecord {
         id: node_id,
@@ -566,6 +849,28 @@ pub fn create_node(input: NodeInput) -> Result<ProjectData, String> {
         deleted_at: None,
         deleted_path: None,
     };
+    if node.kind == "volume" {
+        let metadata = storage::markdown_volume(
+            &node.id,
+            &node.title,
+            &node.status,
+            &node.created_at,
+            &node.updated_at,
+        );
+        storage::atomic_write(&absolute_path.join(".novelforge.md"), metadata.as_bytes())?;
+    } else {
+        let content = format!("# {}\n\n", node.title);
+        let markdown = storage::markdown_node(
+            &node.id,
+            &node.kind,
+            node.parent_id.as_deref(),
+            &node.status,
+            &node.created_at,
+            &node.updated_at,
+            &content,
+        );
+        storage::atomic_write(&absolute_path, markdown.as_bytes())?;
+    }
     let database_result = (|| -> Result<(), String> {
         let transaction = connection
             .transaction()
@@ -574,6 +879,7 @@ pub fn create_node(input: NodeInput) -> Result<ProjectData, String> {
         if node.kind != "volume" {
             let content = fs::read_to_string(&absolute_path)
                 .map_err(|error| format!("读取新建正文失败：{}", error))?;
+            let content = storage::strip_markdown_frontmatter(&content);
             storage::index_record(&transaction, &node.id, &node.kind, &node.title, &content, &node.file_path)?;
         }
         transaction.commit().map_err(|error| format!("提交创建节点失败：{}", error))
@@ -598,16 +904,45 @@ pub fn rename_node(input: crate::models::RenameNodeInput) -> Result<ProjectData,
         return Err("节点不存在或已在回收站".to_string());
     }
     let next_title = input.title.trim().to_string();
-    let old_content = if current.kind == "volume" {
-        None
+    let mirror_path = if current.kind == "volume" {
+        Some(storage::safe_relative(&root, &current.file_path)?.join(".novelforge.md"))
     } else {
-        Some(fs::read_to_string(storage::safe_relative(&root, &current.file_path)?)
-            .map_err(|error| format!("读取正文失败：{}", error))?)
+        Some(storage::safe_relative(&root, &current.file_path)?)
     };
-    let next_content = old_content.as_deref().map(|content| replace_markdown_title(content, &next_title));
-    if let Some(content) = next_content.as_deref() {
-        if old_content.as_deref() != Some(content) {
-            storage::atomic_write(&storage::safe_relative(&root, &current.file_path)?, content.as_bytes())?;
+    let old_raw_content = mirror_path
+        .as_ref()
+        .filter(|path| path.is_file())
+        .map(|path| fs::read_to_string(path).map_err(|error| format!("读取正文失败：{}", error)))
+        .transpose()?;
+    let old_body_content = old_raw_content
+        .as_deref()
+        .map(storage::strip_markdown_frontmatter);
+    let next_timestamp = storage::now();
+    let next_raw_content = if current.kind == "volume" {
+        Some(storage::markdown_volume(
+            &current.id,
+            &next_title,
+            &current.status,
+            &current.created_at,
+            &next_timestamp,
+        ))
+    } else {
+        old_body_content.as_ref().map(|content| {
+            let body = replace_markdown_title(content, &next_title);
+            storage::markdown_node(
+                &current.id,
+                &current.kind,
+                current.parent_id.as_deref(),
+                &current.status,
+                &current.created_at,
+                &next_timestamp,
+                &body,
+            )
+        })
+    };
+    if let (Some(path), Some(content)) = (mirror_path.as_ref(), next_raw_content.as_deref()) {
+        if old_raw_content.as_deref() != Some(content) {
+            storage::atomic_write(path, content.as_bytes())?;
         }
     }
     let database_result = (|| -> Result<(), String> {
@@ -617,21 +952,23 @@ pub fn rename_node(input: crate::models::RenameNodeInput) -> Result<ProjectData,
         let changed = transaction
             .execute(
                 "UPDATE nodes SET title = ?1, updated_at = ?2 WHERE id = ?3 AND deleted_at IS NULL",
-                params![next_title, storage::now(), input.node_id],
+                params![next_title, next_timestamp, input.node_id],
             )
             .map_err(|error| format!("重命名节点失败：{}", error))?;
         if changed == 0 {
             return Err("节点不存在或已在回收站".to_string());
         }
-        if let Some(content) = next_content.as_deref() {
-            storage::index_record(&transaction, &current.id, &current.kind, &next_title, content, &current.file_path)?;
+        if let Some(content) = old_body_content
+            .as_ref()
+            .map(|content| replace_markdown_title(content, &next_title))
+        {
+            storage::index_record(&transaction, &current.id, &current.kind, &next_title, &content, &current.file_path)?;
         }
         transaction.commit().map_err(|error| format!("提交重命名事务失败：{}", error))
     })();
     if let Err(error) = database_result {
-        if let Some(content) = old_content.as_deref() {
-            let target = storage::safe_relative(&root, &current.file_path)?;
-            if let Err(rollback_error) = restore_document_after_save_failure(&target, true, content) {
+        if let (Some(target), Some(content)) = (mirror_path.as_ref(), old_raw_content.as_deref()) {
+            if let Err(rollback_error) = restore_document_after_save_failure(target, true, content) {
                 return Err(format!("{}；正文回滚失败：{}", error, rollback_error));
             }
         }
@@ -795,6 +1132,17 @@ pub fn move_node(input: MoveNodeInput) -> Result<ProjectData, String> {
         deleted_at: None,
         deleted_path: None,
     });
+    if let Err(error) = rewrite_node_mirror(
+        &root,
+        &current,
+        &target_path,
+        target_parent_id,
+        &current.title,
+        &timestamp,
+    ) {
+        rollback_node_move(&source_absolute, &target_absolute, &current.kind, sidecar_moved);
+        return Err(error);
+    }
     let database_result = (|| -> Result<(), String> {
         let transaction = connection
             .transaction()
@@ -896,6 +1244,56 @@ pub fn copy_node(input: CopyNodeInput) -> Result<ProjectData, String> {
         deleted_at: None,
         deleted_path: None,
     });
+    for node in nodes.iter().filter(|node| descendants.iter().any(|id| id == &node.id)) {
+        let new_id = id_map
+            .get(&node.id)
+            .ok_or_else(|| "复制节点 ID 映射失败".to_string())?;
+        let new_parent_id = if node.id == current.id {
+            target_parent_id.map(str::to_string)
+        } else {
+            node.parent_id
+                .as_ref()
+                .and_then(|id| id_map.get(id))
+                .cloned()
+        };
+        let new_title = if node.id == current.id {
+            copied_root_title.clone()
+        } else {
+            node.title.clone()
+        };
+        let new_path = if node.id == current.id {
+            target_path.clone()
+        } else {
+            replace_path_prefix(&node.file_path, &current_prefix, &target_prefix)
+        };
+        let copied_node = NodeRecord {
+            id: new_id.clone(),
+            kind: node.kind.clone(),
+            parent_id: new_parent_id.clone(),
+            title: new_title.clone(),
+            order_index: if node.id == current.id { target_order } else { node.order_index },
+            status: node.status.clone(),
+            file_path: new_path.clone(),
+            created_at: timestamp.clone(),
+            updated_at: timestamp.clone(),
+            deleted_at: None,
+            deleted_path: None,
+        };
+        if let Err(error) = rewrite_node_mirror(
+            &root,
+            &copied_node,
+            &new_path,
+            new_parent_id.as_deref(),
+            &new_title,
+            &timestamp,
+        ) {
+            let _ = remove_path_if_exists(&target_absolute);
+            if current.kind == "chapter" {
+                let _ = remove_path_if_exists(&target_absolute.with_extension(""));
+            }
+            return Err(error);
+        }
+    }
     let database_result = (|| -> Result<(), String> {
         let transaction = connection
             .transaction()
@@ -1020,19 +1418,30 @@ fn save_document_internal(
     }
     let target = storage::safe_relative(root, &node.file_path)?;
     let target_existed = target.exists();
-    let old_content = if target_existed {
+    let old_raw_content = if target_existed {
         fs::read_to_string(&target).map_err(|error| format!("读取原正文失败：{}", error))?
     } else {
         String::new()
     };
+    let old_content = storage::strip_markdown_frontmatter(&old_raw_content);
     let (_recovery_id, recovery_path) = storage::write_recovery(root, node_id, content)?;
-    storage::atomic_write(&target, content.as_bytes())?;
+    let persisted_timestamp = storage::now();
+    let persisted_content = storage::markdown_node(
+        &node.id,
+        &node.kind,
+        node.parent_id.as_deref(),
+        &node.status,
+        &node.created_at,
+        &persisted_timestamp,
+        content,
+    );
+    storage::atomic_write(&target, persisted_content.as_bytes())?;
     let revision_id = storage::new_id();
     let revision_path = match storage::copy_history(root, node_id, &revision_id, content) {
         Ok(path) => path,
         Err(error) => {
             let _ = storage::append_log(root, "ERROR", "document_save_failed");
-            let rollback = restore_document_after_save_failure(&target, target_existed, &old_content);
+            let rollback = restore_document_after_save_failure(&target, target_existed, &old_raw_content);
             return match rollback {
                 Ok(()) => Err(format!("{}；原正文已恢复，恢复文件已保留", error)),
                 Err(rollback_error) => Err(format!("{}；原正文恢复失败：{}；恢复文件已保留", error, rollback_error)),
@@ -1068,7 +1477,7 @@ fn save_document_internal(
         transaction
             .execute(
                 "UPDATE nodes SET updated_at = ?1 WHERE id = ?2",
-                params![storage::now(), node.id],
+                params![persisted_timestamp, node.id],
             )
             .map_err(|error| format!("更新章节时间失败：{}", error))?;
         storage::index_record(&transaction, &node.id, &node.kind, &node.title, content, &node.file_path)?;
@@ -1077,7 +1486,7 @@ fn save_document_internal(
     if let Err(error) = database_result {
         let _ = storage::append_log(root, "ERROR", "document_save_failed");
         let cleanup = storage::remove_file_if_exists(&storage::safe_relative(root, &revision_path)?);
-        let rollback = restore_document_after_save_failure(&target, target_existed, &old_content);
+        let rollback = restore_document_after_save_failure(&target, target_existed, &old_raw_content);
         let mut detail = error;
         if let Err(cleanup_error) = cleanup { detail.push_str(&format!("；历史快照清理失败：{}", cleanup_error)); }
         return match rollback {
@@ -1111,6 +1520,7 @@ fn preserve_current_revision(
     let target = storage::safe_relative(root, &node.file_path)?;
     let current_content = fs::read_to_string(&target)
         .map_err(|error| format!("无法读取恢复前的正文：{}", error))?;
+    let current_content = storage::strip_markdown_frontmatter(&current_content);
     let revision_id = storage::new_id();
     let revision_path = storage::copy_history(root, node_id, &revision_id, &current_content)?;
     let created_at = storage::now();
@@ -1146,7 +1556,7 @@ pub fn get_document(input: crate::models::NodeActionInput) -> Result<DocumentDat
     }
     let content = fs::read_to_string(storage::safe_relative(&root, &node.file_path)?)
         .map_err(|error| format!("读取正文失败：{}", error))?;
-    Ok(DocumentData { node, content })
+    Ok(DocumentData { node, content: storage::strip_markdown_frontmatter(&content) })
 }
 
 #[tauri::command]
@@ -1224,8 +1634,9 @@ pub fn read_history(input: RevisionActionInput) -> Result<String, String> {
     let path: String = connection
         .query_row("SELECT file_path FROM revisions WHERE id = ?1", params![input.revision_id], |row| row.get(0))
         .map_err(|error| format!("版本不存在：{}", error))?;
-    fs::read_to_string(storage::safe_relative(&root, &path)?)
-        .map_err(|error| format!("无法读取历史内容：{}", error))
+    let content = fs::read_to_string(storage::safe_relative(&root, &path)?)
+        .map_err(|error| format!("无法读取历史内容：{}", error))?;
+    Ok(storage::strip_markdown_frontmatter(&content))
 }
 
 #[tauri::command]
@@ -1279,10 +1690,30 @@ pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
         None
     };
     if let Some(target) = target.as_ref() {
-        let markdown = storage::markdown_entity(&input.title, &input.content, &input.tags);
+        let created_at = existing
+            .as_ref()
+            .map(|entity| entity.created_at.as_str())
+            .unwrap_or(timestamp.as_str());
+        let markdown = storage::markdown_entity_with_metadata(
+            &entity_id,
+            &input.kind,
+            created_at,
+            &timestamp,
+            input.title.trim(),
+            &input.content,
+            &input.tags,
+        );
         storage::atomic_write(target, markdown.as_bytes())?;
     }
-    let index_content = if input.kind == "attachment" { input.content.to_string() } else { storage::markdown_entity(&input.title, &input.content, &input.tags) };
+    let index_content = if input.kind == "attachment" {
+        input.content.to_string()
+    } else {
+        storage::markdown_entity(&input.title, &input.content, &input.tags)
+    };
+    let entity_created_at = existing
+        .as_ref()
+        .map(|entity| entity.created_at.clone())
+        .unwrap_or_else(|| timestamp.clone());
     let database_result = (|| -> Result<(), String> {
         let transaction = connection
             .transaction()
@@ -1290,7 +1721,7 @@ pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
         transaction
             .execute(
                 "INSERT INTO entities (id, kind, title, content_json, tags_json, file_path, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, title = excluded.title, content_json = excluded.content_json, tags_json = excluded.tags_json, file_path = excluded.file_path, updated_at = excluded.updated_at, deleted_at = NULL, deleted_path = NULL",
-                params![entity_id, input.kind, input.title.trim(), content_json, tags_json, file_path, existing.as_ref().map(|value| value.created_at.clone()).unwrap_or(timestamp.clone()), timestamp],
+                params![entity_id, input.kind, input.title.trim(), content_json, tags_json, file_path, entity_created_at, timestamp],
             )
             .map_err(|error| format!("保存资料条目失败：{}", error))?;
         storage::index_record(&transaction, &entity_id, &input.kind, input.title.trim(), &index_content, &file_path)?;
@@ -1886,6 +2317,7 @@ pub fn get_statistics(input: StatisticsInput) -> Result<Stats, String> {
     for node in nodes.iter().filter(|node| node.kind != "volume") {
         if node.kind == "chapter" { chapter_count += 1; }
         if let Ok(content) = fs::read_to_string(storage::safe_relative(&root, &node.file_path)?) {
+            let content = storage::strip_markdown_frontmatter(&content);
             let words = storage::word_count(&content);
             total_words += words;
             word_counts.insert(node.id.clone(), words);

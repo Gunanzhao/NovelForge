@@ -267,3 +267,11 @@
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；12 个测试文件 / 54 项测试。
 - cargo check、cargo test 全部通过；26 项 Rust 常规测试，1 项大型基准按设计忽略。
 - 1000 章 / 100 万字大型基准通过，耗时 51.86 秒；release 产物存在且工作区干净。
+
+## P1-01 数据库恢复 UUID 验证（2026-08-30）
+
+- 新建、保存、重命名、移动和复制产生/维护稳定 Markdown frontmatter；编辑器和统计只读取纯正文。
+- 损坏 SQLite 后恢复原卷、章、节、人物关系、地点 parentId、章节大纲/场景 chapterId 和历史快照索引。
+- 无 frontmatter 的旧项目仍可恢复，生成新 UUID，并在项目日志写入 database_recovery_legacy_metadata WARN。
+- cargo test：28 项常规测试通过，1 项大型基准按设计忽略；新增稳定关联和旧格式兼容测试均通过。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：12 个测试文件 / 54 项测试全部通过。

@@ -154,7 +154,8 @@ fn create_and_rename_nodes_roll_back_files_on_database_failure() {
     }).expect("rename node");
     assert_eq!(renamed.nodes.iter().find(|node| node.id == chapter.id).expect("renamed chapter").title, "新标题");
     let chapter_path = root.join("project").join(&chapter.file_path);
-    assert!(fs::read_to_string(&chapter_path).expect("renamed content").starts_with("# 新标题"));
+    let renamed_content = fs::read_to_string(&chapter_path).expect("renamed content");
+    assert!(storage::strip_markdown_frontmatter(&renamed_content).starts_with("# 新标题"));
     {
         let connection = storage::open_db(&root.join("project")).expect("database");
         connection.execute_batch("CREATE TRIGGER fail_node_title BEFORE UPDATE OF title ON nodes BEGIN SELECT RAISE(ABORT, 'test failure'); END;").expect("rename trigger");
@@ -162,7 +163,8 @@ fn create_and_rename_nodes_roll_back_files_on_database_failure() {
     assert!(super::commands::rename_node(super::models::RenameNodeInput {
         project_path: project_path.clone(), node_id: chapter.id.clone(), title: "失败标题".to_string(),
     }).is_err());
-    assert!(fs::read_to_string(&chapter_path).expect("rolled back content").starts_with("# 新标题"));
+    let rolled_back_content = fs::read_to_string(&chapter_path).expect("rolled back content");
+    assert!(storage::strip_markdown_frontmatter(&rolled_back_content).starts_with("# 新标题"));
     let reopened = super::commands::open_project(project_path).expect("reopen renamed project");
     assert_eq!(reopened.nodes.iter().find(|node| node.id == chapter.id).expect("reopened chapter").title, "新标题");
     let _ = fs::remove_dir_all(root);
@@ -246,6 +248,207 @@ fn opening_corrupt_database_rebuilds_markdown_tree() {
 }
 
 #[test]
+fn corrupt_database_preserves_stable_ids_and_relationships() {
+    let root = test_root("stable-id-recovery");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "稳定 ID 恢复".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "科幻".to_string(),
+        target_words: 10000,
+    })
+    .expect("create project");
+    let volume = created.nodes.iter().find(|node| node.kind == "volume").expect("volume").clone();
+    let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
+    let section_data = super::commands::create_node(super::models::NodeInput {
+        project_path: project_path.clone(),
+        kind: "section".to_string(),
+        title: "港口".to_string(),
+        parent_id: Some(chapter.id.clone()),
+    })
+    .expect("create section");
+    let section = section_data.nodes.iter().find(|node| node.kind == "section").expect("section").clone();
+    super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(),
+        node_id: chapter.id.clone(),
+        content: "# 第一章\n\n第一版正文".to_string(),
+        reason: "建立恢复历史".to_string(),
+    })
+    .expect("save first revision");
+    super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(),
+        node_id: chapter.id.clone(),
+        content: "# 第一章\n\n第二版正文".to_string(),
+        reason: "建立最新正文".to_string(),
+    })
+    .expect("save second revision");
+    let people = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "character".to_string(),
+        id: None,
+        title: "林月".to_string(),
+        content: serde_json::json!({"status": "活动"}),
+        tags: vec!["主角".to_string()],
+    })
+    .expect("create first character");
+    let person_a = people.entities.iter().find(|entity| entity.title == "林月").expect("person a").clone();
+    let people = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "character".to_string(),
+        id: None,
+        title: "沈砚".to_string(),
+        content: serde_json::json!({"status": "活动"}),
+        tags: vec!["对手".to_string()],
+    })
+    .expect("create second character");
+    let person_b = people.entities.iter().find(|entity| entity.title == "沈砚").expect("person b").clone();
+    let relationship_data = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "relationship".to_string(),
+        id: None,
+        title: "林月与沈砚".to_string(),
+        content: serde_json::json!({"fromId": person_a.id, "toId": person_b.id, "label": "敌对", "strength": "强"}),
+        tags: Vec::new(),
+    })
+    .expect("create relationship");
+    let relationship = relationship_data.entities.iter().find(|entity| entity.kind == "relationship").expect("relationship").clone();
+    let continent_data = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "location".to_string(),
+        id: None,
+        title: "大陆".to_string(),
+        content: serde_json::json!({}),
+        tags: Vec::new(),
+    })
+    .expect("create continent");
+    let continent = continent_data.entities.iter().find(|entity| entity.title == "大陆").expect("continent").clone();
+    let country_data = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "location".to_string(),
+        id: None,
+        title: "国家".to_string(),
+        content: serde_json::json!({"parentId": continent.id}),
+        tags: Vec::new(),
+    })
+    .expect("create country");
+    let country = country_data.entities.iter().find(|entity| entity.title == "国家").expect("country").clone();
+    let city_data = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "location".to_string(),
+        id: None,
+        title: "城市".to_string(),
+        content: serde_json::json!({"parentId": country.id}),
+        tags: Vec::new(),
+    })
+    .expect("create city");
+    let city = city_data.entities.iter().find(|entity| entity.title == "城市").expect("city").clone();
+    let outline_data = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "outline".to_string(),
+        id: None,
+        title: "章节大纲".to_string(),
+        content: serde_json::json!({"chapterId": chapter.id, "goal": "保留关联"}),
+        tags: Vec::new(),
+    })
+    .expect("create outline");
+    let outline = outline_data.entities.iter().find(|entity| entity.kind == "outline").expect("outline").clone();
+    let scene_data = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "scene".to_string(),
+        id: None,
+        title: "港口场景".to_string(),
+        content: serde_json::json!({"chapterId": chapter.id, "location": city.id}),
+        tags: Vec::new(),
+    })
+    .expect("create scene");
+    let scene = scene_data.entities.iter().find(|entity| entity.kind == "scene").expect("scene").clone();
+    let chapter_path = root.join("project").join(&chapter.file_path);
+    let chapter_raw = fs::read_to_string(&chapter_path).expect("read chapter mirror");
+    assert!(chapter_raw.contains(&format!("novelforgeId: {}", chapter.id)));
+    let entity_raw = fs::read_to_string(root.join("project").join(&person_a.file_path)).expect("read entity mirror");
+    assert!(entity_raw.contains(&format!("novelforgeId: {}", person_a.id)));
+    fs::write(root.join("project/.novelforge/database.sqlite"), b"corrupt").expect("corrupt database");
+
+    let reopened = super::commands::open_project(project_path.clone()).expect("reopen recovered project");
+    let recovered_volume = reopened.nodes.iter().find(|node| node.kind == "volume").expect("recovered volume");
+    let recovered_chapter = reopened.nodes.iter().find(|node| node.kind == "chapter").expect("recovered chapter");
+    let recovered_section = reopened.nodes.iter().find(|node| node.kind == "section").expect("recovered section");
+    assert_eq!(recovered_volume.id, volume.id);
+    assert_eq!(recovered_chapter.id, chapter.id);
+    assert_eq!(recovered_section.id, section.id);
+    assert_eq!(recovered_section.parent_id.as_deref(), Some(chapter.id.as_str()));
+    let recovered_relationship = reopened.entities.iter().find(|entity| entity.id == relationship.id).expect("recovered relationship");
+    assert_eq!(recovered_relationship.content.get("fromId").and_then(serde_json::Value::as_str), Some(person_a.id.as_str()));
+    assert_eq!(recovered_relationship.content.get("toId").and_then(serde_json::Value::as_str), Some(person_b.id.as_str()));
+    let recovered_country = reopened.entities.iter().find(|entity| entity.id == country.id).expect("recovered country");
+    let recovered_city = reopened.entities.iter().find(|entity| entity.id == city.id).expect("recovered city");
+    assert_eq!(recovered_country.content.get("parentId").and_then(serde_json::Value::as_str), Some(continent.id.as_str()));
+    assert_eq!(recovered_city.content.get("parentId").and_then(serde_json::Value::as_str), Some(country.id.as_str()));
+    let recovered_outline = reopened.entities.iter().find(|entity| entity.id == outline.id).expect("recovered outline");
+    let recovered_scene = reopened.entities.iter().find(|entity| entity.id == scene.id).expect("recovered scene");
+    assert_eq!(recovered_outline.content.get("chapterId").and_then(serde_json::Value::as_str), Some(chapter.id.as_str()));
+    assert_eq!(recovered_scene.content.get("chapterId").and_then(serde_json::Value::as_str), Some(chapter.id.as_str()));
+    let document = super::commands::get_document(super::models::NodeActionInput {
+        project_path: project_path.clone(),
+        node_id: chapter.id.clone(),
+    })
+    .expect("read recovered document");
+    assert_eq!(document.content, "# 第一章\n\n第二版正文");
+    let history = super::commands::list_history(super::models::NodeActionInput {
+        project_path: project_path.clone(),
+        node_id: chapter.id,
+    })
+    .expect("list recovered history");
+    assert!(history.len() >= 2);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn corrupt_database_keeps_legacy_markdown_recoverable_and_warns() {
+    let root = test_root("legacy-recovery");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "旧格式恢复".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "现代".to_string(),
+        target_words: 1000,
+    })
+    .expect("create project");
+    let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
+    let entity_data = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "character".to_string(),
+        id: None,
+        title: "旧人物".to_string(),
+        content: serde_json::json!({"identity": "旧项目"}),
+        tags: vec!["旧".to_string()],
+    })
+    .expect("create entity");
+    let entity = entity_data.entities.iter().find(|item| item.title == "旧人物").expect("entity").clone();
+    let chapter_path = root.join("project").join(&chapter.file_path);
+    let chapter_raw = fs::read_to_string(&chapter_path).expect("read chapter");
+    fs::write(&chapter_path, storage::strip_markdown_frontmatter(&chapter_raw)).expect("strip chapter metadata");
+    let entity_path = root.join("project").join(&entity.file_path);
+    let entity_raw = fs::read_to_string(&entity_path).expect("read entity");
+    fs::write(&entity_path, storage::strip_markdown_frontmatter(&entity_raw)).expect("strip entity metadata");
+    fs::write(root.join("project/.novelforge/database.sqlite"), b"legacy corrupt").expect("corrupt database");
+
+    let reopened = super::commands::open_project(project_path.clone()).expect("reopen legacy project");
+    let recovered_chapter = reopened.nodes.iter().find(|node| node.kind == "chapter").expect("recovered chapter");
+    let recovered_entity = reopened.entities.iter().find(|item| item.title == "旧人物").expect("recovered entity");
+    assert_ne!(recovered_chapter.id, chapter.id);
+    assert_ne!(recovered_entity.id, entity.id);
+    let logs = super::commands::read_logs(project_path).expect("read recovery logs");
+    assert!(logs.contains("database_recovered"));
+    assert!(logs.contains("database_recovery_legacy_metadata"));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn move_and_copy_nodes_keep_markdown_files_and_tree_paths_in_sync() {
     let root = test_root("move-copy");
     let project_path = root.join("project").to_string_lossy().to_string();
@@ -277,7 +480,8 @@ fn move_and_copy_nodes_keep_markdown_files_and_tree_paths_in_sync() {
     let moved_section = moved.nodes.iter().find(|node| node.id == section.id).expect("moved section");
     assert!(moved_section.file_path.starts_with(&moved_chapter.file_path.trim_end_matches(".md")));
     let moved_path = root.join("project").join(&moved_chapter.file_path);
-    assert_eq!(fs::read_to_string(&moved_path).expect("moved file"), "# 第一章\n\n移动后仍然可读");
+    let moved_content = fs::read_to_string(&moved_path).expect("moved file");
+    assert_eq!(storage::strip_markdown_frontmatter(&moved_content), "# 第一章\n\n移动后仍然可读");
     assert!(!root.join("project").join(&first_chapter.file_path).exists());
 
     let copied = super::commands::copy_node(super::models::CopyNodeInput {
@@ -287,7 +491,8 @@ fn move_and_copy_nodes_keep_markdown_files_and_tree_paths_in_sync() {
     let copied_chapter = copied.nodes.iter().find(|node| node.title == "第一章副本").expect("copied chapter");
     assert_ne!(copied_chapter.id, first_chapter.id);
     assert_eq!(copied_chapter.parent_id.as_deref(), Some(first_volume.id.as_str()));
-    assert_eq!(fs::read_to_string(root.join("project").join(&copied_chapter.file_path)).expect("copied file"), "# 第一章\n\n移动后仍然可读");
+    let copied_content = fs::read_to_string(root.join("project").join(&copied_chapter.file_path)).expect("copied file");
+    assert_eq!(storage::strip_markdown_frontmatter(&copied_content), "# 第一章副本\n\n移动后仍然可读");
     let copied_section_id = copied.nodes.iter().find(|node| node.parent_id.as_deref() == Some(copied_chapter.id.as_str())).expect("copied section").id.clone();
     assert!(copied.nodes.iter().any(|node| node.id == copied_section_id));
     let _ = fs::remove_dir_all(root);
@@ -419,7 +624,8 @@ fn save_failure_restores_original_and_keeps_recovery_file() {
         project_path: project_path.clone(), node_id: chapter.id.clone(), content: "新正文，不应覆盖原稿".to_string(), reason: "触发失败".to_string(),
     });
     assert!(result.is_err());
-    assert_eq!(fs::read_to_string(root.join("project").join(&chapter.file_path)).expect("original remains"), "原正文");
+    let original_after_failure = fs::read_to_string(root.join("project").join(&chapter.file_path)).expect("original remains");
+    assert_eq!(storage::strip_markdown_frontmatter(&original_after_failure), "原正文");
     let recovery = super::commands::list_recovery(project_path.clone()).expect("list recovery");
     assert_eq!(recovery.len(), 1);
     assert_eq!(super::commands::read_recovery(super::commands::RecoveryActionInput {
