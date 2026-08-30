@@ -51,6 +51,7 @@
 - P2-03：新增 GitHub Actions CI，锁定 pnpm/Node 与 Rust stable，自动执行前端安装、类型检查、Lint、测试、构建及 Rust check/test。
 - P2-04：新增超过 10 万中文字符单章的打开、编辑、插入、删除、搜索、保存和重开验收测试，并把 WebView2/CodeMirror FPS 人工记录加入桌面清单。
 - P3-01：新增 PluginRegistry 和 docs/PLUGIN_API.md，定义六类扩展点并注册内置名字生成器、一致性检查；V1.0 不执行任意外部 JavaScript。
+- P3-02 预检：重新生成 Windows release EXE/NSIS 并完成独立启动响应检查；真实 WebView2 鼠标级 E2E 继续保留为人工验收。
 - 清理 Rust 非阻塞 dead-code 警告，保留回收站数据库字段的明确模型语义。
 - 为 React、CodeMirror、Markdown 和图标依赖增加生产分包；最大输出 chunk 降至约 364 kB，构建不再出现体积警告。
 - 修复浏览器 fallback 的卷/章/节路径、递归回收站快照恢复和二进制导出提示，并补充回归测试。
@@ -59,3 +60,4 @@
 - 创建节点、重命名节点和资料镜像保存改为文件/SQLite/索引事务；失败时自动回滚，并保持章节 Markdown 标题同步。
 - 浏览器 fallback 增加空标题、重复项目、无效状态和不存在目标的输入校验，前端回归测试增至 42 项。
 - 事务化写入后大型最终验收耗时更新为 51.19 秒，最新 release 产物已重新构建。
+- AI 结果取消操作补充 Escape 快捷键，取消时清理选区请求状态，避免误应用过期结果。

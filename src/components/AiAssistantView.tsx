@@ -36,6 +36,17 @@ export function AiAssistantView() {
   const [result, setResult] = useState<AiCompletionResult | null>(null)
   const [busy, setBusy] = useState(false)
 
+  useEffect(() => {
+    if (!result) return
+    const cancelResult = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setResult(null)
+      setRequestSelection(null)
+    }
+    window.addEventListener('keydown', cancelResult)
+    return () => window.removeEventListener('keydown', cancelResult)
+  }, [result])
+
   const items = useMemo(() => data ? contextItems(data.nodes, data.entities, document?.node.id, document?.content, editorSelection) : [], [data, document?.content, document?.node.id, editorSelection])
   const selectedItems = useMemo(() => items.filter((item) => selectedIds.has(item.id)), [items, selectedIds])
   const recentIds = useMemo(() => data ? recentChapterIds(data.nodes, document?.node.id, recentCount) : [], [data, document?.node.id, recentCount])

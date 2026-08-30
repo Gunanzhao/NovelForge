@@ -51,4 +51,4 @@
 
 - [x] Windows x64 release EXE 与 NSIS 安装包构建、启动冒烟
 - [x] P2/P3 代码收尾：AI 上下文增强、命令与存储模块边界、GitHub Actions CI、10 万字单章验收、内部插件 API
-- [ ] 真实桌面鼠标级 E2E 验收（需在带 WebView2 的 Windows 桌面手动完成；当前环境未安装 tauri-driver）
+- [~] 真实桌面鼠标级 E2E 验收（release 预检已完成；仍需在带 WebView2 的 Windows 桌面手动完成，当前环境未安装 tauri-driver）

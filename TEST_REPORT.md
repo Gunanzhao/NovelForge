@@ -330,7 +330,7 @@
 - CodeMirror 选区同步到 AppState，当前选区和当前段落均可作为独立上下文项。
 - 最近 1/3/5/10 章按真实卷/章节顺序选择；手动正文节点和人物、地点、世界观、笔记资料继续可选。
 - 上下文预算显示字符数和预计 Token，超过 80,000 字符会在发送前明确阻止并提示。
-- 选区任务结果支持复制、替换选区、插入选区后，不提供隐式整章覆盖。
+- 选区任务结果支持复制、Esc 取消、替换选区、插入选区后，不提供隐式整章覆盖。
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：通过，12 个测试文件 / 61 项测试。
 
 ## P2-02 命令与存储模块化验证（2026-08-31）
@@ -356,3 +356,20 @@
 - PluginRegistry 测试覆盖两个内置插件、六类扩展点、唯一 ID 冲突和注册失败原子性。
 - 前端门禁：pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；13 个测试文件 / 63 项测试。
 - API 文档明确 V1.0 只允许源码显式注册，不加载或执行任意外部 JavaScript；V1.x 加载器需另行完成 manifest、权限和沙箱设计。
+
+## P3-02 桌面 E2E release 预检（2026-08-31）
+
+- pnpm.cmd tauri:build：通过；重新生成 release EXE 和 NSIS 安装包。
+- 独立启动 src-tauri/target/release/novelforge.exe 4 秒：通过，进程 Responding=True，检查后正常退出。
+- tauri-driver、msedgedriver 未安装；真实 Windows WebView2 鼠标级工作流、CodeMirror FPS 和六种导出文件的阅读器确认仍需人工按清单完成。
+
+## V1.0 RC 自动门禁复核（2026-08-31）
+
+| 层级 | 命令 / 范围 | 结果 |
+| --- | --- | --- |
+| Frontend | pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run、pnpm.cmd build | 通过；13 个测试文件 / 63 项测试 |
+| Rust | cargo check、cargo test --manifest-path src-tauri/Cargo.toml | 通过；33 项常规测试，1 项 ignored |
+| Large acceptance | 1000 章 / 1,000,000 字 ignored 基准 | 通过；54.60 秒 |
+| Release | pnpm.cmd tauri:build + 独立 EXE 4 秒启动 | 通过；EXE Responding=True，NSIS 已生成 |
+
+人工门禁仍未宣称完成：需要在带 WebView2 的 Windows 桌面按 DESKTOP_E2E_CHECKLIST.md 操作并记录 FPS、导出文件阅读结果。

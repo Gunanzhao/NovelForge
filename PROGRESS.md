@@ -481,7 +481,7 @@
 - 编辑器选区保存到全局状态，AI 面板可直接使用当前选中文字和当前段落，不再只能勾选整章。
 - 增加最近 1/3/5/10 章快捷选择，章节依据真实卷顺序和章内顺序计算；仍保留手动选择任意章节和人物、地点、世界观、笔记等资料。
 - 显示上下文字符数与预计 Token，超过 80,000 字符安全阈值时阻止发送并提示减少选择。
-- 润色、改写、扩写、缩写任务的结果只允许替换选区或插入选区后；普通任务仍可显式追加/替换正文。
+- 润色、改写、扩写、缩写任务的结果只允许替换选区或插入选区后，并可用 Esc 取消；普通任务仍可显式追加/替换正文。
 - 新增选区/段落/最近章节/预算/结果应用回归；pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过，前端 12 个测试文件 / 61 项测试。
 
 ## 2026-08-31：P2-02 命令与存储模块化
@@ -509,3 +509,15 @@
 - 新增 src/lib/plugin-registry.ts，提供进程内 PluginRegistry、唯一 ID 校验、暂存后原子合并和内置插件清单。
 - builtin.name-generator 复用本地规则名字生成器，builtin.consistency 复用结构化一致性检查；当前不从磁盘加载或执行任意外部 JavaScript。
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；13 个测试文件 / 63 项测试。
+
+## 2026-08-31：P3-02 桌面 E2E release 预检
+
+- 重新执行 pnpm.cmd tauri:build，生产前端和 Rust release 均成功，生成 src-tauri/target/release/novelforge.exe 与 NSIS 安装包。
+- 独立启动 release EXE 4 秒，进程保持运行且 Responding=True，随后正常终止；验证不依赖 Vite 开发服务器。
+- 当前环境没有 tauri-driver 或 msedgedriver，无法自动完成 WebView2 鼠标级交互、FPS 和阅读器人工确认；DESKTOP_E2E_CHECKLIST.md 保持待人工勾选。
+
+## 2026-08-31：V1.0 RC 自动门禁复核
+
+- 前端 pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run、pnpm.cmd build 全部通过：13 个测试文件 / 63 项测试。
+- Rust cargo check、cargo test 全部通过：33 项常规测试，1 项大型基准按设计 ignored；大型基准再次通过，耗时 54.60 秒。
+- release EXE/NSIS 已重新构建并独立启动冒烟通过；真实 WebView2 鼠标级 E2E、FPS 和六种导出文件人工阅读确认仍是唯一未勾选门禁。

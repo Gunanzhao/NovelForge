@@ -23,13 +23,15 @@
 - [x] P2-03 CI
 - [x] P2-04 大文件性能
 - [x] P3-01 插件 API 设计
-- [ ] P3-02 桌面 E2E
+- [~] P3-02 桌面 E2E（release 预检完成，真实 WebView2 人工验收待执行）
 
 ## 质量门禁
 
 - [x] P1 全部完成后运行 cargo test --manifest-path src-tauri/Cargo.toml -- --ignored
 - [x] P1 全部完成后运行 pnpm.cmd tauri:build
 - [x] P1 全部完成后复核 DESKTOP_E2E_CHECKLIST.md、TODO.md、PROGRESS.md、TEST_REPORT.md
+- [x] P2/P3 自动门禁：前端 63 项测试、Rust 33 项常规测试、1000 章/100 万字基准、release/NSIS 构建和启动冒烟
+- [~] P3-02 人工门禁：真实 WebView2 鼠标级 E2E、FPS 和六种导出文件阅读器确认
 
 ## 记录
 
@@ -41,8 +43,10 @@
 - 2026-08-30：P1-05 完成；前后端一致性检查新增结构化年龄/生日/性别冲突、死亡后时间线出现、疑似人物/地点名称变化、时间线逆序和时间范围校验；新增前后端回归测试，开始 P1-06。
 - 2026-08-30：P1-06 完成；建立 Rust Markdown ExportDocument AST，统一渲染 TXT/HTML/DOCX/EPUB/PDF，覆盖标题、行内格式、引用、列表、任务、链接、Wiki、代码、分割线和表格；HTML data URI、EPUB/DOCX 封面资源与 EPUB 分章导航回归通过，进入 P1 全量门禁。
 - 2026-08-30：P1 全量门禁完成；前端 typecheck/lint/test/build、Rust check/test、1000 章/100 万字 ignored 基准和 Tauri release/NSIS 构建均通过；release EXE 独立启动 4 秒并保持 Responding。桌面鼠标级 E2E 仍按清单保留为人工验收项。
-- 2026-08-30：P2-01 完成；AI 面板接入 CodeMirror 选区和当前段落、最近 1/3/5/10 章、全量指定章节/人物/地点/世界观/笔记、字符/Token 预算及选区替换/插入，前端 61 项测试通过，开始 P2-02。
+- 2026-08-30：P2-01 完成；AI 面板接入 CodeMirror 选区和当前段落、最近 1/3/5/10 章、全量指定章节/人物/地点/世界观/笔记、字符/Token 预算及选区替换/插入，结果支持复制和 Esc 取消，前端 61 项测试通过，开始 P2-02。
 - 2026-08-31：P2-02 完成阶段迁移；commands.rs 已成为 commands/mod.rs 兼容入口，AI、搜索、统计实现已迁移到独立模块，项目/正文/资料/恢复/回收站/一致性/导出及 storage/database、filesystem、migration 领域边界已建立；cargo check、cargo test（32 项常规 + 1 项 ignored）通过。
 - 2026-08-31：P2-03 完成；新增 .github/workflows/ci.yml，在 main 的 push/PR 上执行 pnpm install --frozen-lockfile、typecheck、lint、test、build 及 cargo check/test。
 - 2026-08-31：P2-04 完成；新增 10 万中文单章真实命令链测试，覆盖打开、编辑、插入、删除、搜索、保存和重开，定向测试通过 1/1（约 0.13 秒）；WebView2/CodeMirror FPS 仍列入桌面人工清单。
 - 2026-08-31：P3-01 完成；新增 docs/PLUGIN_API.md、进程内 PluginRegistry 和六类扩展点，内置名字生成器与一致性检查通过注册协议接入；明确 V1.0 不加载或执行任意外部 JavaScript，前端 63 项测试通过。
+- 2026-08-31：P3-02 完成 release 预检；pnpm.cmd tauri:build 重新生成 release EXE/NSIS，独立 EXE 启动 4 秒保持 Responding=True 后正常退出；tauri-driver、msedgedriver 均未安装，真实 WebView2 鼠标级 E2E 未将预检冒充完成。
+- 2026-08-31：最终自动门禁复核；pnpm.cmd typecheck/lint/test/build 全部通过（13 个测试文件 / 63 项），cargo test 33 项常规通过，ignored 大型基准 54.60 秒通过；除用户提供的收尾计划文件外工作区无代码改动。
