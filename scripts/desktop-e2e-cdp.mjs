@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
-import { existsSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -89,19 +90,19 @@ async function bodyText(page) {
 }
 
 async function clickText(page, text) {
-  const expression = "Array.from(document.querySelectorAll('button')).find((button) => (button.textContent || '').includes(" + jsString(text) + "))?.click(); true"
+  const expression = "(function(){const item=Array.from(document.querySelectorAll('button')).find((button)=>(button.textContent||'').includes(" + jsString(text) + "));item?.click();return Boolean(item)})()"
   const clicked = await page.evaluate(expression)
   if (!clicked) throw new Error('找不到按钮：' + text)
 }
 
 async function clickExact(page, text) {
-  const expression = "Array.from(document.querySelectorAll('button')).find((button) => (button.textContent || '').trim() === " + jsString(text) + ")?.click(); true"
+  const expression = "(function(){const item=Array.from(document.querySelectorAll('button')).find((button)=>(button.textContent||'').trim()===" + jsString(text) + ");item?.click();return Boolean(item)})()"
   const clicked = await page.evaluate(expression)
   if (!clicked) throw new Error('找不到精确按钮：' + text)
 }
 
 async function clickTitle(page, title) {
-  const expression = "Array.from(document.querySelectorAll('button')).find((button) => button.getAttribute('title') === " + jsString(title) + ")?.click(); true"
+  const expression = "(function(){const item=Array.from(document.querySelectorAll('button')).find((button)=>button.getAttribute('title')===" + jsString(title) + ");item?.click();return Boolean(item)})()"
   const clicked = await page.evaluate(expression)
   if (!clicked) throw new Error('找不到标题按钮：' + title)
 }
@@ -111,9 +112,29 @@ async function clickSelector(page, selector, text) {
   if (!await page.evaluate(expression)) throw new Error('找不到指定控件：' + selector + ' / ' + text)
 }
 
+async function clickSelectorContains(page, selector, text) {
+  const expression = "(function(){const item=Array.from(document.querySelectorAll(" + jsString(selector) + ")).find((node)=>(node.textContent||'').includes(" + jsString(text) + "));item?.click();return Boolean(item)})()"
+  if (!await page.evaluate(expression)) throw new Error('找不到指定控件：' + selector + ' 包含 ' + text)
+}
+
+async function clickModalButton(page, text) {
+  const expression = "(function(){const item=Array.from(document.querySelectorAll('.modal-card button')).find((button)=>(button.textContent||'').trim()===" + jsString(text) + ");item?.click();return Boolean(item)})()"
+  if (!await page.evaluate(expression)) throw new Error('找不到模态框按钮：' + text)
+}
+
 async function clickRowAction(page, rowText, title) {
   const expression = "(function(){const row=Array.from(document.querySelectorAll('.tree-row')).find((item)=>(item.textContent||'').includes(" + jsString(rowText) + "));const action=Array.from(row?.querySelectorAll('button')||[]).find((button)=>button.getAttribute('title')===" + jsString(title) + ");action?.click();return Boolean(action)})()"
   if (!await page.evaluate(expression)) throw new Error('找不到正文树操作：' + rowText + ' / ' + title)
+}
+
+async function clickRowActionIfPresent(page, rowText, title) {
+  const expression = "(function(){const row=Array.from(document.querySelectorAll('.tree-row')).find((item)=>(item.textContent||'').includes(" + jsString(rowText) + "));const action=Array.from(row?.querySelectorAll('button')||[]).find((button)=>button.getAttribute('title')===" + jsString(title) + ");action?.click();return Boolean(action)})()"
+  return Boolean(await page.evaluate(expression))
+}
+
+async function toggleRowSelection(page, rowText) {
+  const expression = "(function(){const row=Array.from(document.querySelectorAll('.tree-row')).find((item)=>(item.textContent||'').includes(" + jsString(rowText) + "));const checkbox=row?.querySelector('.tree-checkbox');checkbox?.click();return Boolean(checkbox)})()"
+  if (!await page.evaluate(expression)) throw new Error('找不到正文树选择框：' + rowText)
 }
 
 async function replaceEditor(page, text) {
@@ -133,9 +154,21 @@ async function selectEditorAll(page) {
   await page.command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Control', code: 'ControlLeft', modifiers: 0, windowsVirtualKeyCode: 17 })
 }
 
+async function pressControlKey(page, key, code, virtualKey) {
+  await page.command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Control', code: 'ControlLeft', modifiers: 2, windowsVirtualKeyCode: 17 })
+  await page.command('Input.dispatchKeyEvent', { type: 'keyDown', key, code, modifiers: 2, windowsVirtualKeyCode: virtualKey })
+  await page.command('Input.dispatchKeyEvent', { type: 'keyUp', key, code, modifiers: 2, windowsVirtualKeyCode: virtualKey })
+  await page.command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Control', code: 'ControlLeft', modifiers: 0, windowsVirtualKeyCode: 17 })
+}
+
 async function pressEscape(page) {
   await page.command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
   await page.command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+}
+
+async function setCurrentValue(page, fragment, value) {
+  const expression = "(function(){const target=Array.from(document.querySelectorAll('input,textarea')).find((item)=>(item.value||'').includes(" + jsString(fragment) + "));if(!target)return false;const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;setter?.call(target," + jsString(value) + ");target.dispatchEvent(new Event('input',{bubbles:true}));target.dispatchEvent(new Event('change',{bubbles:true}));return true})()"
+  if (!await page.evaluate(expression)) throw new Error('找不到当前值输入框：' + fragment)
 }
 
 async function selectValue(page, selector, value) {
@@ -150,6 +183,10 @@ async function waitForCondition(page, expression, label) {
     await sleep(200)
   }
   throw new Error('条件未满足：' + label)
+}
+
+async function waitForSelector(page, selector, label) {
+  await waitForCondition(page, "document.querySelector(" + jsString(selector) + ") !== null", label)
 }
 
 async function setField(page, labelOrPlaceholder, value) {
@@ -182,6 +219,14 @@ async function run() {
   rmSync(profile, { recursive: true, force: true })
   const projectPath = resolve(tmpdir(), 'novelforge-desktop-e2e-project-' + process.pid)
   rmSync(projectPath, { recursive: true, force: true })
+  const providerServer = createServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'application/json' })
+    response.end(JSON.stringify({ model: 'cdp-provider', choices: [{ message: { content: 'Provider 验收结果' } }] }))
+  })
+  await new Promise((resolvePromise) => providerServer.listen(0, '127.0.0.1', resolvePromise))
+  const providerAddress = providerServer.address()
+  if (!providerAddress || typeof providerAddress === 'string') throw new Error('无法启动本地 Provider 测试服务')
+  const providerEndpoint = 'http://127.0.0.1:' + providerAddress.port + '/v1'
   const app = spawn(executable, [], {
     env: {
       ...process.env,
@@ -225,6 +270,14 @@ async function run() {
 
     await replaceEditor(page, '# 第一章\n\n[[林月]] 来到雾港。\n\n**关键线索**\n\n- 第一项\n- 第二项')
     await sleep(400)
+    await selectEditorAll(page)
+    await pressControlKey(page, 'b', 'KeyB', 66)
+    await waitForCondition(page, "document.querySelector('.cm-content')?.innerText.includes('**')", 'Ctrl+B 选区命令')
+    await selectEditorAll(page)
+    await pressControlKey(page, 'i', 'KeyI', 73)
+    await waitForCondition(page, "document.querySelector('.cm-content')?.innerText.includes('*')", 'Ctrl+I 选区命令')
+    await replaceEditor(page, '# 第一章\n\n[[林月]] 来到雾港。\n\n**关键线索**\n\n- 第一项\n- 第二项')
+    await sleep(250)
     await clickExact(page, '保存')
     await waitForText(page, '已保存')
     await clickExact(page, '预览')
@@ -234,26 +287,78 @@ async function run() {
     await sleep(250)
     await clickExact(page, '编辑')
     await waitForCondition(page, "document.querySelector('.cm-content') !== null", '编辑器重新出现')
+    await clickExact(page, '关闭')
+    await waitForText(page, '新建小说')
+    await clickText(page, 'CDP 桌面验收')
+    await waitForText(page, 'MANUSCRIPT / CHAPTER')
+    await waitForCondition(page, "document.querySelector('.cm-content')?.innerText.includes('关键线索')", '最近项目重开正文')
+    await clickTitle(page, '项目设置')
+    await waitForText(page, '项目设置')
+    await clickExact(page, '正文')
+    await waitForText(page, 'MANUSCRIPT / CHAPTER')
     await clickExact(page, '写作规划')
     await waitForText(page, '写作规划')
     await clickExact(page, '正文')
     await waitForText(page, 'MANUSCRIPT / CHAPTER')
 
+    await clickExact(page, '版本历史')
+    await waitForText(page, 'Diff')
+    await clickExact(page, 'Diff')
+    await waitForCondition(page, "document.querySelector('.history-diff') !== null", '历史 Diff')
+    await clickExact(page, '恢复')
+    await sleep(500)
+    await waitForCondition(page, "document.querySelector('.cm-content') !== null", '历史版本恢复后的编辑器')
+    await replaceEditor(page, '# 第一章\n\n[[林月]] 来到雾港。\n\n**关键线索**\n\n- 第一项\n- 第二项')
+    await clickExact(page, '保存')
+    await waitForText(page, '已保存')
+
     await clickTitle(page, '新建卷')
     await waitForText(page, '新建卷')
     await setField(page, '第二卷', '第二卷')
-    await clickExact(page, '创建')
+    await clickModalButton(page, '创建')
     await waitForText(page, '第二卷')
     await clickRowAction(page, '第二卷', '在此新建章')
     await waitForText(page, '新建章')
     await setField(page, '第二章', '第二章')
-    await clickExact(page, '创建')
+    await clickModalButton(page, '创建')
     await clickRowAction(page, '第二卷', '展开')
     await waitForText(page, '第二章')
     console.log('CORE_EDITOR_TREE_OK')
 
-    await clickExact(page, '人物0')
-    await waitForText(page, '人物 ARCHIVE')
+    await clickRowAction(page, '第二章', '在此新建节')
+    await waitForText(page, '新建节')
+    await setField(page, '开场', '开场')
+    await clickModalButton(page, '创建')
+    await clickRowAction(page, '第二章', '展开')
+    await waitForText(page, '开场')
+    await page.evaluate("window.prompt=()=> '序章'")
+    await clickRowAction(page, '开场', '更多操作')
+    await waitForText(page, '序章')
+    await page.evaluate("window.prompt=(_message, defaultValue)=>defaultValue || ''")
+
+    await clickRowAction(page, '第二章', '复制节点')
+    await waitForText(page, '复制正文节点')
+    await setCurrentValue(page, '副本', '第二章 副本')
+    await clickModalButton(page, '复制')
+    await clickRowActionIfPresent(page, '第一卷', '展开')
+    await waitForText(page, '第二章 副本')
+    await clickRowAction(page, '第二章', '移动节点')
+    await waitForText(page, '移动正文节点')
+    await clickModalButton(page, '移动')
+    await clickRowActionIfPresent(page, '第一卷', '展开')
+    await waitForText(page, '第二章')
+    await clickRowAction(page, '第二章 副本', '移入回收站')
+    await sleep(500)
+    await clickExact(page, '回收站')
+    await waitForText(page, '回收站')
+    await clickExact(page, '恢复')
+    await waitForText(page, '回收站是空的')
+    await clickExact(page, '正文')
+    await waitForText(page, 'MANUSCRIPT / CHAPTER')
+    console.log('HISTORY_AND_TREE_ACTIONS_OK')
+
+    await clickText(page, '人物')
+    await waitForCondition(page, "document.querySelector('.entity-list-head h2')?.textContent?.trim() === '人物'", '人物资料视图')
     await clickSelector(page, '.entity-list-head button', '新建')
     await setField(page, '输入人物名称', '林月')
     await setField(page, '添加标签', '主角')
@@ -266,11 +371,11 @@ async function run() {
 
     await clickExact(page, '地点')
     await sleep(350)
-    if (!(await bodyText(page)).includes('地点 ARCHIVE')) {
+    if (!(await page.evaluate("document.querySelector('.entity-list-head h2')?.textContent?.trim() === '地点'"))) {
       await clickExact(page, '地点')
       await sleep(350)
     }
-    await waitForText(page, '地点 ARCHIVE')
+    await waitForCondition(page, "document.querySelector('.entity-list-head h2')?.textContent?.trim() === '地点'", '地点资料视图')
     await clickSelector(page, '.entity-list-head button', '新建')
     await setField(page, '输入地点名称', '雾港')
     await setField(page, '添加标签', '北境')
@@ -280,11 +385,11 @@ async function run() {
 
     await clickExact(page, '世界观 Wiki')
     await sleep(350)
-    if (!(await bodyText(page)).includes('世界观 ARCHIVE')) {
+    if (!(await page.evaluate("document.querySelector('.entity-list-head h2')?.textContent?.trim() === '世界观'"))) {
       await clickExact(page, '世界观 Wiki')
       await sleep(350)
     }
-    await waitForText(page, '世界观 ARCHIVE')
+    await waitForCondition(page, "document.querySelector('.entity-list-head h2')?.textContent?.trim() === '世界观'", '世界观资料视图')
     await clickSelector(page, '.entity-list-head button', '新建')
     await setField(page, '输入世界观名称', '潮汐历法')
     await clickSelector(page, '.entity-actions button', '保存资料')
@@ -316,17 +421,25 @@ async function run() {
     await pressEscape(page)
     await waitForText(page, '等待一次辅助任务')
     console.log('AI_SELECTION_AND_CANCEL_OK')
+    await setField(page, '留空使用本地离线模式', providerEndpoint)
+    await setField(page, 'local-writer', 'cdp-model')
+    await clickExact(page, '运行辅助')
+    await waitForCondition(page, "document.querySelector('.ai-result-text')?.value.includes('Provider 验收结果')", '本地 Provider AI 结果')
+    await pressEscape(page)
+    await waitForText(page, '等待一次辅助任务')
+    console.log('AI_PROVIDER_OK')
 
-    await clickExact(page, '人物0')
-    await waitForText(page, '林月')
-    await clickText(page, '林月')
-    await waitForText(page, '移入回收站')
-    await clickExact(page, '移入回收站')
+    await clickText(page, '人物')
+    await waitForCondition(page, "document.querySelector('.entity-list-head h2')?.textContent?.trim() === '人物'", '返回人物资料')
+    await clickSelectorContains(page, '.entity-list-item', '林月')
+    await waitForSelector(page, '.entity-actions', '人物编辑操作')
+    await clickSelector(page, '.entity-actions button', '移入回收站')
     await sleep(500)
     await clickExact(page, '回收站')
-    await waitForText(page, '回收站')
-    await clickExact(page, '恢复')
-    await waitForText(page, '回收站是空的')
+    await waitForSelector(page, '.trash-view', '回收站视图')
+    await waitForCondition(page, "document.querySelectorAll('.trash-actions button').length > 0", '回收站删除条目加载')
+    await clickSelector(page, '.trash-actions button', '恢复')
+    await waitForSelector(page, '.trash-view .empty-state', '回收站恢复后为空')
     console.log('TRASH_RESTORE_OK')
 
     const exports = [
@@ -348,6 +461,21 @@ async function run() {
     if (!exports.every(([, extension]) => exportFiles.some((name) => name.endsWith('.' + extension)))) {
       throw new Error('六种导出文件未全部生成：' + exportFiles.join(', '))
     }
+    const fileFor = (extension) => {
+      const name = exportFiles.find((item) => item.endsWith('.' + extension))
+      if (!name) throw new Error('找不到导出文件：' + extension)
+      return resolve(projectPath, '.novelforge', 'exports', name)
+    }
+    const markdown = readFileSync(fileFor('markdown'), 'utf8')
+    const plainText = readFileSync(fileFor('txt'), 'utf8')
+    const html = readFileSync(fileFor('html'), 'utf8')
+    if (!markdown.includes('雾港') || !markdown.includes('**关键线索**')) throw new Error('Markdown 导出缺少中文或粗体结构')
+    if (plainText.includes('**') || plainText.includes('[[') || !plainText.includes('关键线索')) throw new Error('TXT 导出未清理 Markdown/Wiki 标记')
+    if (!html.includes('<strong>') || !html.includes('雾港')) throw new Error('HTML 导出缺少语义结构')
+    if (readFileSync(fileFor('pdf')).subarray(0, 5).toString() !== '%PDF-' ) throw new Error('PDF 导出头不正确')
+    for (const extension of ['docx', 'epub']) {
+      if (readFileSync(fileFor(extension)).length < 200) throw new Error(extension + ' 导出文件为空')
+    }
     console.log('EXPORTS_OK')
   } finally {
     page?.close()
@@ -355,6 +483,7 @@ async function run() {
     await sleep(500)
     rmSync(profile, { recursive: true, force: true })
     rmSync(projectPath, { recursive: true, force: true })
+    await new Promise((resolvePromise) => providerServer.close(resolvePromise))
   }
 }
 

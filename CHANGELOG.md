@@ -52,7 +52,7 @@
 - P2-04：新增超过 10 万中文字符单章的打开、编辑、插入、删除、搜索、保存和重开验收测试，并把 WebView2/CodeMirror FPS 人工记录加入桌面清单。
 - P3-01：新增 PluginRegistry 和 docs/PLUGIN_API.md，定义六类扩展点并注册内置名字生成器、一致性检查；V1.0 不执行任意外部 JavaScript。
 - P3-02 预检：重新生成 Windows release EXE/NSIS 并完成独立启动响应检查；真实 WebView2 鼠标级 E2E 继续保留为人工验收。
-- P3-02 自动化：新增 pnpm test:e2e:desktop 的 WebView2 CDP release 验收脚本，覆盖编辑器、树、资料、规划、搜索、AI、回收站和六种导出生成；原生选择器/FPS/阅读器仍需人工。
+- P3-02 自动化：新增 pnpm test:e2e:desktop 的 WebView2 CDP release 验收脚本，覆盖编辑器、历史、正文树、资料、规划、搜索、AI 双模式、回收站和六种导出生成/结构断言；原生选择器/FPS/阅读器仍需人工。
 - 清理 Rust 非阻塞 dead-code 警告，保留回收站数据库字段的明确模型语义。
 - 为 React、CodeMirror、Markdown 和图标依赖增加生产分包；最大输出 chunk 降至约 364 kB，构建不再出现体积警告。
 - 修复浏览器 fallback 的卷/章/节路径、递归回收站快照恢复和二进制导出提示，并补充回归测试。

@@ -526,5 +526,5 @@
 
 - 新增 scripts/desktop-e2e-cdp.mjs 和 pnpm test:e2e:desktop，使用隔离 WebView2 用户目录与 CDP 调试端口启动 release EXE。
 - 自动化通过创建项目、编辑器编辑/预览/分栏、卷章树操作、人物/地点/世界观 CRUD、自定义字段、规划/一致性/统计视图、全文搜索、AI 选区/最近 3 章/Esc 取消、回收站恢复和六种导出文件生成。
-- 运行标记全部通过：CORE_EDITOR_TREE_OK、ENTITY_CRUD_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、TRASH_RESTORE_OK、EXPORTS_OK。
+- 运行标记全部通过：CORE_EDITOR_TREE_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK。
 - 脚本对 window.confirm/prompt 使用测试隔离替身，未把原生文件选择、FPS 或外部阅读器打开结果计为自动完成；这些仍按桌面清单人工验收。

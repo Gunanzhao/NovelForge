@@ -378,5 +378,6 @@
 
 - 命令：pnpm.cmd test:e2e:desktop。
 - 结果：通过；脚本启动隔离用户目录中的 release EXE，并通过 WebView2 CDP 完成核心编辑器/正文树、资料 CRUD、规划视图、搜索、AI 选区/最近章节/Esc 取消、回收站恢复和六种导出生成。
-- 阶段标记：CORE_EDITOR_TREE_OK、ENTITY_CRUD_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、TRASH_RESTORE_OK、EXPORTS_OK。
+- 阶段标记：CORE_EDITOR_TREE_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK。
+- 导出自动断言：Markdown 保留中文/粗体，TXT 清理 Markdown/Wiki 标记，HTML 保留 strong 语义，PDF 头正确，DOCX/EPUB 文件非空。
 - 仍需人工：原生目录选择器、真实确认/提示框、CodeMirror FPS/滚动体感及用 Word/WPS/EPUB/PDF 阅读器打开并核对六种导出文件。
