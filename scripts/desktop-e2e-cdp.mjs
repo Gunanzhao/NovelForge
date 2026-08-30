@@ -235,6 +235,14 @@ async function ensureTreeRow(page, parentText, childText) {
   await waitForText(page, childText)
 }
 
+async function ensureEditor(page, label) {
+  await waitForSelector(page, '.manuscript-view', label + '正文视图')
+  if (!(await page.evaluate("document.querySelector('.cm-content') !== null"))) {
+    await clickExact(page, '编辑')
+  }
+  await waitForCondition(page, "document.querySelector('.cm-content') !== null", label + '编辑器')
+}
+
 async function dragRow(page, sourceText, targetText) {
   const source = await rowPoint(page, sourceText)
   const target = await rowPoint(page, targetText)
@@ -302,6 +310,11 @@ async function pressControlKey(page, key, code, virtualKey) {
   await page.command('Input.dispatchKeyEvent', { type: 'keyDown', key, code, modifiers: 2, windowsVirtualKeyCode: virtualKey })
   await page.command('Input.dispatchKeyEvent', { type: 'keyUp', key, code, modifiers: 2, windowsVirtualKeyCode: virtualKey })
   await page.command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Control', code: 'ControlLeft', modifiers: 0, windowsVirtualKeyCode: 17 })
+}
+
+async function pressPlainKey(page, key, code, virtualKey) {
+  await page.command('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: virtualKey })
+  await page.command('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: virtualKey })
 }
 
 async function pressEscape(page) {
@@ -589,6 +602,52 @@ async function run() {
     await clickSelector(page, '.entity-actions button', '保存资料')
     await waitForText(page, '潮汐历法')
     console.log('ENTITY_CRUD_OK')
+
+    await clickExact(page, '正文')
+    await ensureEditor(page, 'Wiki 返回')
+    await clickExact(page, '预览')
+    await waitForSelector(page, 'a.wiki-link', 'Wiki 预览链接')
+    await clickSelector(page, 'a.wiki-link', '林月')
+    await waitForCondition(page, "document.querySelector('.entity-list-head h2')?.textContent?.trim() === '人物'", 'Wiki 跳转人物')
+    await clickExact(page, '正文')
+    await ensureEditor(page, 'Wiki 返回正文')
+    console.log('WIKI_NAVIGATION_OK')
+
+    await clickTitle(page, '项目设置')
+    await waitForText(page, '项目设置')
+    await clickExact(page, '深色')
+    await waitForCondition(page, "document.documentElement.dataset.theme === 'dark'", '深色主题')
+    await clickTitle(page, '收起左栏')
+    await waitForCondition(page, "document.querySelector('.main-layout')?.classList.contains('sidebar-closed')", '收起左栏')
+    await clickTitle(page, '展开左栏')
+    await clickTitle(page, '收起辅助栏')
+    await waitForCondition(page, "document.querySelector('.main-layout')?.classList.contains('inspector-closed')", '收起辅助栏')
+    await clickTitle(page, '展开辅助栏')
+    await clickExact(page, '正文')
+    await waitForCondition(page, "document.querySelector('.cm-content') !== null", '设置返回正文')
+    await clickTitle(page, '专注模式（F11）')
+    await waitForCondition(page, "document.querySelector('.app-shell')?.classList.contains('focus-mode')", 'F11 专注模式')
+    await clickTitle(page, '专注模式（F11）')
+    await waitForCondition(page, "document.querySelector('.app-shell')?.classList.contains('focus-mode') === false", '退出专注模式')
+
+    await pressControlKey(page, 'k', 'KeyK', 75)
+    await waitForSelector(page, '.command-palette', '命令面板')
+    await setField(page, '搜索命令', '全项目搜索')
+    await clickSelectorContains(page, '.command-main', '全项目搜索')
+    await waitForText(page, '全文搜索')
+    await clickExact(page, '正文')
+    await waitForCondition(page, "document.querySelector('.cm-content') !== null", '命令面板返回正文')
+    await pressControlKey(page, 'k', 'KeyK', 75)
+    await waitForSelector(page, '.command-palette', '快捷键命令面板')
+    await setField(page, '搜索命令', '全项目搜索')
+    await clickTitle(page, '点击设置快捷键')
+    await pressControlKey(page, 'f', 'KeyF', 70)
+    await waitForText(page, '已被')
+    await clickExact(page, '恢复默认')
+    await pressEscape(page)
+    await pressEscape(page)
+    await waitForCondition(page, "document.querySelector('.command-palette') === null", '关闭命令面板')
+    console.log('SETTINGS_COMMANDS_OK')
 
     if (nativeDialogMode) {
       writeFileSync(attachmentSource, 'NovelForge 原生文件选择器验收附件。\n', 'utf8')
