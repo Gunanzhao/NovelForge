@@ -54,4 +54,13 @@ src-tauri/target/release/novelforge.exe
   $env:NOVELFORGE_E2E_WEBDRIVER='1'; $env:NOVELFORGE_E2E_NATIVE_DIALOGS='1'; pnpm.cmd test:e2e:desktop
 - 自动化结果（2026-08-31）：CORE_EDITOR_TREE_OK、DRAG_DROP_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、WIKI_NAVIGATION_OK、SETTINGS_COMMANDS_OK、RECOVERY_FAILURE_OK、NATIVE_DIALOGS_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK。
 - 覆盖说明：脚本在隔离 WebView2 用户目录中启动 release EXE；官方 tauri-driver + WebDriver 覆盖真实会话，UI Automation 覆盖原生文件夹/文件选择器，WebDriver 对话框事件覆盖确认/提示框。恢复流程会关闭并重新启动应用，验证恢复提示、预览、恢复写回和恢复目录清理。
-- 仍需人工记录：CodeMirror 在 100,000 字单章中的 FPS、滚动和输入体感；用实际安装的 Word/WPS、LibreOffice/Calibre、Sumatra/Acrobat 等对应阅读器打开 HTML/TXT/DOCX/EPUB/PDF（及 Markdown）并核对中文、粗体、列表、标题、目录、封面与章节顺序。当前机器未发现完整的上述阅读器组合。
+- 仍需人工记录：CodeMirror 在 100,000 字单章中的 FPS、滚动和输入体感，以及六种导出物的视觉细节（中文、粗体、列表、标题、目录、封面与章节顺序）。本轮已准备官方/便携阅读器并完成外部打开冒烟：Windows 记事本（Markdown/TXT）、Edge（HTML/PDF）、LibreOffice Portable Writer 26.2.4（DOCX）和 Calibre Portable eBook Viewer 9.14.0（EPUB）；SumatraPDF 3.6.1 也已安装。打开窗口/可访问文本或转换结果已核对，但尚未把这类证据等同于逐页人工视觉签核。
+
+### 阅读器冒烟记录（2026-08-31）
+
+- Markdown：记事本标签页标题为导出文件名，UI Automation 文本读取到作品名、目录、章节和“恢复验收内容”。
+- TXT：记事本标签页标题为导出文件名，UI Automation 文本读取到作品名、卷章顺序和正文。
+- HTML：独立 Edge 窗口标题为导出文件名，页面已加载。
+- DOCX：LibreOffice Portable Writer 窗口标题为导出文件名并标记“只读”；无界面 soffice --convert-to pdf 返回 0 并生成 PDF。
+- EPUB：Calibre Portable 窗口标题为“CDP 桌面验收 [EPUB] — 电子书阅读器”，UI Automation 读取到目录和中文阅读器界面。
+- PDF：独立 Edge PDF 窗口显示“PDF Document”、1 页和第 1 页内容；SumatraPDF 3.6.1 已安装备用。

@@ -543,3 +543,8 @@
 - cargo check、cargo test：通过，33 项常规测试；1000 章 / 100 万字 ignored 基准通过，耗时 52.72 秒。
 - pnpm.cmd tauri:build：通过，重新生成 Windows x64 release EXE 与 NSIS 安装包；独立启动 4 秒 Responding=True 后精确关闭。
 - 直连 CDP 与官方 WebDriver + 原生 UI Automation E2E 均通过，所有阶段标记（含恢复重启、原生对话框和 EXPORTS_OK）均出现；当前只剩 FPS/阅读器视觉人工门禁。
+
+## 2026-08-31：外部阅读器冒烟补充
+
+- 已准备并验证外部阅读器：Windows 记事本读取 Markdown/TXT；独立 Edge 窗口打开 HTML/PDF；LibreOffice Portable Writer 26.2.4 打开 DOCX（只读窗口，soffice --convert-to pdf 成功）；Calibre Portable eBook Viewer 9.14.0 打开 EPUB 并显示目录；SumatraPDF 3.6.1 已安装。
+- 以上结果只证明文件能被真实阅读器接收并加载，不替代逐页视觉核对；CodeMirror 100,000 字单章的 FPS、滚动和输入体感，以及导出视觉细节仍待人工签核。

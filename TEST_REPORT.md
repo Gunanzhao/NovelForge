@@ -396,3 +396,9 @@
 - Rust cargo check、cargo test 全部通过（33 项常规测试）；1000 章 / 100 万字 ignored 基准通过，耗时 52.72 秒。
 - pnpm.cmd tauri:build 通过并重新生成 release EXE/NSIS；独立进程启动 4 秒保持 Responding=True 后精确关闭。
 - 直连 CDP 和官方 WebDriver + 原生 UI Automation 两种 E2E 模式均通过全部阶段标记；剩余人工门禁仅为 CodeMirror FPS/滚动体感和外部阅读器视觉确认。
+
+## 外部阅读器冒烟补充（2026-08-31）
+
+- Markdown/TXT 已由 Windows 记事本打开并通过 UI Automation 读取中文正文；HTML/PDF 已由独立 Edge 窗口打开。
+- DOCX 已由 LibreOffice Portable Writer 26.2.4 以只读窗口打开，且 soffice --convert-to pdf 返回 0；EPUB 已由 Calibre Portable eBook Viewer 9.14.0 打开并读取目录；SumatraPDF 3.6.1 已安装。
+- 这些是外部阅读器加载冒烟和文本/转换证据，尚未完成逐页视觉签核；CodeMirror FPS/滚动体感与导出视觉细节仍保持人工未完成状态。
