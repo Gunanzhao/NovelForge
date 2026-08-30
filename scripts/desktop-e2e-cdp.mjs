@@ -516,6 +516,65 @@ async function waitForExport(projectPath, extension) {
   throw new Error('导出文件未出现：' + extension)
 }
 
+async function runEditorPerformanceFlow(page) {
+  const baseline = '# 第一章\n\n[[林月]] 来到雾港。\n\n**关键线索**\n\n- 第一项\n- 第二项'
+  const largeText = '# 大文件性能\n\n' + '中文性能测试段落。'.repeat(12_000) + '\n\n性能结尾标记'
+  const replaceStarted = Date.now()
+  await replaceEditor(page, largeText.slice(0, 12_000))
+  for (let offset = 12_000; offset < largeText.length; offset += 12_000) {
+    await page.command('Input.insertText', { text: largeText.slice(offset, offset + 12_000) })
+  }
+  await waitForCondition(page, "document.querySelector('.cm-content') !== null", '大文件编辑器')
+  await page.evaluate("(()=>{let node=document.querySelector('.cm-content');while(node){node.scrollTop=node.scrollHeight;node=node.parentElement}if(document.scrollingElement)document.scrollingElement.scrollTop=document.scrollingElement.scrollHeight;return true})()")
+  await waitForCondition(page, "document.querySelector('.cm-content')?.innerText.includes('性能结尾标记')", '大文件末尾内容')
+  const replaceMs = Date.now() - replaceStarted
+  const saveStarted = Date.now()
+  await clickExact(page, '保存')
+  await waitForText(page, '已保存')
+  const saveMs = Date.now() - saveStarted
+  const sample = await page.evaluate([
+    '(async()=>{',
+    "const content=document.querySelector('.cm-content');",
+    "const candidates=[];",
+    "let scroller=null;",
+    "for(let node=content;node;node=node.parentElement){",
+    "const style=getComputedStyle(node);",
+    "const entry={tag:node.tagName,className:node.className,overflowY:style.overflowY,scrollHeight:node.scrollHeight,clientHeight:node.clientHeight};",
+    "candidates.push(entry);",
+    "if(!scroller&&node.scrollHeight>node.clientHeight+1&&(style.overflowY==='auto'||style.overflowY==='scroll'))scroller=node;",
+    "}",
+    "if(!scroller&&document.scrollingElement&&document.scrollingElement.scrollHeight>document.scrollingElement.clientHeight+1)scroller=document.scrollingElement;",
+    "if(!scroller)return {error:'找不到真实滚动溢出容器',candidates};",
+    'const started=performance.now();',
+    'const times=[];',
+    'return await new Promise((resolvePromise)=>{',
+    'const tick=(now)=>{',
+    'times.push(now);',
+    'const elapsed=now-started;',
+    'if(elapsed>=2000){',
+    'const intervals=times.slice(1).map((value,index)=>value-times[index]);',
+    'const sorted=intervals.slice().sort((a,b)=>a-b);',
+    'const percentile=(ratio)=>sorted.length?sorted[Math.min(sorted.length-1,Math.floor((sorted.length-1)*ratio))]:0;',
+    'resolvePromise({durationMs:elapsed,frames:times.length,fps:times.length/(elapsed/1000),minFrameMs:sorted[0]||0,p95FrameMs:percentile(.95),scrollHeight:scroller.scrollHeight,clientHeight:scroller.clientHeight,candidates});',
+    'return;',
+    '}',
+    'const maxScroll=Math.max(0,scroller.scrollHeight-scroller.clientHeight);',
+    'scroller.scrollTop=maxScroll?((elapsed*0.35)%maxScroll):0;',
+    'requestAnimationFrame(tick);',
+    '};',
+    'requestAnimationFrame(tick);',
+    '});',
+    '})()',
+  ].join('\n'))
+  if (sample?.error || !sample || sample.frames < 30) {
+    throw new Error('编辑器 FPS 采样失败：' + JSON.stringify(sample))
+  }
+  await replaceEditor(page, baseline)
+  await clickExact(page, '保存')
+  await waitForText(page, '已保存')
+  console.log('EDITOR_FPS_OK ' + JSON.stringify({ replaceMs, saveMs, ...sample }))
+}
+
 async function run() {
   rmSync(profile, { recursive: true, force: true })
   const projectPath = nativeDialogMode
@@ -803,6 +862,7 @@ async function run() {
     console.log('SETTINGS_COMMANDS_OK')
 
     await runRecoveryFlow(page, projectPath, 'CDP 桌面验收', restartPage)
+    if (process.env.NOVELFORGE_E2E_FPS === '1') await runEditorPerformanceFlow(page)
 
     if (nativeDialogMode) {
       writeFileSync(attachmentSource, 'NovelForge 原生文件选择器验收附件。\n', 'utf8')
