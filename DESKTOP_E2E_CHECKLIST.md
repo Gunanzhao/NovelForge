@@ -47,8 +47,11 @@ src-tauri/target/release/novelforge.exe
 - release 版本 / commit：__________
 - 未通过项与截图：________________________________
 
-## CDP 自动化记录
+## 自动化记录
 
-- 运行命令：pnpm.cmd test:e2e:desktop
-- 自动化结果（2026-08-31）：CORE_EDITOR_TREE_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK。
-- 说明：脚本通过隔离 WebView2 CDP 控制 release EXE；原生目录选择器、系统确认/提示框、FPS 和外部阅读器阅读结果仍必须由人工按上方清单记录。
+- 直连命令：pnpm.cmd test:e2e:desktop
+- 官方 WebDriver + 原生对话框命令（需设置与当前 WebView2 匹配的 EDGE_DRIVER_PATH）：
+  $env:NOVELFORGE_E2E_WEBDRIVER='1'; $env:NOVELFORGE_E2E_NATIVE_DIALOGS='1'; pnpm.cmd test:e2e:desktop
+- 自动化结果（2026-08-31）：CORE_EDITOR_TREE_OK、DRAG_DROP_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、WIKI_NAVIGATION_OK、SETTINGS_COMMANDS_OK、RECOVERY_FAILURE_OK、NATIVE_DIALOGS_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK。
+- 覆盖说明：脚本在隔离 WebView2 用户目录中启动 release EXE；官方 tauri-driver + WebDriver 覆盖真实会话，UI Automation 覆盖原生文件夹/文件选择器，WebDriver 对话框事件覆盖确认/提示框。恢复流程会关闭并重新启动应用，验证恢复提示、预览、恢复写回和恢复目录清理。
+- 仍需人工记录：CodeMirror 在 100,000 字单章中的 FPS、滚动和输入体感；用实际安装的 Word/WPS、LibreOffice/Calibre、Sumatra/Acrobat 等对应阅读器打开 HTML/TXT/DOCX/EPUB/PDF（及 Markdown）并核对中文、粗体、列表、标题、目录、封面与章节顺序。当前机器未发现完整的上述阅读器组合。

@@ -380,4 +380,12 @@
 - 结果：通过；脚本启动隔离用户目录中的 release EXE，并通过 WebView2 CDP 完成核心编辑器/正文树、资料 CRUD、规划视图、搜索、AI 选区/最近章节/Esc 取消、回收站恢复和六种导出生成。
 - 阶段标记：CORE_EDITOR_TREE_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK。
 - 导出自动断言：Markdown 保留中文/粗体，TXT 清理 Markdown/Wiki 标记，HTML 保留 strong 语义，PDF 头正确，DOCX/EPUB 文件非空。
-- 仍需人工：原生目录选择器、真实确认/提示框、CodeMirror FPS/滚动体感及用 Word/WPS/EPUB/PDF 阅读器打开并核对六种导出文件。
+- 初版 CDP 运行当时仍需人工：CodeMirror FPS/滚动体感及用实际安装的 Word/WPS、LibreOffice/Calibre、Sumatra/Acrobat 等阅读器打开并核对六种导出文件；最终 WebDriver/原生对话框结果见下节。
+
+## P3-02 官方 WebDriver 与原生对话框验证（2026-08-31）
+
+- 命令：设置 EDGE_DRIVER_PATH 指向与 WebView2 151 匹配的官方 msedgedriver.exe，并设置 NOVELFORGE_E2E_WEBDRIVER=1、NOVELFORGE_E2E_NATIVE_DIALOGS=1 后运行 pnpm.cmd test:e2e:desktop。
+- 结果：通过；tauri-driver 2.0.6 + Microsoft Edge WebDriver 151.0.4129.107 建立 WebView2 会话，原生文件夹/文件选择器由 Windows UI Automation 完成，确认/提示框由 WebDriver 对话框事件处理。
+- 新增回归：真实应用重启后的保存失败与恢复提示、恢复内容预览/写回/清理、拖拽和批量恢复、Wiki 跳转、设置/命令面板、原生附件导入。
+- 两种模式均通过的阶段标记：CORE_EDITOR_TREE_OK、DRAG_DROP_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、WIKI_NAVIGATION_OK、SETTINGS_COMMANDS_OK、RECOVERY_FAILURE_OK、NATIVE_DIALOGS_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK。
+- 导出结构断言继续通过：Markdown 保留中文/粗体，TXT 清理 Markdown/Wiki，HTML 保留 strong，PDF 头正确，DOCX/EPUB 文件非空。阅读器视觉确认和 CodeMirror FPS 仍未虚报完成。

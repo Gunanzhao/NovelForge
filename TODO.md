@@ -51,4 +51,4 @@
 
 - [x] Windows x64 release EXE 与 NSIS 安装包构建、启动冒烟
 - [x] P2/P3 代码收尾：AI 上下文增强、命令与存储模块边界、GitHub Actions CI、10 万字单章验收、内部插件 API
-- [~] 真实桌面鼠标级 E2E 验收（CDP release 自动化核心流程已通过；仍需原生选择器、真实确认框、FPS 和六种导出文件阅读器人工确认）
+- [~] 真实桌面验收收尾（直连 CDP、官方 Tauri WebDriver、原生文件选择器/确认框/提示框和恢复重启自动化均已通过；仍需 CodeMirror FPS/滚动体感及六种导出文件的真实阅读器人工确认）

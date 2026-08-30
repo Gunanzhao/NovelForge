@@ -527,4 +527,12 @@
 - 新增 scripts/desktop-e2e-cdp.mjs 和 pnpm test:e2e:desktop，使用隔离 WebView2 用户目录与 CDP 调试端口启动 release EXE。
 - 自动化通过创建项目、编辑器编辑/预览/分栏、卷章树操作、人物/地点/世界观 CRUD、自定义字段、规划/一致性/统计视图、全文搜索、AI 选区/最近 3 章/Esc 取消、回收站恢复和六种导出文件生成。
 - 运行标记全部通过：CORE_EDITOR_TREE_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK。
-- 脚本对 window.confirm/prompt 使用测试隔离替身，未把原生文件选择、FPS 或外部阅读器打开结果计为自动完成；这些仍按桌面清单人工验收。
+- 初版脚本对 window.confirm/prompt 使用测试隔离替身，未把原生文件选择、FPS 或外部阅读器打开结果计为自动完成；后续官方 WebDriver/原生 UI Automation 结果见下一节，FPS 与阅读器视觉确认仍保留人工门禁。
+
+## 2026-08-31：P3-02 官方 WebDriver 与恢复流程收尾
+
+- 桌面 E2E 新增真实保存失败模拟：独占正文文件、确认错误提示和恢复文件生成，关闭并重新启动 release 应用后打开项目，在总览查看恢复内容、执行恢复，并核对正文写回与恢复目录清理。
+- 新增拖拽章节到卷、跨卷复制、批量移入回收站和批量恢复；补齐 Wiki 预览跳转、主题/侧栏/辅助栏/F11、命令面板快捷键冲突和原生附件导入回归。
+- 已安装并使用官方 tauri-driver 2.0.6 与匹配 WebView2 151.0.4129.107 的 Microsoft Edge WebDriver；WebDriver 会话和 Windows UI Automation 文件/文件夹选择器均通过。
+- 直连 CDP 和官方 WebDriver + 原生对话框两种模式均通过 pnpm.cmd test:e2e:desktop；自动化标记包含 RECOVERY_FAILURE_OK、NATIVE_DIALOGS_OK、DRAG_DROP_OK、WIKI_NAVIGATION_OK、SETTINGS_COMMANDS_OK 及六种导出 EXPORTS_OK。
+- 当前剩余不是代码实现而是发布验收证据：CodeMirror 100,000 字单章的 FPS/滚动体感，以及在实际 Word/WPS、LibreOffice/Calibre、Sumatra/Acrobat 等阅读器中打开并核对导出文件；本机未发现完整阅读器组合。

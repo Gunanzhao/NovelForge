@@ -23,7 +23,7 @@
 - [x] P2-03 CI
 - [x] P2-04 大文件性能
 - [x] P3-01 插件 API 设计
-- [~] P3-02 桌面 E2E（release 预检完成，真实 WebView2 人工验收待执行）
+- [~] P3-02 桌面 E2E（release、官方 WebDriver 与原生对话框自动化已通过；FPS 和外部阅读器仍待人工确认）
 
 ## 质量门禁
 
@@ -31,7 +31,7 @@
 - [x] P1 全部完成后运行 pnpm.cmd tauri:build
 - [x] P1 全部完成后复核 DESKTOP_E2E_CHECKLIST.md、TODO.md、PROGRESS.md、TEST_REPORT.md
 - [x] P2/P3 自动门禁：前端 63 项测试、Rust 33 项常规测试、1000 章/100 万字基准、release/NSIS 构建和启动冒烟
-- [~] P3-02 人工门禁：真实 WebView2 鼠标级 E2E、FPS 和六种导出文件阅读器确认
+- [~] P3-02 人工门禁：CodeMirror FPS/滚动体感和六种导出文件在对应阅读器中的实际打开确认
 
 ## 记录
 
@@ -50,4 +50,5 @@
 - 2026-08-31：P3-01 完成；新增 docs/PLUGIN_API.md、进程内 PluginRegistry 和六类扩展点，内置名字生成器与一致性检查通过注册协议接入；明确 V1.0 不加载或执行任意外部 JavaScript，前端 63 项测试通过。
 - 2026-08-31：P3-02 完成 release 预检；pnpm.cmd tauri:build 重新生成 release EXE/NSIS，独立 EXE 启动 4 秒保持 Responding=True 后正常退出；tauri-driver、msedgedriver 均未安装，真实 WebView2 鼠标级 E2E 未将预检冒充完成。
 - 2026-08-31：最终自动门禁复核；pnpm.cmd typecheck/lint/test/build 全部通过（13 个测试文件 / 63 项），cargo test 33 项常规通过，ignored 大型基准 54.60 秒通过；除用户提供的收尾计划文件外工作区无代码改动。
-- 2026-08-31：P3-02 CDP 自动化补齐；新增 scripts/desktop-e2e-cdp.mjs 与 pnpm test:e2e:desktop，release WebView2 实际跑通核心编辑器/正文树、历史 Diff/恢复、节重命名、跨卷复制/移动、资料 CRUD、规划视图、搜索、AI 选区/最近章节/Esc 取消/Provider、回收站恢复和六种导出生成及内容断言（CORE_EDITOR_TREE_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK）；原生文件夹选择、系统确认框、FPS 和外部阅读器仍需人工。
+- 2026-08-31：P3-02 CDP 自动化初版；新增 scripts/desktop-e2e-cdp.mjs 与 pnpm test:e2e:desktop，release WebView2 实际跑通核心编辑器/正文树、历史 Diff/恢复、节重命名、跨卷复制/移动、资料 CRUD、规划视图、搜索、AI 选区/最近章节/Esc 取消/Provider、回收站恢复和六种导出生成及内容断言；随后在下方记录中补齐了官方 WebDriver、原生对话框和恢复重启流程。
+- 2026-08-31：P3-02 桌面流程自动化收尾；新增真实应用重启后的保存失败/恢复提示、拖拽与批量恢复、Wiki 导航、设置/命令面板流程，并通过官方 tauri-driver + 与 WebView2 151 匹配的 msedgedriver 运行原生文件夹/文件选择器和系统对话框（CORE_EDITOR_TREE_OK、DRAG_DROP_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、WIKI_NAVIGATION_OK、SETTINGS_COMMANDS_OK、RECOVERY_FAILURE_OK、NATIVE_DIALOGS_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK）。剩余门禁仅为 CodeMirror FPS/滚动体感及在 Word/WPS、LibreOffice/Calibre、Sumatra/Acrobat 等对应阅读器中实际打开六种导出文件并记录人工结果。
