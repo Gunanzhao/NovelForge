@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -9,15 +9,53 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const executable = process.argv[2] ? resolve(process.argv[2]) : resolve(root, 'src-tauri/target/release/novelforge.exe')
 const port = Number(process.env.NOVELFORGE_E2E_PORT ?? 9223)
 const profile = resolve(tmpdir(), 'novelforge-e2e-' + process.pid)
+const webdriverMode = process.env.NOVELFORGE_E2E_WEBDRIVER === '1'
+const webdriverPort = Number(process.env.NOVELFORGE_WEBDRIVER_PORT ?? 4467)
+const nativeDriverPort = Number(process.env.NOVELFORGE_NATIVE_DRIVER_PORT ?? 4468)
+const nativeDialogScript = resolve(root, 'scripts/desktop-dialog-uia.ps1')
+const nativeDialogMode = process.env.NOVELFORGE_E2E_NATIVE_DIALOGS === '1'
 const sleep = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds))
 
 if (!existsSync(executable)) throw new Error('release EXE 不存在：' + executable)
 
-async function waitForPage() {
+function findNativeDriver() {
+  const configured = process.env.EDGE_DRIVER_PATH
+  if (configured && existsSync(configured)) return resolve(configured)
+  const candidates = []
+  const addCandidate = (value) => {
+    if (value && existsSync(value) && !candidates.includes(value)) candidates.push(value)
+  }
+  const pathCandidates = process.env.PATH?.split(';') ?? []
+  for (const directory of pathCandidates) addCandidate(resolve(directory, 'msedgedriver.exe'))
+  const packageRoot = resolve(process.env.LOCALAPPDATA ?? '', 'Microsoft/WinGet/Packages')
+  const walk = (directory, depth) => {
+    if (!directory || depth > 3 || !existsSync(directory)) return
+    let entries = []
+    try { entries = readdirSync(directory, { withFileTypes: true }) } catch { return }
+    for (const entry of entries) {
+      const child = resolve(directory, entry.name)
+      if (entry.isFile() && entry.name.toLowerCase() === 'msedgedriver.exe') addCandidate(child)
+      else if (entry.isDirectory()) walk(child, depth + 1)
+    }
+  }
+  walk(packageRoot, 0)
+  const preferredVersion = process.env.NOVELFORGE_EDGE_DRIVER_VERSION
+  if (preferredVersion) {
+    const preferred = candidates.find((candidate) => {
+      try { return execFileSync(candidate, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).includes(preferredVersion) } catch { return false }
+    })
+    if (preferred) return preferred
+  }
+  if (candidates.length) return candidates[0]
+  throw new Error('未找到 msedgedriver.exe；请设置 EDGE_DRIVER_PATH 指向与 WebView2 版本匹配的官方驱动。')
+}
+
+async function waitForPage(address = '127.0.0.1:' + port) {
+  const base = address.startsWith('http://') ? address : 'http://' + address
   const deadline = Date.now() + 20_000
   while (Date.now() < deadline) {
     try {
-      const pages = await fetch('http://127.0.0.1:' + port + '/json/list').then((response) => response.json())
+      const pages = await fetch(base + '/json/list').then((response) => response.json())
       const page = pages.find((item) => item.type === 'page' && item.url.startsWith('http://tauri.localhost'))
       if (page) return page
     } catch {
@@ -25,16 +63,22 @@ async function waitForPage() {
     }
     await sleep(250)
   }
-  throw new Error('等待 WebView2 CDP 页面超时，端口：' + port)
+  throw new Error('等待 WebView2 CDP 页面超时，地址：' + address)
 }
 
 class CdpPage {
-  constructor(page) {
+  constructor(page, handleDialogs = false) {
     this.socket = new WebSocket(page.webSocketDebuggerUrl)
     this.nextId = 1
     this.pending = new Map()
+    this.handleDialogs = handleDialogs
     this.socket.addEventListener('message', (event) => {
       const message = JSON.parse(event.data)
+      if (message.method === 'Page.javascriptDialogOpening' && this.handleDialogs) {
+        const promptText = message.params?.type === 'prompt' ? '序章' : undefined
+        void this.command('Page.handleJavaScriptDialog', { accept: true, ...(promptText ? { promptText } : {}) })
+        return
+      }
       const pending = this.pending.get(message.id)
       if (!pending) return
       this.pending.delete(message.id)
@@ -53,6 +97,7 @@ class CdpPage {
       this.socket.addEventListener('error', reject, { once: true })
     })
     await this.command('Runtime.enable')
+    if (this.handleDialogs) await this.command('Page.enable')
   }
 
   command(method, params = {}) {
@@ -79,6 +124,56 @@ class CdpPage {
   close() {
     this.socket.close()
   }
+}
+
+async function requestJson(url, options = {}) {
+  const response = await fetch(url, options)
+  const text = await response.text()
+  let payload = null
+  try { payload = text ? JSON.parse(text) : null } catch { payload = { value: text } }
+  if (!response.ok) throw new Error('WebDriver 请求失败 ' + response.status + '：' + JSON.stringify(payload))
+  return payload
+}
+
+async function startWebDriver() {
+  const driverPath = process.env.TAURI_DRIVER_PATH || resolve(homedir(), '.cargo/bin/tauri-driver.exe')
+  if (!existsSync(driverPath)) throw new Error('未找到 tauri-driver.exe：' + driverPath)
+  const nativeDriverPath = findNativeDriver()
+  rmSync(profile, { recursive: true, force: true })
+  const driver = spawn(driverPath, [
+    '--port', String(webdriverPort),
+    '--native-port', String(nativeDriverPort),
+    '--native-driver', nativeDriverPath,
+  ], {
+    env: { ...process.env, WEBVIEW2_USER_DATA_FOLDER: profile },
+    windowsHide: true,
+    stdio: 'ignore',
+  })
+  const statusUrl = 'http://127.0.0.1:' + webdriverPort + '/status'
+  const deadline = Date.now() + 20_000
+  while (Date.now() < deadline) {
+    try {
+      await requestJson(statusUrl)
+      break
+    } catch {
+      await sleep(250)
+    }
+  }
+  const capabilities = {
+    alwaysMatch: {
+      'tauri:options': { application: executable, args: [] },
+    },
+    firstMatch: [{}],
+  }
+  const session = await requestJson('http://127.0.0.1:' + webdriverPort + '/session', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ capabilities }),
+  })
+  const sessionId = session?.value?.sessionId
+  const debuggerAddress = session?.value?.capabilities?.['ms:edgeOptions']?.debuggerAddress
+  if (!sessionId || !debuggerAddress) throw new Error('WebDriver 返回中缺少 sessionId 或 debuggerAddress：' + JSON.stringify(session))
+  return { driver, sessionId, debuggerAddress }
 }
 
 function jsString(value) {
@@ -196,6 +291,31 @@ async function setField(page, labelOrPlaceholder, value) {
   if (!await page.evaluate(expression)) throw new Error('找不到输入框：' + labelOrPlaceholder)
 }
 
+function runNativeDialogHelper(mode, title, targetPath) {
+  if (!existsSync(nativeDialogScript)) throw new Error('原生对话框辅助脚本不存在：' + nativeDialogScript)
+  const powershell = process.env.NOVELFORGE_POWERSHELL || 'pwsh'
+  const child = spawn(powershell, [
+    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', nativeDialogScript,
+    '-Mode', mode, '-Path', targetPath, '-Title', title,
+  ], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] })
+  return new Promise((resolvePromise, reject) => {
+    let stderr = ''
+    child.stderr?.on('data', (chunk) => { stderr += String(chunk) })
+    child.once('error', reject)
+    child.once('exit', (code, signal) => {
+      if (code === 0) resolvePromise()
+      else reject(new Error('原生文件对话框辅助失败：' + (stderr.trim() || 'exit=' + code + ' signal=' + signal)))
+    })
+  })
+}
+
+async function chooseNativeDialog(page, mode, title, targetPath, triggerText = '选择') {
+  const helper = runNativeDialogHelper(mode, title, targetPath)
+  await sleep(150)
+  await clickExact(page, triggerText)
+  await helper
+}
+
 async function waitForText(page, text) {
   const deadline = Date.now() + 10_000
   while (Date.now() < deadline) {
@@ -217,8 +337,13 @@ async function waitForExport(projectPath, extension) {
 
 async function run() {
   rmSync(profile, { recursive: true, force: true })
-  const projectPath = resolve(tmpdir(), 'novelforge-desktop-e2e-project-' + process.pid)
+  const projectPath = nativeDialogMode
+    ? resolve(root, 'novelforge-desktop-e2e-project-' + process.pid)
+    : resolve(tmpdir(), 'novelforge-desktop-e2e-project-' + process.pid)
   rmSync(projectPath, { recursive: true, force: true })
+  if (nativeDialogMode) mkdirSync(projectPath, { recursive: true })
+  const attachmentSource = resolve(tmpdir(), 'novelforge-e2e-attachment-' + process.pid + '.txt')
+  rmSync(attachmentSource, { force: true })
   const providerServer = createServer((_request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' })
     response.end(JSON.stringify({ model: 'cdp-provider', choices: [{ message: { content: 'Provider 验收结果' } }] }))
@@ -227,20 +352,27 @@ async function run() {
   const providerAddress = providerServer.address()
   if (!providerAddress || typeof providerAddress === 'string') throw new Error('无法启动本地 Provider 测试服务')
   const providerEndpoint = 'http://127.0.0.1:' + providerAddress.port + '/v1'
-  const app = spawn(executable, [], {
-    env: {
-      ...process.env,
-      WEBVIEW2_USER_DATA_FOLDER: profile,
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=' + port,
-    },
-    windowsHide: true,
-    stdio: 'ignore',
-  })
   let page
+  let app
+  let webdriver
   try {
-    page = new CdpPage(await waitForPage())
+    if (webdriverMode) {
+      webdriver = await startWebDriver()
+      page = new CdpPage(await waitForPage(webdriver.debuggerAddress), true)
+    } else {
+      app = spawn(executable, [], {
+        env: {
+          ...process.env,
+          WEBVIEW2_USER_DATA_FOLDER: profile,
+          WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=' + port,
+        },
+        windowsHide: true,
+        stdio: 'ignore',
+      })
+      page = new CdpPage(await waitForPage(), false)
+    }
     await page.connect()
-    await page.evaluate("window.confirm=()=>true; window.prompt=(_message, defaultValue)=>defaultValue || ''")
+    if (!webdriverMode) await page.evaluate("window.confirm=()=>true; window.prompt=(_message, defaultValue)=>defaultValue || ''")
     if (process.env.NOVELFORGE_E2E_VERBOSE === '1') {
       console.log('INITIAL_PAGE')
       console.log(await bodyText(page))
@@ -252,7 +384,11 @@ async function run() {
       console.log(await bodyText(page))
       console.log(await page.evaluate("Array.from(document.querySelectorAll('input,textarea')).map((item) => ({tag: item.tagName, type: item.getAttribute('type'), placeholder: item.getAttribute('placeholder'), aria: item.getAttribute('aria-label'), value: item.value}))"))
     }
-    await setField(page, '选择项目文件夹', projectPath)
+    if (nativeDialogMode) await chooseNativeDialog(page, 'folder', '选择项目文件夹', projectPath)
+    else await setField(page, '选择项目文件夹', projectPath)
+    if (nativeDialogMode && process.env.NOVELFORGE_E2E_VERBOSE === '1') {
+      console.log('NATIVE_PATH_INPUT', await page.evaluate("Array.from(document.querySelectorAll('input')).map((item) => ({placeholder: item.placeholder, value: item.value}))"))
+    }
     await setField(page, '例如：雾港来信', 'CDP 桌面验收')
     await setField(page, '署名', '自动化测试')
     await setField(page, '现代 / 仙侠 / 科幻', '现代')
@@ -396,6 +532,21 @@ async function run() {
     await waitForText(page, '潮汐历法')
     console.log('ENTITY_CRUD_OK')
 
+    if (nativeDialogMode) {
+      writeFileSync(attachmentSource, 'NovelForge 原生文件选择器验收附件。\n', 'utf8')
+      await clickExact(page, '资料附件')
+      await waitForText(page, '资料附件')
+      await chooseNativeDialog(page, 'file', '选择要导入的附件', attachmentSource, '导入附件')
+      await waitForText(page, 'novelforge-e2e-attachment-' + process.pid + '.txt')
+      await setField(page, '记录这份素材和小说的关系…', '原生 UI Automation 导入')
+      await clickExact(page, '保存说明')
+      const importedFile = readdirSync(resolve(projectPath, 'attachments')).find((name) => name.endsWith('.txt'))
+      if (!importedFile) throw new Error('附件目录未生成导入文件')
+      const importedContent = readFileSync(resolve(projectPath, 'attachments', importedFile), 'utf8')
+      if (!importedContent.includes('原生文件选择器验收附件')) throw new Error('导入附件内容不完整')
+      console.log('NATIVE_DIALOGS_OK')
+    }
+
     for (const view of ['时间线', '伏笔', '人物关系图', '一致性检查', '详细统计']) {
       await clickExact(page, view)
       await waitForText(page, view)
@@ -479,10 +630,15 @@ async function run() {
     console.log('EXPORTS_OK')
   } finally {
     page?.close()
-    app.kill()
+    if (webdriver?.sessionId) {
+      await requestJson('http://127.0.0.1:' + webdriverPort + '/session/' + webdriver.sessionId, { method: 'DELETE' }).catch(() => {})
+    }
+    if (webdriver?.driver && !webdriver.driver.killed) webdriver.driver.kill()
+    if (app && !app.killed) app.kill()
     await sleep(500)
     rmSync(profile, { recursive: true, force: true })
     rmSync(projectPath, { recursive: true, force: true })
+    rmSync(attachmentSource, { force: true })
     await new Promise((resolvePromise) => providerServer.close(resolvePromise))
   }
 }
