@@ -344,3 +344,9 @@
 - 已检查 .github/workflows/ci.yml 的触发器、权限、pnpm 版本、锁文件安装和 Rust 工作目录。
 - CI 在 main push / pull_request 上执行 pnpm install --frozen-lockfile、pnpm typecheck、pnpm lint、pnpm test、pnpm build、cargo check 和 cargo test。
 - GitHub 云端运行结果需在首次 push/PR 后由远程 Actions 提供；本地等价命令已在本轮各阶段通过。
+
+## P2-04 单章大文件验收（2026-08-31）
+
+- 新增真实命令链：生成超过 100,000 个中文字符的单章，打开、插入、删除、搜索、保存、重开并核对最终正文。
+- cargo test --manifest-path src-tauri/Cargo.toml single_chapter_100k_chinese_acceptance_covers_edit_search_and_reopen -- --nocapture：通过，1 passed，约 0.13 秒。
+- WebView2/CodeMirror 的 FPS、滚动和输入体感属于桌面人工验收，已补入 DESKTOP_E2E_CHECKLIST.md；未将命令层耗时冒充 UI 帧率结论。

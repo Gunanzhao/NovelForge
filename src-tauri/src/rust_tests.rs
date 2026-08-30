@@ -1164,6 +1164,87 @@ fn ai_provider_parses_openai_compatible_response() {
 }
 
 #[test]
+fn single_chapter_100k_chinese_acceptance_covers_edit_search_and_reopen() {
+    let root = test_root("single-chapter-100k");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "十万字单章验收".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "现代".to_string(),
+        target_words: 100_000,
+    })
+    .expect("create project");
+    let chapter = created
+        .nodes
+        .iter()
+        .find(|node| node.kind == "chapter")
+        .expect("chapter")
+        .clone();
+    let original = format!("{}待删除标记", "海".repeat(100_000));
+    let saved = super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(),
+        node_id: chapter.id.clone(),
+        content: original,
+        reason: "10 万字单章初始保存".to_string(),
+    })
+    .expect("save 100k chapter");
+    assert!(saved.content.chars().count() >= 100_005);
+
+    let opened = super::commands::get_document(super::models::NodeActionInput {
+        project_path: project_path.clone(),
+        node_id: chapter.id.clone(),
+    })
+    .expect("open chapter");
+    assert!(opened.content.chars().count() >= 100_005);
+
+    let inserted = format!("插入锚点\n{}", opened.content);
+    let edited = super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(),
+        node_id: chapter.id.clone(),
+        content: inserted,
+        reason: "插入编辑".to_string(),
+    })
+    .expect("save inserted content");
+    assert!(edited.content.starts_with("插入锚点"));
+    let search = super::commands::search_project(super::models::SearchInput {
+        project_path: project_path.clone(),
+        query: "插入锚点".to_string(),
+        kind: Some("manuscript".to_string()),
+        scope: None,
+        node_id: None,
+        volume_path: None,
+        tag: None,
+        case_sensitive: None,
+    })
+    .expect("search inserted content");
+    assert!(search.iter().any(|result| result.id == chapter.id));
+
+    let deleted_content = edited.content.replace("待删除标记", "");
+    let deleted = super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(),
+        node_id: chapter.id.clone(),
+        content: deleted_content,
+        reason: "删除编辑".to_string(),
+    })
+    .expect("save deleted content");
+    assert!(!deleted.content.contains("待删除标记"));
+
+    let reopened = super::commands::open_project(project_path.clone()).expect("reopen project");
+    assert!(reopened.nodes.iter().any(|node| node.id == chapter.id));
+    let final_document = super::commands::get_document(super::models::NodeActionInput {
+        project_path,
+        node_id: chapter.id,
+    })
+    .expect("read reopened chapter");
+    assert!(final_document.content.starts_with("插入锚点"));
+    assert!(!final_document.content.contains("待删除标记"));
+    assert!(final_document.content.chars().count() >= 100_000);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 #[ignore = "large project acceptance benchmark; run explicitly with cargo test -- --ignored"]
 fn large_project_acceptance_handles_1000_chapters_and_one_million_characters() {
     let root = test_root("large-project");

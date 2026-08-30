@@ -496,3 +496,9 @@
 - 新增 .github/workflows/ci.yml，针对 main push 和 pull request 运行前端与 Rust 两个 job。
 - 前端 job 固定 pnpm 11.19.0 / Node 22，执行 frozen-lockfile 安装、typecheck、lint、test 和 production build。
 - Rust job 使用 stable toolchain 和缓存，执行 cargo check 与 cargo test；工作流不依赖本地生成产物。
+
+## 2026-08-31：P2-04 单章大文件验收
+
+- 新增 single_chapter_100k_chinese_acceptance_covers_edit_search_and_reopen Rust 测试，使用超过 100,000 个中文字符，执行打开、编辑、插入、删除、搜索、保存和重新打开。
+- 定向 cargo test 通过（1 passed，约 0.13 秒）；既有 1,000 章 / 1,000,000 字 ignored 基准继续保留。
+- CodeMirror 在真实 WebView2 中的帧率和滚动体感无法由当前 Rust/浏览器单测替代，已在 DESKTOP_E2E_CHECKLIST.md 增加人工记录项。
