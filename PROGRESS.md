@@ -433,3 +433,12 @@
 - 新增删除→新建→恢复→永久删除的 Rust 集成测试，验证正文、章节小节和路径均不覆盖、不丢失。
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；12 个测试文件 / 54 项测试。
 - cargo check、cargo test 全部通过；29 项 Rust 常规测试，1 项大型基准按设计忽略。
+
+## 2026-08-30：P1-03 CodeMirror 选区编辑
+
+- 新增基于 CodeMirror transaction 的选区/光标 Markdown command，粗体、斜体、删除线和代码支持再次执行解除格式。
+- 工具栏补齐标题、引用、无序/有序/任务列表、链接、图片和分割线命令；多行选区保持行级选择。
+- 粗体和斜体接入命令注册表，默认 Ctrl+B/Ctrl+I，可通过现有命令面板重绑定并避免拦截普通输入框。
+- 新增 Unicode 单选区、空光标、多行选区和快捷键注册回归。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；12 个测试文件 / 56 项测试。
+- cargo check、cargo test 全部通过；29 项 Rust 常规测试，1 项大型基准按设计忽略。

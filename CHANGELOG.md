@@ -41,6 +41,7 @@
 
 - 审计 P1-01：为正文节点、卷元数据和资料镜像增加稳定 frontmatter；SQLite 损坏后可恢复 UUID、关系、地点树、章节关联和历史快照索引，并对旧项目缺少元数据写入 WARN。
 - 审计 P1-02：统一节点路径分配，阻止回收站原路径复用；章节 sidecar 随正文安全删除、恢复和永久删除，并补充冲突恢复回归。
+- 审计 P1-03：工具栏和快捷键改为 CodeMirror 选区 transaction，补齐基础 Markdown 格式命令并支持可重绑定 Ctrl+B/Ctrl+I。
 - 清理 Rust 非阻塞 dead-code 警告，保留回收站数据库字段的明确模型语义。
 - 为 React、CodeMirror、Markdown 和图标依赖增加生产分包；最大输出 chunk 降至约 364 kB，构建不再出现体积警告。
 - 修复浏览器 fallback 的卷/章/节路径、递归回收站快照恢复和二进制导出提示，并补充回归测试。

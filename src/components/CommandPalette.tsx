@@ -50,6 +50,10 @@ export function CommandPalette({ onNewProject, onCloseProject, onQuickOpen }: Co
       void saveCurrentDocument('命令面板保存')
     } else if (id === 'toggle-focus') {
       toggleFocusMode()
+    } else if (id === 'toggle-bold' || id === 'toggle-italic') {
+      window.dispatchEvent(new CustomEvent('novelforge:editor-command', {
+        detail: id === 'toggle-bold' ? 'bold' : 'italic',
+      }))
     }
     setOpen(false)
     setRecording(null)
@@ -127,6 +131,10 @@ export function CommandPalette({ onNewProject, onCloseProject, onQuickOpen }: Co
       }
       const command = Object.entries(shortcuts).find(([, value]) => value && value === shortcut)
       if (command) {
+        const editorCommand = command[0] === 'toggle-bold' || command[0] === 'toggle-italic'
+        const target = event.target
+        const inEditor = target instanceof Element && Boolean(target.closest('.cm-editor'))
+        if (editorCommand && !inEditor) return
         event.preventDefault()
         runCommand(command[0] as CommandId)
       }

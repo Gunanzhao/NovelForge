@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { convertPunctuation, wikiTargets, writingHints } from '../src/lib/markdown'
+import { applyMarkdownCommand, convertPunctuation, wikiTargets, writingHints } from '../src/lib/markdown'
 import {
   categoryEntityKind, generateNames, readFavoriteNames, toggleFavoriteName, writeFavoriteNames,
 } from '../src/lib/name-generator'
@@ -14,6 +14,24 @@ describe('Markdown writing helpers', () => {
     const source = '他说：“好”。,\n\n\n\n下一段  '
     expect(writingHints(source).map((hint) => hint.type)).toEqual(['punctuation', 'spacing', 'blank'])
     expect(convertPunctuation('你好,世界!', 'full')).toBe('你好，世界！')
+  })
+
+  it('applies inline commands to selected Unicode text and toggles them off', () => {
+    const bold = applyMarkdownCommand('林月', 0, 2, 'bold')
+    expect(bold.text).toBe('**林月**')
+    expect(bold.selection).toEqual({ from: 2, to: 4 })
+    const unbold = applyMarkdownCommand(bold.text, bold.selection.from, bold.selection.to, 'bold')
+    expect(unbold.text).toBe('林月')
+    expect(unbold.selection).toEqual({ from: 0, to: 2 })
+  })
+
+  it('inserts a selected placeholder at an empty cursor and formats multiple lines', () => {
+    const placeholder = applyMarkdownCommand('前后', 1, 1, 'italic')
+    expect(placeholder.text).toBe('前*文字*后')
+    expect(placeholder.selection).toEqual({ from: 2, to: 4 })
+    const quoted = applyMarkdownCommand('甲\n乙', 0, 3, 'quote')
+    expect(quoted.text).toBe('> 甲\n> 乙')
+    expect(quoted.selection).toEqual({ from: 0, to: 7 })
   })
 })
 

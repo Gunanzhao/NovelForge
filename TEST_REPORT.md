@@ -282,3 +282,10 @@
 - 删除、恢复和永久删除章节时 sidecar 与正文保持一致；恢复冲突时路径和兄弟顺序均保持唯一。
 - cargo test：29 项常规测试通过，1 项大型基准按设计忽略；新增路径复用集成测试通过。
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run：12 个测试文件 / 54 项测试全部通过。
+
+## P1-03 CodeMirror 选区编辑验证（2026-08-30）
+
+- 选区/光标 Markdown command 覆盖粗体、斜体、删除线、代码、标题、引用、列表、链接、图片和分割线；编辑通过 CodeMirror transaction 更新。
+- Ctrl+B/Ctrl+I 已进入可重绑定命令注册表；普通输入框不会被编辑器快捷键拦截。
+- 前端回归：12 个测试文件 / 56 项测试全部通过；包含 Unicode、多行和取消格式测试。
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；cargo check、cargo test 全部通过（29 项常规 + 1 项 ignored）。
