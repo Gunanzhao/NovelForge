@@ -1,3 +1,5 @@
+/* global console, fetch, process, setTimeout, WebSocket */
+
 import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -353,11 +355,6 @@ async function pressControlKey(page, key, code, virtualKey) {
   await page.command('Input.dispatchKeyEvent', { type: 'keyDown', key, code, modifiers: 2, windowsVirtualKeyCode: virtualKey })
   await page.command('Input.dispatchKeyEvent', { type: 'keyUp', key, code, modifiers: 2, windowsVirtualKeyCode: virtualKey })
   await page.command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Control', code: 'ControlLeft', modifiers: 0, windowsVirtualKeyCode: 17 })
-}
-
-async function pressPlainKey(page, key, code, virtualKey) {
-  await page.command('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: virtualKey })
-  await page.command('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: virtualKey })
 }
 
 async function pressEscape(page) {
