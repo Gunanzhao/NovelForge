@@ -409,3 +409,9 @@
 - 直连模式：286 帧，约 142.8 FPS；内容约 57,030 px，视口 670 px；替换 655 ms，保存 260 ms。
 - 官方 WebDriver + 原生对话框模式：278 帧，约 139.0 FPS；内容约 58,140 px，视口 670 px；替换 715 ms，保存 292 ms。
 - 该结果是量化补充，不替代滚动/输入主观体感与六种导出文件逐页视觉签核。
+
+## 带测试封面导出夹具与阅读器复核（2026-08-31）
+
+- commit 0710bbd 增加 NOVELFORGE_E2E_COVER=1 和 NOVELFORGE_E2E_KEEP_PROJECT=1；直连 release E2E 通过全部阶段标记，FPS 为 286 帧、约 142.9 FPS，并保留项目 C:\Users\Jiang\AppData\Local\Temp\novelforge-desktop-e2e-project-30116。
+- 六种导出均生成；HTML 在独立 Edge 中加载并通过 UI Automation 读取标题、目录和中文正文；Markdown/TXT 在记事本中读取；DOCX 在 LibreOffice Portable Writer 中打开；EPUB 在 Calibre Portable 中打开并显示目录；PDF 在 Edge 与 SumatraPDF 中均显示 1 页加载状态。
+- 7-Zip 归档检查确认 DOCX 的 word/media/cover.png 与 EPUB 的 OEBPS/images/cover.png 存在。该结果是封面资源与阅读器加载证据，不替代截图/逐页视觉签核；当前视觉后端不可用。

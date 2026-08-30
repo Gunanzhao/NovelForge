@@ -54,6 +54,9 @@ src-tauri/target/release/novelforge.exe
   $env:NOVELFORGE_E2E_WEBDRIVER='1'; $env:NOVELFORGE_E2E_NATIVE_DIALOGS='1'; pnpm.cmd test:e2e:desktop
 - 可选大文档性能命令（在上述两种模式分别设置 NOVELFORGE_E2E_FPS='1'）：
   $env:NOVELFORGE_E2E_FPS='1'; pnpm.cmd test:e2e:desktop
+- 带测试封面的导出复现（仅直连 CDP；保留项目目录供阅读器检查）：
+  $env:NOVELFORGE_E2E_COVER='1'; $env:NOVELFORGE_E2E_KEEP_PROJECT='1'; pnpm.cmd test:e2e:desktop
+- 上述封面模式复制 src-tauri/icons/icon.png 到项目 attachments/cover.png，导出对话框自动填写该相对路径，并输出 E2E_PROJECT_PATH；不要把测试封面当作生产素材。
 - 自动化结果（2026-08-31）：CORE_EDITOR_TREE_OK、DRAG_DROP_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、WIKI_NAVIGATION_OK、SETTINGS_COMMANDS_OK、RECOVERY_FAILURE_OK、NATIVE_DIALOGS_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK。
 - 性能采样结果（2026-08-31）：直连模式 2 秒 286 帧（约 142.8 FPS），WebDriver + 原生对话框模式 2 秒 278 帧（约 139.0 FPS）；真实 editor-pane 内容约 57,030 / 58,140 px、视口 670 px，替换约 655 / 715 ms、保存约 260 / 292 ms。
 - 覆盖说明：脚本在隔离 WebView2 用户目录中启动 release EXE；官方 tauri-driver + WebDriver 覆盖真实会话，UI Automation 覆盖原生文件夹/文件选择器，WebDriver 对话框事件覆盖确认/提示框。恢复流程会关闭并重新启动应用，验证恢复提示、预览、恢复写回和恢复目录清理。
@@ -67,3 +70,11 @@ src-tauri/target/release/novelforge.exe
 - DOCX：LibreOffice Portable Writer 窗口标题为导出文件名并标记“只读”；无界面 soffice --convert-to pdf 返回 0 并生成 PDF。
 - EPUB：Calibre Portable 窗口标题为“CDP 桌面验收 [EPUB] — 电子书阅读器”，UI Automation 读取到目录和中文阅读器界面。
 - PDF：独立 Edge PDF 窗口显示“PDF Document”、1 页和第 1 页内容；SumatraPDF 3.6.1 已安装备用。
+
+### 带测试封面复核（2026-08-31）
+
+- commit 0710bbd 的 NOVELFORGE_E2E_COVER=1 + NOVELFORGE_E2E_KEEP_PROJECT=1 直连运行通过全部 E2E 标记和 FPS 采样（约 142.9 FPS），保留项目目录：C:\Users\Jiang\AppData\Local\Temp\novelforge-desktop-e2e-project-30116。
+- 该项目生成六种导出物；HTML 的 Edge UI Automation 文本包含标题、目录、中文正文和图片占位，说明页面及封面资源已加载。
+- DOCX 的 LibreOffice Portable Writer 窗口已打开；7-Zip 检查到 word/media/cover.png。EPUB 的 Calibre Portable 窗口已打开并显示目录；7-Zip 检查到 OEBPS/images/cover.png。
+- Markdown/TXT 记事本 UI Automation 读取到标题、目录、卷章顺序和中文正文；PDF 在 Edge 与 SumatraPDF 中均显示 1 页加载状态。
+- 以上是带真实封面夹具的加载/结构证据；截图后端当前不可用，六种导出逐页视觉细节和编辑器滚动/输入体感仍需人工签核。

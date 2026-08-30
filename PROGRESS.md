@@ -555,3 +555,10 @@
 - 直连 release WebView2：286 帧、约 142.8 FPS，editor-pane 内容约 57,030 px / 670 px 视口，替换约 655 ms、保存约 260 ms。
 - 官方 Tauri WebDriver + 原生 UI Automation：278 帧、约 139.0 FPS，editor-pane 内容约 58,140 px / 670 px 视口，替换约 715 ms、保存约 292 ms。
 - 量化采样不能替代用户对滚动和输入体感的人工判断；桌面清单仍保留该人工项及六种导出逐页视觉签核。
+
+## 2026-08-31：带测试封面导出夹具与阅读器复核
+
+- commit 0710bbd 为 scripts/desktop-e2e-cdp.mjs 增加 NOVELFORGE_E2E_COVER=1 和 NOVELFORGE_E2E_KEEP_PROJECT=1：复制 src-tauri/icons/icon.png 为 attachments/cover.png，导出时自动填入封面相对路径并保留项目目录。
+- 直连 release E2E 通过全部阶段标记和 FPS 采样（286 帧、约 142.9 FPS），本次保留目录为 C:\Users\Jiang\AppData\Local\Temp\novelforge-desktop-e2e-project-30116；六种导出均生成。
+- 真实阅读器复核：记事本读取 Markdown/TXT；Edge 加载 HTML/PDF；LibreOffice Portable Writer 打开 DOCX；Calibre Portable eBook Viewer 打开 EPUB；DOCX/EPUB 归档分别包含 word/media/cover.png 与 OEBPS/images/cover.png。
+- 该轮仍只证明加载、可访问文本和导出归档结构；当前无法取得可靠桌面截图，逐页视觉细节与滚动/输入主观体感不标记为完成。

@@ -55,6 +55,7 @@
 - P3-02 自动化：新增 pnpm test:e2e:desktop 的 WebView2 CDP release 验收脚本，覆盖编辑器、历史、正文树、拖拽/批量恢复、资料、Wiki、设置/命令面板、规划、搜索、AI 双模式、真实重启恢复和六种导出生成/结构断言；官方 tauri-driver + WebDriver 与原生 UI Automation 文件选择器已通过。
 - P3-02 验收边界：CodeMirror FPS/滚动体感和在实际 Word/WPS、LibreOffice/Calibre、Sumatra/Acrobat 等阅读器中打开六种导出文件仍需人工记录；不以结构断言替代视觉确认。
 - P3-02 性能补充：直连 WebView2 2 秒 286 帧（约 142.8 FPS），官方 WebDriver + 原生对话框 2 秒 278 帧（约 139.0 FPS）；量化结果不替代滚动/输入体感和阅读器视觉确认。
+- P3-02 阅读器复核补充：E2E 支持可选测试封面夹具和保留项目目录；六种导出已由记事本、Edge、LibreOffice Portable、Calibre Portable、SumatraPDF 完成加载/结构复核，逐页视觉仍保留人工门禁。
 - 清理 Rust 非阻塞 dead-code 警告，保留回收站数据库字段的明确模型语义。
 - 为 React、CodeMirror、Markdown 和图标依赖增加生产分包；最大输出 chunk 降至约 364 kB，构建不再出现体积警告。
 - 修复浏览器 fallback 的卷/章/节路径、递归回收站快照恢复和二进制导出提示，并补充回归测试。

@@ -55,3 +55,4 @@
 - 2026-08-31：最终门禁重跑（代码提交 83fe730）；pnpm.cmd typecheck、lint、test -- --run、build，cargo check、cargo test 和 1000 章/100 万字 ignored 基准（52.72 秒）全部通过；重新生成 release EXE/NSIS，独立 EXE Responding=True；直连 CDP 与官方 WebDriver + 原生对话框桌面 E2E 均通过。P3-02 仅保留 FPS/阅读器人工门禁。
 - 2026-08-31：阅读器冒烟补充；使用 Windows 记事本打开 Markdown/TXT、Edge 打开 HTML/PDF、LibreOffice Portable Writer 打开 DOCX、Calibre Portable eBook Viewer 打开 EPUB，并记录窗口标题、可访问文本或转换结果；逐页视觉核对与 CodeMirror FPS/滚动体感仍保留为人工签核，不将冒烟证据标记为完成。
 - 2026-08-31：新增可选大文档桌面采样；直连 release WebView2 2 秒 286 帧（约 142.8 FPS），官方 WebDriver + 原生对话框模式 2 秒 278 帧（约 139.0 FPS），均确认真实 editor-pane overflow 容器和 100,000 字以上分块注入/保存；滚动输入主观体感及逐页导出视觉仍待人工签核。
+- 2026-08-31：新增带测试封面的可复现导出夹具（commit 0710bbd）；直连 E2E 保留项目目录并由记事本、Edge、LibreOffice Portable、Calibre Portable、SumatraPDF 完成加载复核，DOCX/EPUB 归档确认封面资源存在；截图不可用，视觉门禁仍保持未完成。
