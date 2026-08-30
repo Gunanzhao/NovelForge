@@ -57,3 +57,4 @@
 - 2026-08-31：新增可选大文档桌面采样；直连 release WebView2 2 秒 286 帧（约 142.8 FPS），官方 WebDriver + 原生对话框模式 2 秒 278 帧（约 139.0 FPS），均确认真实 editor-pane overflow 容器和 100,000 字以上分块注入/保存；滚动输入主观体感及逐页导出视觉仍待人工签核。
 - 2026-08-31：新增带测试封面的可复现导出夹具（commit 0710bbd）；直连 E2E 保留项目目录并由记事本、Edge、LibreOffice Portable、Calibre Portable、SumatraPDF 完成加载复核，DOCX/EPUB 归档确认封面资源存在；截图不可用，视觉门禁仍保持未完成。
 - 2026-08-31：PDF 跨阅读器视觉修复（commit e9ed8f3）；引入 printpdf 与 Windows CJK 字体子集嵌入，最新 release PDF 在 Edge、SumatraPDF 3.6.1 和 Poppler 中均确认中文、章节文本与测试封面可读，关闭 PDF 乱码门禁；Markdown/TXT/HTML/DOCX/EPUB 逐页视觉及 CodeMirror 主观体感仍保留人工门禁。
+- 2026-08-31：PDF 修复后重跑官方 WebDriver + 原生对话框 + FPS；全部阶段标记通过，100,000 字 editor-pane 276 帧（约 137.7 FPS）。补充真实阅读器截图：Markdown/TXT、HTML、DOCX 的可读性与版式通过，EPUB 目录通过但当前 Calibre 链接未完成正文跳转，五种格式整体与 CodeMirror 主观体感继续保留人工门禁。

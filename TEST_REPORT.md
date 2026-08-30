@@ -422,3 +422,10 @@
 - 最新 release 重新生成的 PDF 为 C:\Users\Jiang\AppData\Local\Temp\novelforge-desktop-e2e-project-33364\.novelforge\exports\CDP桌面验收-20260830220250089.pdf，大小约 5.1 MB，Poppler pdftotext/pdftohtml -xml 可读中文并识别封面图像。
 - Edge 与 SumatraPDF 3.6.1 实际窗口均显示 1 页；标题、作者、卷章标题、中文正文和测试封面均清晰，无此前 STSong-Light 未嵌入导致的乱码。
 - 因此 PDF 的跨阅读器视觉问题已关闭；剩余仍是 Markdown/TXT/HTML/DOCX/EPUB 的逐页视觉签核，以及 CodeMirror 100,000 字单章滚动/输入主观体感。
+
+## PDF 修复后官方 WebDriver 重跑与五种导出视觉复核（2026-08-31）
+
+- 使用同一 release 重新运行 EDGE_DRIVER_PATH + NOVELFORGE_E2E_WEBDRIVER=1 + NOVELFORGE_E2E_NATIVE_DIALOGS=1 + NOVELFORGE_E2E_FPS=1；全部阶段标记（含 NATIVE_DIALOGS_OK、RECOVERY_FAILURE_OK、EXPORTS_OK）通过。
+- 本轮 100,000 字 editor-pane 采样 276 帧、约 137.7 FPS，内容 57,030 px、视口 670 px，替换 824 ms、保存 289 ms；量化结果仍不替代主观滚动/输入体感。
+- 同一保留项目目录的只读窗口截图：记事本 Markdown/TXT 中文、目录和章节可读；Edge HTML 标题、作者、封面和目录可读；LibreOffice Writer DOCX 封面、标题、列表和正文可读；Calibre EPUB 目录和中文目录可读。DOCX 另经 LibreOffice 转 PDF 渲染两页，正文/列表/封面均可读。
+- Calibre 当前目录链接未完成正文跳转，故不把 EPUB 全部正文视觉签核或五种格式总体门禁标为完成；剩余项目仍为 EPUB 正文页确认、Markdown/TXT/HTML/DOCX 的逐页细节复核以及 CodeMirror 主观体感。

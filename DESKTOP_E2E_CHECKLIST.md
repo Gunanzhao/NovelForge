@@ -59,6 +59,7 @@ src-tauri/target/release/novelforge.exe
 - 上述封面模式复制 src-tauri/icons/icon.png 到项目 attachments/cover.png，导出对话框自动填写该相对路径，并输出 E2E_PROJECT_PATH；不要把测试封面当作生产素材。
 - 自动化结果（2026-08-31）：CORE_EDITOR_TREE_OK、DRAG_DROP_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、WIKI_NAVIGATION_OK、SETTINGS_COMMANDS_OK、RECOVERY_FAILURE_OK、NATIVE_DIALOGS_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK。
 - 性能采样结果（2026-08-31）：直连模式 2 秒 286 帧（约 142.8 FPS），WebDriver + 原生对话框模式 2 秒 278 帧（约 139.0 FPS）；真实 editor-pane 内容约 57,030 / 58,140 px、视口 670 px，替换约 655 / 715 ms、保存约 260 / 292 ms。
+- PDF 修复后的官方 WebDriver 重跑（2026-08-31）：全部阶段标记再次通过；100,000 字 editor-pane 2 秒 276 帧（约 137.7 FPS），替换 824 ms、保存 289 ms，内容 57,030 px / 670 px。
 - 覆盖说明：脚本在隔离 WebView2 用户目录中启动 release EXE；官方 tauri-driver + WebDriver 覆盖真实会话，UI Automation 覆盖原生文件夹/文件选择器，WebDriver 对话框事件覆盖确认/提示框。恢复流程会关闭并重新启动应用，验证恢复提示、预览、恢复写回和恢复目录清理。
 - 仍需人工记录：CodeMirror 在 100,000 字单章中的滚动输入体感，以及 Markdown/TXT/HTML/DOCX/EPUB 五种导出物的逐页视觉细节（中文、粗体、列表、标题、目录、封面与章节顺序）。PDF 已在本机 Edge 与 SumatraPDF 中完成中文、封面和页面显示核对。上述 FPS 是真实 WebView2 rAF/overflow 容器的量化补充，不能替代主观体感。
 
@@ -78,3 +79,4 @@ src-tauri/target/release/novelforge.exe
 - DOCX 的 LibreOffice Portable Writer 窗口已打开；7-Zip 检查到 word/media/cover.png。EPUB 的 Calibre Portable 窗口已打开并显示目录；7-Zip 检查到 OEBPS/images/cover.png。
 - Markdown/TXT 记事本 UI Automation 读取到标题、目录、卷章顺序和中文正文；PDF 在 Edge 与 SumatraPDF 中均显示 1 页，中文与封面视觉核对通过。
 - 以上是带真实封面夹具的加载/结构证据；PDF 视觉门禁已完成，Markdown/TXT/HTML/DOCX/EPUB 的逐页视觉细节和编辑器滚动/输入体感仍需人工签核。
+- 本轮截图复核补充：记事本 Markdown/TXT 中文与目录可读，Edge HTML 标题/封面/目录可读，LibreOffice DOCX 封面/标题/列表/正文可读，Calibre EPUB 目录可读；EPUB 目录链接未能在当前 Calibre 窗口中完成正文跳转，因此五种格式整体仍不标记为全部完成。

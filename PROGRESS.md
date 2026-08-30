@@ -568,3 +568,9 @@
 - commit e9ed8f3 为 PDF 导出引入 printpdf，并优先嵌入 C:\Windows\Fonts\simhei.ttf 等本机 CJK 字体；支持 NOVELFORGE_PDF_FONT 覆盖字体路径，无字体时保留旧版回退。
 - 最新 release E2E 保留项目 C:\Users\Jiang\AppData\Local\Temp\novelforge-desktop-e2e-project-33364 的 PDF 约 5.1 MB；Poppler 文本/图像提取正常，Edge 和 SumatraPDF 3.6.1 实际窗口均显示正确中文、章节内容及测试封面。
 - 此前 Edge/Sumatra 的 STSong-Light 未嵌入乱码已修复；PDF 视觉门禁完成。剩余发布收尾为 Markdown/TXT/HTML/DOCX/EPUB 五种格式逐页视觉确认，以及 CodeMirror 100,000 字单章滚动/输入主观体感。
+
+## 2026-08-31：PDF 修复后桌面重跑与导出窗口复核
+
+- 在 e9ed8f3 release 上重跑官方 WebDriver、原生对话框和 FPS；全部阶段标记通过，100,000 字 editor-pane 2 秒 276 帧（约 137.7 FPS），替换 824 ms、保存 289 ms。
+- 真实窗口截图确认 Markdown/TXT（记事本）、HTML（Edge）、DOCX（LibreOffice）中的中文、标题、目录/列表和封面可读；DOCX 转 PDF 两页渲染也通过。EPUB（Calibre）目录和中文目录可读，但当前目录链接未完成正文跳转。
+- 因 EPUB 正文跳转证据不足，五种非 PDF 格式仍不统一标记为逐页视觉完成；剩余门禁为 EPUB 正文页、其余格式逐页细节和 CodeMirror 100,000 字滚动/输入主观体感。
