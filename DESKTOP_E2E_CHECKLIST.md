@@ -46,3 +46,9 @@ src-tauri/target/release/novelforge.exe
 - 验收日期：__________
 - release 版本 / commit：__________
 - 未通过项与截图：________________________________
+
+## CDP 自动化记录
+
+- 运行命令：pnpm.cmd test:e2e:desktop
+- 自动化结果（2026-08-31）：CORE_EDITOR_TREE_OK、ENTITY_CRUD_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、TRASH_RESTORE_OK、EXPORTS_OK。
+- 说明：脚本通过隔离 WebView2 CDP 控制 release EXE；原生目录选择器、系统确认/提示框、FPS 和外部阅读器阅读结果仍必须由人工按上方清单记录。

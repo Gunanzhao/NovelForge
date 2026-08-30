@@ -373,3 +373,10 @@
 | Release | pnpm.cmd tauri:build + 独立 EXE 4 秒启动 | 通过；EXE Responding=True，NSIS 已生成 |
 
 人工门禁仍未宣称完成：需要在带 WebView2 的 Windows 桌面按 DESKTOP_E2E_CHECKLIST.md 操作并记录 FPS、导出文件阅读结果。
+
+## P3-02 CDP 桌面自动化验证（2026-08-31）
+
+- 命令：pnpm.cmd test:e2e:desktop。
+- 结果：通过；脚本启动隔离用户目录中的 release EXE，并通过 WebView2 CDP 完成核心编辑器/正文树、资料 CRUD、规划视图、搜索、AI 选区/最近章节/Esc 取消、回收站恢复和六种导出生成。
+- 阶段标记：CORE_EDITOR_TREE_OK、ENTITY_CRUD_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、TRASH_RESTORE_OK、EXPORTS_OK。
+- 仍需人工：原生目录选择器、真实确认/提示框、CodeMirror FPS/滚动体感及用 Word/WPS/EPUB/PDF 阅读器打开并核对六种导出文件。

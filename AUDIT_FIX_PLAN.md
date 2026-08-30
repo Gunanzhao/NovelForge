@@ -50,3 +50,4 @@
 - 2026-08-31：P3-01 完成；新增 docs/PLUGIN_API.md、进程内 PluginRegistry 和六类扩展点，内置名字生成器与一致性检查通过注册协议接入；明确 V1.0 不加载或执行任意外部 JavaScript，前端 63 项测试通过。
 - 2026-08-31：P3-02 完成 release 预检；pnpm.cmd tauri:build 重新生成 release EXE/NSIS，独立 EXE 启动 4 秒保持 Responding=True 后正常退出；tauri-driver、msedgedriver 均未安装，真实 WebView2 鼠标级 E2E 未将预检冒充完成。
 - 2026-08-31：最终自动门禁复核；pnpm.cmd typecheck/lint/test/build 全部通过（13 个测试文件 / 63 项），cargo test 33 项常规通过，ignored 大型基准 54.60 秒通过；除用户提供的收尾计划文件外工作区无代码改动。
+- 2026-08-31：P3-02 CDP 自动化补齐；新增 scripts/desktop-e2e-cdp.mjs 与 pnpm test:e2e:desktop，release WebView2 实际跑通核心编辑器/正文树、资料 CRUD、规划视图、搜索、AI 选区/最近章节/Esc 取消、回收站恢复和六种导出生成（CORE_EDITOR_TREE_OK、ENTITY_CRUD_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、TRASH_RESTORE_OK、EXPORTS_OK）；原生文件夹选择、系统确认框、FPS 和外部阅读器仍需人工。
