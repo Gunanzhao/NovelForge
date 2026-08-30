@@ -1,7 +1,7 @@
 /* global console, fetch, process, setTimeout, WebSocket */
 
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
@@ -16,6 +16,8 @@ const webdriverPort = Number(process.env.NOVELFORGE_WEBDRIVER_PORT ?? 4467)
 const nativeDriverPort = Number(process.env.NOVELFORGE_NATIVE_DRIVER_PORT ?? 4468)
 const nativeDialogScript = resolve(root, 'scripts/desktop-dialog-uia.ps1')
 const nativeDialogMode = process.env.NOVELFORGE_E2E_NATIVE_DIALOGS === '1'
+const coverMode = process.env.NOVELFORGE_E2E_COVER === '1'
+const keepProject = process.env.NOVELFORGE_E2E_KEEP_PROJECT === '1'
 const sleep = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds))
 
 if (!existsSync(executable)) throw new Error('release EXE 不存在：' + executable)
@@ -582,6 +584,10 @@ async function run() {
     : resolve(tmpdir(), 'novelforge-desktop-e2e-project-' + process.pid)
   rmSync(projectPath, { recursive: true, force: true })
   if (nativeDialogMode) mkdirSync(projectPath, { recursive: true })
+  if (coverMode) {
+    mkdirSync(resolve(projectPath, 'attachments'), { recursive: true })
+    copyFileSync(resolve(root, 'src-tauri/icons/icon.png'), resolve(projectPath, 'attachments/cover.png'))
+  }
   const attachmentSource = resolve(tmpdir(), 'novelforge-e2e-attachment-' + process.pid + '.txt')
   rmSync(attachmentSource, { force: true })
   const providerServer = createServer((_request, response) => {
@@ -937,6 +943,7 @@ async function run() {
       const format = exports[index]
       await clickExact(page, '导出')
       await waitForText(page, '导出项目')
+      if (coverMode) await setField(page, 'attachments/cover.jpg', 'attachments/cover.png')
       await clickText(page, format[0])
       await waitForExport(projectPath, format[1])
     }
@@ -960,6 +967,7 @@ async function run() {
       if (readFileSync(fileFor(extension)).length < 200) throw new Error(extension + ' 导出文件为空')
     }
     console.log('EXPORTS_OK')
+    if (keepProject) console.log('E2E_PROJECT_PATH ' + projectPath)
   } finally {
     page?.close()
     if (webdriver?.sessionId) {
@@ -969,7 +977,7 @@ async function run() {
     stopProcessTree(app)
     await sleep(500)
     rmSync(profile, { recursive: true, force: true })
-    rmSync(projectPath, { recursive: true, force: true })
+    if (!keepProject) rmSync(projectPath, { recursive: true, force: true })
     rmSync(attachmentSource, { force: true })
     await new Promise((resolvePromise) => providerServer.close(resolvePromise))
   }
