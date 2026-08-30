@@ -389,3 +389,10 @@
 - 新增回归：真实应用重启后的保存失败与恢复提示、恢复内容预览/写回/清理、拖拽和批量恢复、Wiki 跳转、设置/命令面板、原生附件导入。
 - 两种模式均通过的阶段标记：CORE_EDITOR_TREE_OK、DRAG_DROP_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、WIKI_NAVIGATION_OK、SETTINGS_COMMANDS_OK、RECOVERY_FAILURE_OK、NATIVE_DIALOGS_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK。
 - 导出结构断言继续通过：Markdown 保留中文/粗体，TXT 清理 Markdown/Wiki，HTML 保留 strong，PDF 头正确，DOCX/EPUB 文件非空。阅读器视觉确认和 CodeMirror FPS 仍未虚报完成。
+
+## 最终全量门禁重跑（2026-08-31）
+
+- 代码提交 83fe730 后，前端 typecheck、lint、test -- --run、build 全部通过（13 个测试文件 / 63 项测试）。
+- Rust cargo check、cargo test 全部通过（33 项常规测试）；1000 章 / 100 万字 ignored 基准通过，耗时 52.72 秒。
+- pnpm.cmd tauri:build 通过并重新生成 release EXE/NSIS；独立进程启动 4 秒保持 Responding=True 后精确关闭。
+- 直连 CDP 和官方 WebDriver + 原生 UI Automation 两种 E2E 模式均通过全部阶段标记；剩余人工门禁仅为 CodeMirror FPS/滚动体感和外部阅读器视觉确认。

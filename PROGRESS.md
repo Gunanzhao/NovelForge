@@ -536,3 +536,10 @@
 - 已安装并使用官方 tauri-driver 2.0.6 与匹配 WebView2 151.0.4129.107 的 Microsoft Edge WebDriver；WebDriver 会话和 Windows UI Automation 文件/文件夹选择器均通过。
 - 直连 CDP 和官方 WebDriver + 原生对话框两种模式均通过 pnpm.cmd test:e2e:desktop；自动化标记包含 RECOVERY_FAILURE_OK、NATIVE_DIALOGS_OK、DRAG_DROP_OK、WIKI_NAVIGATION_OK、SETTINGS_COMMANDS_OK 及六种导出 EXPORTS_OK。
 - 当前剩余不是代码实现而是发布验收证据：CodeMirror 100,000 字单章的 FPS/滚动体感，以及在实际 Word/WPS、LibreOffice/Calibre、Sumatra/Acrobat 等阅读器中打开并核对导出文件；本机未发现完整阅读器组合。
+
+## 2026-08-31：最终门禁重跑
+
+- 代码提交 83fe730 后重跑 pnpm.cmd typecheck、lint、test -- --run、build：全部通过，前端 13 个测试文件 / 63 项测试。
+- cargo check、cargo test：通过，33 项常规测试；1000 章 / 100 万字 ignored 基准通过，耗时 52.72 秒。
+- pnpm.cmd tauri:build：通过，重新生成 Windows x64 release EXE 与 NSIS 安装包；独立启动 4 秒 Responding=True 后精确关闭。
+- 直连 CDP 与官方 WebDriver + 原生 UI Automation E2E 均通过，所有阶段标记（含恢复重启、原生对话框和 EXPORTS_OK）均出现；当前只剩 FPS/阅读器视觉人工门禁。
