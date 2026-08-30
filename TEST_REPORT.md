@@ -402,3 +402,10 @@
 - Markdown/TXT 已由 Windows 记事本打开并通过 UI Automation 读取中文正文；HTML/PDF 已由独立 Edge 窗口打开。
 - DOCX 已由 LibreOffice Portable Writer 26.2.4 以只读窗口打开，且 soffice --convert-to pdf 返回 0；EPUB 已由 Calibre Portable eBook Viewer 9.14.0 打开并读取目录；SumatraPDF 3.6.1 已安装。
 - 这些是外部阅读器加载冒烟和文本/转换证据，尚未完成逐页视觉签核；CodeMirror FPS/滚动体感与导出视觉细节仍保持人工未完成状态。
+
+## 大文档 WebView2 FPS 采样（2026-08-31）
+
+- 新增可选环境变量 NOVELFORGE_E2E_FPS=1；性能阶段在真实 release WebView2 中分块注入超过 100,000 个中文字符，确认 editor-pane overflow 容器后滚动采样 2 秒 rAF，并恢复基线正文。
+- 直连模式：286 帧，约 142.8 FPS；内容约 57,030 px，视口 670 px；替换 655 ms，保存 260 ms。
+- 官方 WebDriver + 原生对话框模式：278 帧，约 139.0 FPS；内容约 58,140 px，视口 670 px；替换 715 ms，保存 292 ms。
+- 该结果是量化补充，不替代滚动/输入主观体感与六种导出文件逐页视觉签核。

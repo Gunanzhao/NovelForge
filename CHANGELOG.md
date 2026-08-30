@@ -49,11 +49,12 @@
 - P2-01：AI 上下文支持当前选区/段落、最近 1/3/5/10 章、指定正文与资料，显示字符/Token 预算；选区任务仅可替换选区或插入选区后。
 - P2-02：commands.rs 迁移为 commands/mod.rs，AI/搜索/统计实现进入独立模块，并建立项目、正文、资料、恢复、回收站、一致性、导出及 storage 子模块边界；保持现有命令调用兼容。
 - P2-03：新增 GitHub Actions CI，锁定 pnpm/Node 与 Rust stable，自动执行前端安装、类型检查、Lint、测试、构建及 Rust check/test。
-- P2-04：新增超过 10 万中文字符单章的打开、编辑、插入、删除、搜索、保存和重开验收测试，并把 WebView2/CodeMirror FPS 人工记录加入桌面清单。
+- P2-04：新增超过 10 万中文字符单章的打开、编辑、插入、删除、搜索、保存和重开验收测试；桌面 E2E 增加可选真实 overflow/rAF FPS 采样，同时保留滚动输入体感人工记录。
 - P3-01：新增 PluginRegistry 和 docs/PLUGIN_API.md，定义六类扩展点并注册内置名字生成器、一致性检查；V1.0 不执行任意外部 JavaScript。
 - P3-02 预检：重新生成 Windows release EXE/NSIS 并完成独立启动响应检查；真实 WebView2 鼠标级 E2E 继续保留为人工验收。
 - P3-02 自动化：新增 pnpm test:e2e:desktop 的 WebView2 CDP release 验收脚本，覆盖编辑器、历史、正文树、拖拽/批量恢复、资料、Wiki、设置/命令面板、规划、搜索、AI 双模式、真实重启恢复和六种导出生成/结构断言；官方 tauri-driver + WebDriver 与原生 UI Automation 文件选择器已通过。
 - P3-02 验收边界：CodeMirror FPS/滚动体感和在实际 Word/WPS、LibreOffice/Calibre、Sumatra/Acrobat 等阅读器中打开六种导出文件仍需人工记录；不以结构断言替代视觉确认。
+- P3-02 性能补充：直连 WebView2 2 秒 286 帧（约 142.8 FPS），官方 WebDriver + 原生对话框 2 秒 278 帧（约 139.0 FPS）；量化结果不替代滚动/输入体感和阅读器视觉确认。
 - 清理 Rust 非阻塞 dead-code 警告，保留回收站数据库字段的明确模型语义。
 - 为 React、CodeMirror、Markdown 和图标依赖增加生产分包；最大输出 chunk 降至约 364 kB，构建不再出现体积警告。
 - 修复浏览器 fallback 的卷/章/节路径、递归回收站快照恢复和二进制导出提示，并补充回归测试。

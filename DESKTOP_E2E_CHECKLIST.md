@@ -52,9 +52,12 @@ src-tauri/target/release/novelforge.exe
 - 直连命令：pnpm.cmd test:e2e:desktop
 - 官方 WebDriver + 原生对话框命令（需设置与当前 WebView2 匹配的 EDGE_DRIVER_PATH）：
   $env:NOVELFORGE_E2E_WEBDRIVER='1'; $env:NOVELFORGE_E2E_NATIVE_DIALOGS='1'; pnpm.cmd test:e2e:desktop
+- 可选大文档性能命令（在上述两种模式分别设置 NOVELFORGE_E2E_FPS='1'）：
+  $env:NOVELFORGE_E2E_FPS='1'; pnpm.cmd test:e2e:desktop
 - 自动化结果（2026-08-31）：CORE_EDITOR_TREE_OK、DRAG_DROP_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、WIKI_NAVIGATION_OK、SETTINGS_COMMANDS_OK、RECOVERY_FAILURE_OK、NATIVE_DIALOGS_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK。
+- 性能采样结果（2026-08-31）：直连模式 2 秒 286 帧（约 142.8 FPS），WebDriver + 原生对话框模式 2 秒 278 帧（约 139.0 FPS）；真实 editor-pane 内容约 57,030 / 58,140 px、视口 670 px，替换约 655 / 715 ms、保存约 260 / 292 ms。
 - 覆盖说明：脚本在隔离 WebView2 用户目录中启动 release EXE；官方 tauri-driver + WebDriver 覆盖真实会话，UI Automation 覆盖原生文件夹/文件选择器，WebDriver 对话框事件覆盖确认/提示框。恢复流程会关闭并重新启动应用，验证恢复提示、预览、恢复写回和恢复目录清理。
-- 仍需人工记录：CodeMirror 在 100,000 字单章中的 FPS、滚动和输入体感，以及六种导出物的视觉细节（中文、粗体、列表、标题、目录、封面与章节顺序）。本轮已准备官方/便携阅读器并完成外部打开冒烟：Windows 记事本（Markdown/TXT）、Edge（HTML/PDF）、LibreOffice Portable Writer 26.2.4（DOCX）和 Calibre Portable eBook Viewer 9.14.0（EPUB）；SumatraPDF 3.6.1 也已安装。打开窗口/可访问文本或转换结果已核对，但尚未把这类证据等同于逐页人工视觉签核。
+- 仍需人工记录：CodeMirror 在 100,000 字单章中的滚动输入体感，以及六种导出物的视觉细节（中文、粗体、列表、标题、目录、封面与章节顺序）。上述 FPS 是真实 WebView2 rAF/overflow 容器的量化补充，不能替代主观体感；本轮已准备官方/便携阅读器并完成外部打开冒烟，但尚未把这类证据等同于逐页人工视觉签核。
 
 ### 阅读器冒烟记录（2026-08-31）
 

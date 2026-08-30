@@ -548,3 +548,10 @@
 
 - 已准备并验证外部阅读器：Windows 记事本读取 Markdown/TXT；独立 Edge 窗口打开 HTML/PDF；LibreOffice Portable Writer 26.2.4 打开 DOCX（只读窗口，soffice --convert-to pdf 成功）；Calibre Portable eBook Viewer 9.14.0 打开 EPUB 并显示目录；SumatraPDF 3.6.1 已安装。
 - 以上结果只证明文件能被真实阅读器接收并加载，不替代逐页视觉核对；CodeMirror 100,000 字单章的 FPS、滚动和输入体感，以及导出视觉细节仍待人工签核。
+
+## 2026-08-31：大文档 WebView2 FPS 采样
+
+- scripts/desktop-e2e-cdp.mjs 增加默认关闭的 NOVELFORGE_E2E_FPS=1 阶段：分块注入超过 100,000 个中文字符，滚动到末尾验证尾标记，寻找真实 overflow 容器并采样 2 秒 requestAnimationFrame，最后恢复基线正文。
+- 直连 release WebView2：286 帧、约 142.8 FPS，editor-pane 内容约 57,030 px / 670 px 视口，替换约 655 ms、保存约 260 ms。
+- 官方 Tauri WebDriver + 原生 UI Automation：278 帧、约 139.0 FPS，editor-pane 内容约 58,140 px / 670 px 视口，替换约 715 ms、保存约 292 ms。
+- 量化采样不能替代用户对滚动和输入体感的人工判断；桌面清单仍保留该人工项及六种导出逐页视觉签核。
