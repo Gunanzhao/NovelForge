@@ -1085,6 +1085,57 @@ fn export_project_writes_all_supported_formats() {
 }
 
 #[test]
+fn export_project_preserves_markdown_structure_and_embeds_cover() {
+    let root = test_root("exports-ast");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(), title: "结构导出".to_string(), author: "作者".to_string(),
+        description: String::new(), genre: "现代".to_string(), target_words: 1000,
+    }).expect("create project");
+    let chapter = created.nodes.iter().find(|node| node.kind == "chapter").expect("chapter").clone();
+    super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: project_path.clone(), node_id: chapter.id, content: "# 章节标题\n\n**粗体** *斜体* ~~删除~~ [链接](https://example.com) [[林月]]\n\n> 引用\n\n- [x] 完成\n- 普通项\n\n1. 第一项\n2. 第二项\n\n| 姓名 | 年龄 |\n| --- | --- |\n| 林月 | 18 |\n\n~~~txt\n代码 [[不应链接]]\n~~~".to_string(), reason: "结构导出".to_string(),
+    }).expect("save document");
+    let cover = root.join("project").join("attachments").join("cover.png");
+    fs::write(&cover, [137_u8, 80, 78, 71, 13, 10, 26, 10]).expect("write cover");
+    let input = |format: &str| super::models::ExportInput {
+        project_path: project_path.clone(), format: format.to_string(), cover_path: Some("attachments/cover.png".to_string()), ..Default::default()
+    };
+    let html_path = super::commands::export_project(input("html")).expect("html export");
+    let html = fs::read_to_string(&html_path).expect("read html");
+    assert!(html.contains("<strong>粗体</strong>"));
+    assert!(html.contains("<em>斜体</em>"));
+    assert!(html.contains("<del>删除</del>"));
+    assert!(html.contains("<ul>") && html.contains("<ol>") && html.contains("<input type=\"checkbox\""));
+    assert!(html.contains("<table>") && html.contains("class=\"wiki-link\""));
+    assert!(html.contains("data:image/png;base64,iVBORw0KGgo="));
+    assert!(!html.contains("attachments/cover.png"));
+
+    let txt_path = super::commands::export_project(input("txt")).expect("txt export");
+    let text = fs::read_to_string(&txt_path).expect("read txt");
+    assert!(text.contains("粗体") && text.contains("林月") && text.contains("姓名"));
+    assert!(!text.contains("**") && !text.contains("[[") && !text.contains("~~~"));
+
+    let docx_path = super::commands::export_project(input("docx")).expect("docx export");
+    let mut docx = zip::ZipArchive::new(std::io::Cursor::new(fs::read(&docx_path).expect("read docx"))).expect("docx zip");
+    let mut document_xml = String::new();
+    use std::io::Read;
+    docx.by_name("word/document.xml").expect("document xml").read_to_string(&mut document_xml).expect("read document xml");
+    assert!(document_xml.contains("Heading1") && document_xml.contains("<w:b/>") && document_xml.contains("<w:i/>") && document_xml.contains("<w:numPr"));
+    assert!(docx.by_name("word/media/cover.png").is_ok());
+
+    let epub_path = super::commands::export_project(input("epub")).expect("epub export");
+    let mut epub = zip::ZipArchive::new(std::io::Cursor::new(fs::read(&epub_path).expect("read epub"))).expect("epub zip");
+    let mut xhtml = String::new();
+    epub.by_name("OEBPS/content.xhtml").expect("content xhtml").read_to_string(&mut xhtml).expect("read xhtml");
+    let mut nav = String::new();
+    epub.by_name("OEBPS/nav.xhtml").expect("nav xhtml").read_to_string(&mut nav).expect("read nav");
+    assert!(xhtml.contains("<strong>粗体</strong>") && xhtml.contains("<table>") && xhtml.contains("class=\"wiki-link\""));
+    assert!(nav.contains("chapter-001.xhtml#heading-1") && epub.by_name("OEBPS/images/cover.png").is_ok());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn ai_endpoint_normalization_rejects_invalid_urls() {
     assert_eq!(super::commands::normalize_ai_endpoint("http://127.0.0.1:1234/v1" ).expect("base endpoint"), "http://127.0.0.1:1234/v1/chat/completions");
     assert_eq!(super::commands::normalize_ai_endpoint("https://api.example.com/v1/chat/completions/").expect("completion endpoint"), "https://api.example.com/v1/chat/completions");

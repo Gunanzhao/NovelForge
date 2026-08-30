@@ -44,6 +44,8 @@
 - 审计 P1-03：工具栏和快捷键改为 CodeMirror 选区 transaction，补齐基础 Markdown 格式命令并支持可重绑定 Ctrl+B/Ctrl+I。
 - 审计 P1-04：Wiki 链接在预览和编辑模式中可导航；同名资料展示候选，缺失资料可跳转搜索，代码围栏不会触发 Wiki 误报。
 - 审计 P1-05：一致性检查新增结构化人物年龄/生日/性别、死亡后时间线出现、相似名称、地点名称和时间线顺序/范围规则；新增问题均可定位且不扫描普通正文推断剧情错误。
+- 审计 P1-06：导出改为统一 Markdown AST，TXT/HTML/DOCX/EPUB/PDF 保留语义结构；TXT 纯文本清理、EPUB 分章导航、DOCX 编号/封面资源和 HTML data URI 封面均已覆盖回归。
+- P1 全量门禁：前端 58 项测试、Rust 32 项常规测试、1000 章/100 万字基准、Tauri release/NSIS 构建和独立 EXE 冒烟全部通过；仅保留真实 WebView2 桌面鼠标级 E2E 人工验收。
 - 清理 Rust 非阻塞 dead-code 警告，保留回收站数据库字段的明确模型语义。
 - 为 React、CodeMirror、Markdown 和图标依赖增加生产分包；最大输出 chunk 降至约 364 kB，构建不再出现体积警告。
 - 修复浏览器 fallback 的卷/章/节路径、递归回收站快照恢复和二进制导出提示，并补充回归测试。

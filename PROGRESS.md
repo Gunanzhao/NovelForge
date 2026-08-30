@@ -459,3 +459,19 @@
 - 前后端继续共用相同 issue 字段（severity、code、title、detail、refId、refKind、path），所有新问题可从一致性页面定位。
 - pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 全部通过；12 个测试文件 / 58 项测试。
 - cargo check、cargo test 全部通过；31 项 Rust 常规测试，1 个大型基准按设计忽略。
+
+## 2026-08-30：P1-06 结构化导出与格式保真
+
+- 建立 Rust ExportDocument AST，从 Markdown 一次解析后统一渲染 TXT、HTML、DOCX、EPUB 和 PDF。
+- 覆盖 H1-H6、段落、粗体、斜体、删除线、引用、无序/有序/任务列表、链接、Wiki Link、分割线、代码块和表格。
+- TXT 输出清理 Markdown/Wiki 标记；HTML 输出真实语义标签和单文件 data URI 封面；DOCX 输出 Heading、Paragraph、Bold、Italic、List、Table、编号定义及可选嵌入封面。
+- EPUB 输出合法 ZIP/EPUB3 结构、OPF 元数据、nav 目录、分章节 XHTML 和封面图片资源；PDF 复用 AST 纯文本并支持 JPEG 封面对象。
+- 前端与 Rust 导出回归覆盖多格式结构、纯文本清理、DOCX/EPUB 资源和 HTML 封面，进入 P1 全量发布门禁。
+
+## 2026-08-30：P1 全量质量门禁与发布复核
+
+- pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run、pnpm.cmd build 全部通过；前端 12 个测试文件 / 58 项测试，生产最大 chunk 约 364 kB。
+- cargo check、cargo test 全部通过；Rust 32 项常规测试，1 项大型基准按设计 ignored。
+- 1000 章 / 100 万字 ignored 基准通过，耗时 53.14 秒。
+- pnpm.cmd tauri:build 通过；release EXE 与 NSIS 安装包已生成。独立 release EXE 启动 4 秒后进程仍 Responding=True，检查后正常退出。
+- 已复核 TODO、PROGRESS、TEST_REPORT 和 DESKTOP_E2E_CHECKLIST；当前唯一保留的未完成项是带 WebView2 的真实桌面鼠标级人工 E2E。

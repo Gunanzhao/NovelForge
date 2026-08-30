@@ -304,3 +304,23 @@
 - 每条新增问题沿用 severity、code、title、detail、refId、refKind、path 字段，并可由一致性页面定位到资料或时间线实体。
 - 前端回归：12 个测试文件 / 58 项测试全部通过；覆盖全部新增规则。
 - Rust 回归：31 项常规测试通过，1 项大型基准按设计忽略；覆盖真实命令链和前后端语义对齐。
+
+## P1-06 结构化导出与格式保真验证（2026-08-30）
+
+- Markdown 先解析为统一 ExportDocument AST，再渲染 TXT、HTML、DOCX、EPUB 和 PDF；不再按格式各自逐行转普通文本。
+- 回归覆盖 H1-H6、行内粗体/斜体/删除线/代码、引用、无序/有序/任务列表、链接、Wiki、分割线、代码块和表格。
+- TXT 清理 Markdown/Wiki 标记；HTML 使用语义标签和 data URI 封面；DOCX 检查 Heading、Bold、Italic、List、Table、编号和嵌入图片；EPUB 检查 OPF 元数据、nav 分章和封面资源。
+- PDF 使用结构化纯文本分页，保持中文 CID 字体、标题文本和无 Markdown 标记；JPEG 封面生成 PDF 图片对象，其他格式仍保留封面资源校验。
+- Rust 导出回归：32 项常规测试通过，1 项大型基准按设计忽略；新增 AST 多格式/封面端到端测试通过。
+
+## P1 全量质量门禁与发布复核（2026-08-30）
+
+| 层级 | 命令 / 范围 | 结果 |
+| --- | --- | --- |
+| Frontend type/lint/test/build | pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run、pnpm.cmd build | 全部通过；12 个测试文件 / 58 项测试，最大 chunk 约 364 kB |
+| Rust compile/tests | cargo check、cargo test --manifest-path src-tauri/Cargo.toml | 通过：32 项常规测试，1 项大型基准 ignored |
+| Large benchmark | cargo test --manifest-path src-tauri/Cargo.toml large_project_acceptance_handles_1000_chapters_and_one_million_characters -- --ignored --nocapture | 通过：1,000 章、1,000,000 字，53.14 秒 |
+| Windows release | pnpm.cmd tauri:build | 通过：src-tauri/target/release/novelforge.exe 与 NSIS 安装包 |
+| Release smoke | 独立启动 release EXE 4 秒 | 通过：进程保持运行且 Responding=True，检查后正常退出 |
+
+已复核 TODO、PROGRESS、TEST_REPORT 和 DESKTOP_E2E_CHECKLIST；真实桌面鼠标级 WebView2 E2E 仍需人工按清单执行，未将进程级冒烟冒充鼠标级验收。
