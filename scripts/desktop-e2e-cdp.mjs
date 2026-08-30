@@ -212,6 +212,54 @@ async function clickSelectorContains(page, selector, text) {
   if (!await page.evaluate(expression)) throw new Error('找不到指定控件：' + selector + ' 包含 ' + text)
 }
 
+async function rowPoint(page, text) {
+  const expression = "(function(){const row=Array.from(document.querySelectorAll('.tree-row')).find((item)=>(item.textContent||'').includes(" + jsString(text) + "));if(!row)return null;const rect=row.getBoundingClientRect();return {x:rect.left+Math.min(rect.width-18,Math.max(18,rect.width/2)),y:rect.top+rect.height/2}})()"
+  const point = await page.evaluate(expression)
+  if (!point) throw new Error('找不到正文树行：' + text)
+  return point
+}
+
+async function treeRowExists(page, text) {
+  return Boolean(await page.evaluate("(function(){return Array.from(document.querySelectorAll('.tree-row')).some((item)=>(item.textContent||'').includes(" + jsString(text) + "))})()"))
+}
+
+async function treeRowUnderParent(page, childText, parentText) {
+  const expression = "(function(){const rows=Array.from(document.querySelectorAll('.tree-row'));const index=rows.findIndex((item)=>(item.textContent||'').includes(" + jsString(childText) + "));if(index<0)return false;const childLevel=Number.parseInt(rows[index].style.paddingLeft||'0',10);for(let cursor=index-1;cursor>=0;cursor-=1){const row=rows[cursor];const level=Number.parseInt(row.style.paddingLeft||'0',10);if(level<childLevel)return (row.textContent||'').includes(" + jsString(parentText) + ");}return false})()"
+  return Boolean(await page.evaluate(expression))
+}
+
+async function ensureTreeRow(page, parentText, childText) {
+  if (await treeRowUnderParent(page, childText, parentText)) return
+  const expanded = await clickRowActionIfPresent(page, parentText, '展开')
+  if (!expanded && !(await treeRowExists(page, parentText))) throw new Error('找不到正文树父行：' + parentText)
+  await waitForText(page, childText)
+}
+
+async function dragRow(page, sourceText, targetText) {
+  const source = await rowPoint(page, sourceText)
+  const target = await rowPoint(page, targetText)
+  await page.command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: source.x, y: source.y })
+  await page.command('Input.dispatchMouseEvent', { type: 'mousePressed', x: source.x, y: source.y, button: 'left', buttons: 1, clickCount: 1 })
+  await sleep(150)
+  const steps = 5
+  for (let index = 1; index <= steps; index += 1) {
+    const ratio = index / steps
+    await page.command('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: source.x + (target.x - source.x) * ratio,
+      y: source.y + (target.y - source.y) * ratio,
+      button: 'left',
+      buttons: 1,
+    })
+    await sleep(60)
+  }
+  await page.command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: target.x, y: target.y, button: 'left', buttons: 0, clickCount: 1 })
+  await sleep(500)
+  if (await treeRowUnderParent(page, sourceText, targetText)) return
+  const dispatched = await page.evaluate("(function(){const rows=Array.from(document.querySelectorAll('.tree-row'));const source=rows.find((item)=>(item.textContent||'').includes(" + jsString(sourceText) + "));const target=rows.find((item)=>(item.textContent||'').includes(" + jsString(targetText) + "));if(!source||!target||typeof DataTransfer==='undefined'||typeof DragEvent==='undefined')return false;const dataTransfer=new DataTransfer();source.dispatchEvent(new DragEvent('dragstart',{bubbles:true,cancelable:true,dataTransfer}));target.dispatchEvent(new DragEvent('dragenter',{bubbles:true,cancelable:true,dataTransfer}));target.dispatchEvent(new DragEvent('dragover',{bubbles:true,cancelable:true,dataTransfer}));target.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer}));source.dispatchEvent(new DragEvent('dragend',{bubbles:true,cancelable:true,dataTransfer}));return true})()")
+  if (dispatched) await sleep(500)
+}
+
 async function clickModalButton(page, text) {
   const expression = "(function(){const item=Array.from(document.querySelectorAll('.modal-card button')).find((button)=>(button.textContent||'').trim()===" + jsString(text) + ");item?.click();return Boolean(item)})()"
   if (!await page.evaluate(expression)) throw new Error('找不到模态框按钮：' + text)
@@ -467,27 +515,37 @@ async function run() {
     await clickModalButton(page, '创建')
     await clickRowAction(page, '第二章', '展开')
     await waitForText(page, '开场')
-    await page.evaluate("window.prompt=()=> '序章'")
+    if (!webdriverMode) await page.evaluate("window.prompt=()=> '序章'")
     await clickRowAction(page, '开场', '更多操作')
     await waitForText(page, '序章')
-    await page.evaluate("window.prompt=(_message, defaultValue)=>defaultValue || ''")
+    if (!webdriverMode) await page.evaluate("window.prompt=(_message, defaultValue)=>defaultValue || ''")
+
+    await dragRow(page, '第二章', '第一卷')
+    await ensureTreeRow(page, '第一卷', '第二章')
+    if (!(await treeRowUnderParent(page, '第二章', '第一卷'))) throw new Error('拖拽后章节未进入第一卷')
+    console.log('DRAG_DROP_OK')
 
     await clickRowAction(page, '第二章', '复制节点')
     await waitForText(page, '复制正文节点')
     await setCurrentValue(page, '副本', '第二章 副本')
     await clickModalButton(page, '复制')
-    await clickRowActionIfPresent(page, '第一卷', '展开')
-    await waitForText(page, '第二章 副本')
-    await clickRowAction(page, '第二章', '移动节点')
-    await waitForText(page, '移动正文节点')
-    await clickModalButton(page, '移动')
-    await clickRowActionIfPresent(page, '第一卷', '展开')
-    await waitForText(page, '第二章')
-    await clickRowAction(page, '第二章 副本', '移入回收站')
+    await ensureTreeRow(page, '第二卷', '第二章 副本')
+    await clickRowAction(page, '第二章', '复制节点')
+    await waitForText(page, '复制正文节点')
+    await setCurrentValue(page, '副本', '第二章 副本二')
+    await clickModalButton(page, '复制')
+    await ensureTreeRow(page, '第二卷', '第二章 副本二')
+    await toggleRowSelection(page, '第二章 副本')
+    await toggleRowSelection(page, '第二章 副本二')
+    await waitForText(page, '已选 2 项')
+    await clickExact(page, '批量移入回收站')
     await sleep(500)
     await clickExact(page, '回收站')
     await waitForText(page, '回收站')
-    await clickExact(page, '恢复')
+    await clickSelector(page, '.trash-actions button', '恢复')
+    await sleep(500)
+    await clickSelector(page, '.trash-actions button', '恢复')
+    await sleep(500)
     await waitForText(page, '回收站是空的')
     await clickExact(page, '正文')
     await waitForText(page, 'MANUSCRIPT / CHAPTER')
