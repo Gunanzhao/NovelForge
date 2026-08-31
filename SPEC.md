@@ -33,4 +33,4 @@ V0.4：规则一致性检查、资料库、高级统计与更多导出格式。V
 
 ## V1.0 收尾状态（2026-08-31）
 
-AI 上下文增强、命令与存储模块边界、持续集成、10 万字单章命令链验收和进程内插件 API 已实现并有自动化回归。插件 API 当前仅支持源码显式注册，外部插件加载属于后续版本能力。Windows release 构建、直连 CDP、官方 Tauri WebDriver、原生文件选择器、恢复重启流程和两种模式的 100,000 字 rAF/overflow 采样均已验证；E2E 可选测试封面夹具已用于复现六种导出，PDF 已通过 Edge/SumatraPDF 实际视觉复核；滚动/输入体感及 Markdown/TXT/HTML/DOCX/EPUB 五种导出文件逐页视觉确认仍需按 DESKTOP_E2E_CHECKLIST.md 完成。
+AI 上下文增强、命令与存储模块边界、持续集成、10 万字单章命令链验收和进程内插件 API 已实现并有自动化回归。插件 API 当前仅支持源码显式注册，外部插件加载属于后续版本能力。Windows release 构建、直连 CDP、官方 Tauri WebDriver、原生文件选择器、恢复重启流程、100,000 字滚动/输入观察和两种模式的 rAF/overflow 采样均已验证；E2E 可选测试封面夹具已用于复现六种导出，Markdown/TXT/HTML/DOCX/EPUB/PDF 已在对应阅读器完成本机视觉复核；不同硬件/阅读器组合的兼容性抽查属于后续可选工作。

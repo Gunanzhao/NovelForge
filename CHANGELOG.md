@@ -67,3 +67,10 @@
 - 浏览器 fallback 增加空标题、重复项目、无效状态和不存在目标的输入校验，前端回归测试增至 42 项。
 - 事务化写入后大型最终验收耗时更新为 51.19 秒，最新 release 产物已重新构建。
 - AI 结果取消操作补充 Escape 快捷键，取消时清理选区请求状态，避免误应用过期结果。
+
+## 未发布 - 2026-08-31 收尾
+
+- 完成 P3-02 桌面 E2E 人工门禁：release WebView2 大文档滚动/输入观察、FPS 量化、恢复重启和官方 WebDriver 流程均有记录。
+- 使用记事本、Edge、LibreOffice Writer、Calibre 9.14.0、SumatraPDF 和 Poppler 完成本机六种导出格式视觉复核；Calibre 目录双击“第二卷”已验证正文跳转。
+- AUDIT_FIX_PLAN.md、TODO.md、SPEC.md、DESKTOP_E2E_CHECKLIST.md、TEST_REPORT.md 与 PROGRESS.md 已校准为当前 V1.0 RC 收尾状态。
+- 稳定官方 WebDriver 原生对话框验收：修复 Windows 选择器控件过滤、路径输入和目录刷新后的控件重解析，匹配 WebView2 151 的 EdgeDriver 复跑全部阶段标记与大文档 FPS。

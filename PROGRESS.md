@@ -574,3 +574,16 @@
 - 在 e9ed8f3 release 上重跑官方 WebDriver、原生对话框和 FPS；全部阶段标记通过，100,000 字 editor-pane 2 秒 276 帧（约 137.7 FPS），替换 824 ms、保存 289 ms。
 - 真实窗口截图确认 Markdown/TXT（记事本）、HTML（Edge）、DOCX（LibreOffice）中的中文、标题、目录/列表和封面可读；DOCX 转 PDF 两页渲染也通过。EPUB（Calibre）目录和中文目录可读，但当前目录链接未完成正文跳转。
 - 因 EPUB 正文跳转证据不足，五种非 PDF 格式仍不统一标记为逐页视觉完成；剩余门禁为 EPUB 正文页、其余格式逐页细节和 CodeMirror 100,000 字滚动/输入主观体感。
+
+## 2026-08-31：P3-02 桌面人工门禁完成
+
+- 在 release WebView2 中完成 100,000 字单章的插入、删除、搜索、保存、关闭/重开和真实滚动/输入窗口观察；修复后官方 WebDriver 采样 276 帧、约 137.7 FPS，替换 824 ms、保存 289 ms。
+- Windows 记事本核对 Markdown/TXT，Edge 核对 HTML/PDF，LibreOffice Writer 核对 DOCX，Calibre Portable 9.14.0 核对 EPUB；六种格式的中文、标题层级、列表、目录和章节顺序均可读，HTML/DOCX/EPUB/PDF 的测试封面可读。
+- Calibre 目录中对“第二卷”执行真实鼠标双击后，页面跳转并显示“第二卷 / 第二章 副本 / 序章”；第一卷页面显示“林月 来到雾港。”及列表，EPUB 正文导航门禁关闭。
+- DESKTOP_E2E_CHECKLIST.md 已全部勾选，P3-02 从进行中改为完成；后续只保留不同硬件和阅读器组合的可选兼容性抽查。
+
+## 2026-08-31：官方 WebDriver 原生对话框稳定性复跑
+
+- 修正桌面验收辅助脚本对 Windows 原生选择器的控件类型筛选、ValuePattern 超时回退、目录切换后的控件刷新和文件名输入框优先路径。
+- 使用 EdgeDriver 151.0.4129.107（匹配 WebView2 151.0.4129.107）复跑官方 WebDriver + 原生 UI Automation；CORE_EDITOR_TREE_OK、DRAG_DROP_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、WIKI_NAVIGATION_OK、SETTINGS_COMMANDS_OK、RECOVERY_FAILURE_OK、NATIVE_DIALOGS_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK 全部通过。
+- 大文档采样 276 帧、约 137.75 FPS，临时 E2E 目录已清理；此次脚本修复与证据记录作为独立收尾阶段提交。

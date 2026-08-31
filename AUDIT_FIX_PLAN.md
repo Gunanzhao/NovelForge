@@ -4,7 +4,7 @@
 
 ## 执行范围
 
-本轮严格执行《NovelForge 审计修复与 V1.0 收尾计划.md》的 P1-01 至 P2-02。
+本轮严格执行《NovelForge 审计修复与 V1.0 收尾计划.md》的 P1-01 至 P3-02。
 每个阶段均须完成实现、相关自动测试、质量门禁、PROGRESS.md 更新和独立 Git 提交。
 
 ## P1 高优先级
@@ -23,7 +23,7 @@
 - [x] P2-03 CI
 - [x] P2-04 大文件性能
 - [x] P3-01 插件 API 设计
-- [~] P3-02 桌面 E2E（release、官方 WebDriver、原生对话框和量化 FPS 已通过；PDF 跨阅读器视觉已通过，其余五种导出视觉与滚动/输入体感仍待人工确认）
+- [x] P3-02 桌面 E2E（release、官方 WebDriver、原生对话框、量化 FPS、滚动/输入和六种导出阅读器视觉均已完成本机验收）
 
 ## 质量门禁
 
@@ -31,7 +31,7 @@
 - [x] P1 全部完成后运行 pnpm.cmd tauri:build
 - [x] P1 全部完成后复核 DESKTOP_E2E_CHECKLIST.md、TODO.md、PROGRESS.md、TEST_REPORT.md
 - [x] P2/P3 自动门禁：前端 63 项测试、Rust 33 项常规测试、1000 章/100 万字基准、release/NSIS 构建和启动冒烟
-- [~] P3-02 人工门禁：CodeMirror 滚动/输入体感和 Markdown/TXT/HTML/DOCX/EPUB 五种导出文件的逐页视觉确认；PDF 已完成 Edge/SumatraPDF 实际复核
+- [x] P3-02 人工门禁：CodeMirror 大文档滚动/输入和 Markdown/TXT/HTML/DOCX/EPUB/PDF 六种导出文件已在本机真实窗口完成视觉确认
 
 ## 记录
 
@@ -58,3 +58,5 @@
 - 2026-08-31：新增带测试封面的可复现导出夹具（commit 0710bbd）；直连 E2E 保留项目目录并由记事本、Edge、LibreOffice Portable、Calibre Portable、SumatraPDF 完成加载复核，DOCX/EPUB 归档确认封面资源存在；截图不可用，视觉门禁仍保持未完成。
 - 2026-08-31：PDF 跨阅读器视觉修复（commit e9ed8f3）；引入 printpdf 与 Windows CJK 字体子集嵌入，最新 release PDF 在 Edge、SumatraPDF 3.6.1 和 Poppler 中均确认中文、章节文本与测试封面可读，关闭 PDF 乱码门禁；Markdown/TXT/HTML/DOCX/EPUB 逐页视觉及 CodeMirror 主观体感仍保留人工门禁。
 - 2026-08-31：PDF 修复后重跑官方 WebDriver + 原生对话框 + FPS；全部阶段标记通过，100,000 字 editor-pane 276 帧（约 137.7 FPS）。补充真实阅读器截图：Markdown/TXT、HTML、DOCX 的可读性与版式通过，EPUB 目录通过但当前 Calibre 链接未完成正文跳转，五种格式整体与 CodeMirror 主观体感继续保留人工门禁。
+- 2026-08-31：P3-02 人工门禁收尾；在 release WebView2 中完成 100,000 字单章插入、删除、搜索、保存、关闭/重开与滚动输入观察，直连和官方 WebDriver 的 rAF 采样分别为约 142.8/139.0 FPS（修复后重跑约 137.7 FPS）。使用记事本核对 Markdown/TXT、Edge 核对 HTML/PDF、LibreOffice Writer 核对 DOCX、Calibre 9.14 核对 EPUB；Calibre 目录中双击“第二卷”后实际跳转到“第二卷 / 第二章 副本 / 序章”正文页，六种导出均确认中文、标题层级、列表、目录、章节顺序和支持格式的封面可读。P3-02 及人工门禁改为完成。
+- 2026-08-31：官方 WebDriver 最终复跑使用与 WebView2 151.0.4129.107 匹配的 EdgeDriver；修复原生选择器控件过滤、路径输入回退和目录刷新后控件重解析后，NATIVE_DIALOGS_OK、RECOVERY_FAILURE_OK、EXPORTS_OK 及其余全部阶段标记再次通过，100,000 字 editor-pane 276 帧（约 137.75 FPS）。临时 E2E 项目已清理，用户提供的收尾计划文件保持未跟踪。

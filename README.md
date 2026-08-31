@@ -54,4 +54,4 @@ pnpm tauri build
 
 ## 当前范围
 
-当前版本已覆盖构建任务文档中的 MVP、写作规划、关系图、一致性、附件、结构管理、多格式导出、AI 辅助、数据恢复与大型正文树性能能力；1000 章 / 100 万字真实文件与 SQLite 性能验收已通过，Windows x64 release EXE 与 NSIS 安装包已构建并完成进程级冒烟。直连 CDP、官方 Tauri WebDriver、原生文件选择器、恢复重启和 100,000 字单章 rAF/overflow 采样均有回归脚本；E2E 还支持可选测试封面夹具并保留项目供外部阅读器加载复核，PDF 已完成 Edge/SumatraPDF 跨阅读器视觉核对。剩余发布门禁是滚动/输入主观体感，以及 Markdown/TXT/HTML/DOCX/EPUB 五种导出文件的逐页视觉结构核对。没有 API Key 时核心写作流程和本地 AI 草稿模式完全可用。
+当前版本已覆盖构建任务文档中的 MVP、写作规划、关系图、一致性、附件、结构管理、多格式导出、AI 辅助、数据恢复与大型正文树性能能力；1000 章 / 100 万字真实文件与 SQLite 性能验收已通过，Windows x64 release EXE 与 NSIS 安装包已构建并完成进程级冒烟。直连 CDP、官方 Tauri WebDriver、原生文件选择器、恢复重启、100,000 字单章滚动/输入观察和 rAF/overflow 采样均有回归记录；E2E 还支持可选测试封面夹具并保留项目供外部阅读器复核，Markdown/TXT/HTML/DOCX/EPUB/PDF 六种格式均已在对应阅读器完成本机视觉核对。没有 API Key 时核心写作流程和本地 AI 草稿模式完全可用。

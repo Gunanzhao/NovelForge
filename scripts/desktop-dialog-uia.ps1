@@ -70,17 +70,35 @@ function Find-DescendantByName([System.Windows.Automation.AutomationElement]$par
   return $null
 }
 
-function Find-Edit([System.Windows.Automation.AutomationElement]$parent) {
-  $idCondition = New-Object System.Windows.Automation.PropertyCondition(
-    [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
-    '1152'
+function Find-ButtonByName([System.Windows.Automation.AutomationElement]$parent, [string[]]$names) {
+  $buttonType = New-Object System.Windows.Automation.PropertyCondition(
+    [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+    [System.Windows.Automation.ControlType]::Button
   )
-  $element = $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $idCondition)
-  if ($null -ne $element) { return $element }
+  foreach ($name in $names) {
+    $nameCondition = New-Object System.Windows.Automation.PropertyCondition(
+      [System.Windows.Automation.AutomationElement]::NameProperty,
+      $name
+    )
+    $combined = New-Object System.Windows.Automation.AndCondition($nameCondition, $buttonType)
+    $element = $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $combined)
+    if ($null -ne $element) { return $element }
+  }
+  return $null
+}
+
+function Find-Edit([System.Windows.Automation.AutomationElement]$parent) {
   $editCondition = New-Object System.Windows.Automation.PropertyCondition(
     [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
     [System.Windows.Automation.ControlType]::Edit
   )
+  $idCondition = New-Object System.Windows.Automation.PropertyCondition(
+    [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
+    '1152'
+  )
+  $combined = New-Object System.Windows.Automation.AndCondition($idCondition, $editCondition)
+  $element = $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $combined)
+  if ($null -ne $element) { return $element }
   return $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $editCondition)
 }
 
@@ -90,7 +108,12 @@ function Find-FileNameEdit([System.Windows.Automation.AutomationElement]$parent)
       [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
       $id
     )
-    $element = $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $idCondition)
+    $editType = New-Object System.Windows.Automation.PropertyCondition(
+      [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+      [System.Windows.Automation.ControlType]::Edit
+    )
+    $combined = New-Object System.Windows.Automation.AndCondition($idCondition, $editType)
+    $element = $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $combined)
     if ($null -ne $element) { return $element }
   }
   foreach ($name in @('文件名:', '文件名', 'File name:', 'File name')) {
@@ -114,7 +137,12 @@ function Find-AddressEdit([System.Windows.Automation.AutomationElement]$parent) 
     [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
     '41477'
   )
-  $element = $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $idCondition)
+  $editType = New-Object System.Windows.Automation.PropertyCondition(
+    [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+    [System.Windows.Automation.ControlType]::Edit
+  )
+  $combined = New-Object System.Windows.Automation.AndCondition($idCondition, $editType)
+  $element = $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $combined)
   if ($null -ne $element) { return $element }
   $nameCondition = New-Object System.Windows.Automation.PropertyCondition(
     [System.Windows.Automation.AutomationElement]::NameProperty,
@@ -124,8 +152,33 @@ function Find-AddressEdit([System.Windows.Automation.AutomationElement]$parent) 
     [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
     [System.Windows.Automation.ControlType]::Edit
   )
-  $combined = New-Object System.Windows.Automation.AndCondition($nameCondition, $editType)
-  return $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $combined)
+  $combinedByName = New-Object System.Windows.Automation.AndCondition($nameCondition, $editType)
+  return $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $combinedByName)
+}
+
+function Set-EditText([System.Windows.Automation.AutomationElement]$element, [string]$value) {
+  if ($null -eq $element) { throw '原生文件对话框输入控件为空' }
+  $valuePattern = $null
+  try {
+    $element.SetFocus()
+    [System.Windows.Forms.SendKeys]::SendWait('^a')
+    [System.Windows.Forms.SendKeys]::SendWait($value)
+    Start-Sleep -Milliseconds 150
+    $valuePattern = $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+    if ($valuePattern.Current.Value -eq $value) { return }
+  } catch {
+    $sendKeysError = $_.Exception.Message
+  }
+  try {
+    if ($null -eq $valuePattern) {
+      $valuePattern = $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+    }
+    $valuePattern.SetValue($value)
+    if ($valuePattern.Current.Value -eq $value) { return }
+    throw "ValuePattern 写入后值不匹配"
+  } catch {
+    throw "原生文件对话框无法填写路径：$value；SendKeys=$sendKeysError；ValuePattern=$($_.Exception.Message)"
+  }
 }
 
 function Navigate-To([System.Windows.Automation.AutomationElement]$parent, [string]$directoryPath) {
@@ -138,8 +191,7 @@ function Navigate-To([System.Windows.Automation.AutomationElement]$parent, [stri
     $address = Find-AddressEdit $parent
   }
   if ($null -eq $address) { throw "原生文件对话框缺少地址栏：$Title" }
-  $address.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($directory.FullName)
-  $address.SetFocus()
+  Set-EditText $address $directory.FullName
   [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
   Start-Sleep -Milliseconds 500
   return $directory.Name
@@ -151,8 +203,7 @@ if ($Mode -eq 'folder') {
   if (-not [IO.Directory]::Exists($target)) { throw "目标文件夹不存在：$target" }
   $folderEdit = Find-Edit $dialog
   if ($null -eq $folderEdit) { throw "原生文件夹选择器缺少文件夹输入框：$Title" }
-  $folderEdit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($target)
-  $folderEdit.SetFocus()
+  Set-EditText $folderEdit $target
 } else {
   $parentDirectory = [IO.DirectoryInfo]::new($target).Parent
   if ($null -eq $parentDirectory) { throw "无法确定原生选择器目标父目录：$target" }
@@ -174,6 +225,30 @@ while ([DateTime]::UtcNow -lt $refreshDeadline) {
 
 $candidate = $null
 if ($Mode -eq 'file') {
+  $fileNameEdit = $null
+  $fileEditDeadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+  while ([DateTime]::UtcNow -lt $fileEditDeadline -and $null -eq $fileNameEdit) {
+    $freshDialog = Resolve-Dialog
+    if ($null -ne $freshDialog) {
+      try {
+        $freshFileNameEdit = Find-FileNameEdit $freshDialog
+        if ($null -ne $freshFileNameEdit) {
+          $dialog = $freshDialog
+          $fileNameEdit = $freshFileNameEdit
+          break
+        }
+      } catch {
+        # The common dialog can replace its controls while the directory loads.
+      }
+    }
+    Start-Sleep -Milliseconds 100
+  }
+  if ($null -ne $fileNameEdit) {
+    Set-EditText $fileNameEdit $target
+    [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+    Start-Sleep -Milliseconds 700
+    if ($null -eq (Resolve-Dialog)) { Write-Output 'NATIVE_DIALOG_OK'; exit 0 }
+  }
   $listCondition = New-Object System.Windows.Automation.PropertyCondition(
     [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
     [System.Windows.Automation.ControlType]::ListItem
@@ -200,8 +275,7 @@ if ($Mode -eq 'file') {
   if ($null -eq $candidate) {
     $fileNameEdit = Find-FileNameEdit $dialog
     if ($null -ne $fileNameEdit) {
-      $fileNameEdit.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue($target)
-      $fileNameEdit.SetFocus()
+      Set-EditText $fileNameEdit $target
       [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
       Start-Sleep -Milliseconds 500
       if ($null -eq (Resolve-Dialog)) { Write-Output 'NATIVE_DIALOG_OK'; exit 0 }
@@ -216,7 +290,7 @@ if ($Mode -eq 'file') {
 }
 
 $buttonNames = if ($Mode -eq 'folder') { @('选择文件夹', '选择此文件夹', 'Select Folder', 'Select this folder', '选择', '确定', 'OK') } else { @('打开', 'Open', '选择', '确定', 'OK') }
-$button = Find-DescendantByName $dialog $buttonNames
+$button = Find-ButtonByName $dialog $buttonNames
 if ($null -eq $button) {
   $buttons = $dialog.FindAll([System.Windows.Automation.TreeScope]::Descendants, $buttonType)
   $available = for ($index = 0; $index -lt $buttons.Count; $index++) {
@@ -231,7 +305,35 @@ if ($null -eq $button) {
   throw "原生文件对话框缺少提交按钮：$Title；当前按钮：$($available -join ', ')；桌面窗口：$($windowSummary -join ' | ')"
 }
 $dialog.SetFocus()
-$invokePattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-$invokePattern.Invoke()
+$invoked = $false
+try {
+  $invokePattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+  $invokePattern.Invoke()
+  $invoked = $true
+} catch {
+  $invokeError = $_.Exception.Message
+}
+if (-not $invoked) {
+  try {
+    $selectionPattern = $button.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
+    $selectionPattern.Select()
+    [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+    $invoked = $true
+  } catch {
+    $selectionError = $_.Exception.Message
+  }
+}
+if (-not $invoked) {
+  try {
+    $button.SetFocus()
+    [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+    $invoked = $true
+  } catch {
+    $focusError = $_.Exception.Message
+  }
+}
+if (-not $invoked) {
+  throw "原生文件对话框提交按钮无法激活：$Title；Invoke=$invokeError；Selection=$selectionError；Focus=$focusError"
+}
 
 Write-Output 'NATIVE_DIALOG_OK'
