@@ -1,20 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type MouseEvent as ReactMouseEvent } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
+import { redo, undo } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
 import { RangeSetBuilder } from '@codemirror/state'
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import {
-  Bold, Code2, Columns3, Eye, Heading1, Image, Italic, Link, List, ListChecks, ListOrdered,
-  Maximize2, Minus, PenLine, Quote, Save, Strikethrough,
+  Bold, Code2, Columns3, Copy, Eye, Heading1, Image, Italic, Link, List, ListChecks, ListOrdered,
+  Maximize2, Minus, PenLine, Quote, Redo2, Save, Search, Scissors, Sparkles, Strikethrough, Undo2,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
   applyMarkdownCommand, wikiMarkdown, wikiRanges, wikiTargetFromHref, type MarkdownCommand,
 } from '../lib/markdown'
+import type { ContextMenuItem } from '../lib/context-menu'
+import { readClipboardText, writeClipboardText } from '../lib/clipboard'
+import type { AiAction } from '../lib/ai-data'
 import { ENTITY_LABELS, NODE_STATUS_LABELS, type EntityRecord } from '../lib/types'
 import { useAppStore } from '../stores/app-store'
 import { Button, IconButton } from './ui'
+import { useContextMenu } from './ContextMenu'
 
 function wikiDecorationSet(source: string): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
@@ -68,6 +73,10 @@ export function EditorPane() {
   const selectEntity = useAppStore((state) => state.selectEntity)
   const setView = useAppStore((state) => state.setView)
   const setEditorSelection = useAppStore((state) => state.setEditorSelection)
+  const setError = useAppStore((state) => state.setError)
+  const openAiAssistant = useAppStore((state) => state.openAiAssistant)
+  const projectPath = useAppStore((state) => state.projectPath)
+  const { openContextMenu } = useContextMenu()
   const editorViewRef = useRef<EditorView | null>(null)
   const [wikiResolution, setWikiResolution] = useState<{ target: string; candidates: EntityRecord[] } | null>(null)
 
@@ -121,6 +130,87 @@ export function EditorPane() {
     view.focus()
   }, [])
 
+  const openEditorContextMenu = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    const view = editorViewRef.current
+    if (!view || !view.dom.isConnected || !document) return
+    const point = view.posAtCoords({ x: event.clientX, y: event.clientY })
+    const before = view.state.selection.main
+    const insideSelection = before.from !== before.to && point !== null && point >= before.from && point <= before.to
+    if (!insideSelection && point !== null) view.dispatch({ selection: { anchor: point } })
+    const selection = view.state.selection.main
+    const selectionText = view.state.sliceDoc(selection.from, selection.to)
+    setEditorSelection({ nodeId: document.node.id, from: selection.from, to: selection.to, text: selectionText })
+    const hasSelection = selection.from !== selection.to
+    const copySelection = async () => {
+      if (!await writeClipboardText(selectionText)) setError('无法访问系统剪贴板，请改用 Ctrl+C。')
+    }
+    const cutSelection = async () => {
+      if (!await writeClipboardText(selectionText)) {
+        setError('无法访问系统剪贴板，请改用 Ctrl+X。')
+        return
+      }
+      view.dispatch({ changes: { from: selection.from, to: selection.to, insert: '' }, selection: { anchor: selection.from }, userEvent: 'delete.cut' })
+      view.focus()
+    }
+    const pasteSelection = async () => {
+      const result = await readClipboardText()
+      if (!result.ok || typeof result.text !== 'string') {
+        setError('无法访问系统剪贴板，请改用 Ctrl+V。')
+        return
+      }
+      view.dispatch({ changes: { from: selection.from, to: selection.to, insert: result.text }, selection: { anchor: selection.from + result.text.length }, userEvent: 'input.paste' })
+      view.focus()
+    }
+    const search = (query: string, scope: 'current' | 'project') => {
+      setView('search')
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('novelforge:search-scope', { detail: scope }))
+        window.dispatchEvent(new CustomEvent('novelforge:search-query', { detail: query }))
+      }, 0)
+    }
+    const formatCommands: Array<[MarkdownCommand, string]> = [
+      ['bold', '粗体'], ['italic', '斜体'], ['strikethrough', '删除线'], ['code', '行内代码'],
+      ['heading', '标题'], ['quote', '引用'], ['unordered-list', '无序列表'], ['ordered-list', '有序列表'],
+      ['task-list', '任务列表'], ['link', '链接'], ['image', '图片'], ['horizontal-rule', '分割线'],
+    ]
+    const formatItems: ContextMenuItem[] = formatCommands.map(([command, label]) => ({ type: 'item' as const, id: 'format-' + command, label, onSelect: () => applyCommand(command) }))
+    const selectionAi: Array<[AiAction, string]> = [['polish', '润色'], ['rewrite', '改写'], ['expand', '扩写'], ['shrink', '缩写']]
+    const cursorAi: Array<[AiAction, string]> = [['continue', '续写'], ['chapter-summary', '章节摘要'], ['outline', '生成大纲'], ['dialogue', '角色对话'], ['setting-advice', '设定建议'], ['name', '名字生成']]
+    const aiItems = (actions: Array<[AiAction, string]>) => actions.map(([action, label]) => ({ type: 'item' as const, id: 'ai-' + action, label, disabled: !document, onSelect: () => openAiAssistant(action) }))
+    const items: ContextMenuItem[] = [
+      { type: 'item', id: 'editor-undo', label: '撤销', icon: Undo2, onSelect: () => { undo(view); view.focus() } },
+      { type: 'item', id: 'editor-redo', label: '重做', icon: Redo2, onSelect: () => { redo(view); view.focus() } },
+      { type: 'item', id: 'editor-cut', label: '剪切', icon: Scissors, shortcut: 'Ctrl+X', disabled: !hasSelection, onSelect: cutSelection },
+      { type: 'item', id: 'editor-copy', label: '复制', icon: Copy, shortcut: 'Ctrl+C', disabled: !hasSelection, onSelect: copySelection },
+      { type: 'item', id: 'editor-paste', label: '粘贴', shortcut: 'Ctrl+V', onSelect: pasteSelection },
+      { type: 'separator' },
+      { type: 'item', id: 'editor-format', label: '格式', children: formatItems, onSelect: () => undefined },
+      { type: 'item', id: 'editor-ai', label: 'AI 处理选区', disabled: !hasSelection, children: aiItems(selectionAi), onSelect: () => undefined },
+      { type: 'item', id: 'editor-ai-open', label: '打开 AI 辅助', icon: Sparkles, onSelect: () => openAiAssistant(hasSelection ? 'polish' : 'continue') },
+      { type: 'item', id: 'editor-search-current', label: hasSelection ? '搜索所选文字（当前章节）' : '当前章节搜索', icon: Search, disabled: !hasSelection, onSelect: () => search(selectionText, 'current') },
+      { type: 'item', id: 'editor-search-project', label: hasSelection ? '搜索所选文字（全项目）' : '全项目搜索', icon: Search, disabled: !hasSelection, onSelect: () => search(selectionText, 'project') },
+      { type: 'item', id: 'editor-ai-cursor', label: 'AI 写作任务', disabled: hasSelection, children: aiItems(cursorAi), onSelect: () => undefined },
+      { type: 'separator' },
+      { type: 'item', id: 'editor-select-all', label: '全选', shortcut: 'Ctrl+A', onSelect: () => { view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } }); view.focus() } },
+    ]
+    const location = hasSelection ? 'editor.selection' : 'editor.cursor'
+    openContextMenu(event, { title: document.node.title, location, payload: { location, projectPath: projectPath ?? undefined, nodeIds: [document.node.id], nodeKind: document.node.kind, selectionText: selectionText || undefined }, items, trigger: view.dom })
+  }, [applyCommand, document, openAiAssistant, openContextMenu, projectPath, setEditorSelection, setError, setView])
+
+  const handlePreviewContextMenu = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null
+    if (!(anchor instanceof HTMLAnchorElement)) return
+    const target = wikiTargetFromHref(anchor.getAttribute('href') ?? undefined)
+    if (!target) return
+    const wikiLink = '[[' + target + ']]'
+    const items: ContextMenuItem[] = [
+      { type: 'item', id: 'wiki-open', label: '打开资料', onSelect: () => resolveWikiTarget(target) },
+      { type: 'item', id: 'wiki-copy', label: '复制 Wiki 链接', icon: Copy, onSelect: async () => { if (!await writeClipboardText(wikiLink)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
+      { type: 'item', id: 'wiki-search', label: '搜索目标', icon: Search, onSelect: () => openWikiSearch(target) },
+    ]
+    openContextMenu(event, { title: target, location: 'editor.preview', payload: { location: 'editor.preview', selectionText: wikiLink }, items, trigger: event.currentTarget })
+  }, [openContextMenu, openWikiSearch, resolveWikiTarget, setError])
+
   useEffect(() => {
     const onEditorCommand = (event: Event) => {
       const command = (event as CustomEvent<unknown>).detail
@@ -172,8 +262,8 @@ export function EditorPane() {
       </div>
     </div>
     <div className={'editor-body mode-' + editorMode}>
-      {editorMode !== 'preview' ? <div className="editor-pane"><CodeMirror value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={(view) => { editorViewRef.current = view; reportEditorSelection({ state: view.state } as ViewUpdate) }} onUpdate={reportEditorSelection} onChange={(value) => updateContent(value)} /></div> : null}
-      {editorMode !== 'markdown' ? <div className="editor-pane"><article className="preview"><ReactMarkdown remarkPlugins={[remarkGfm]} components={previewComponents} urlTransform={(url) => url}>{preview}</ReactMarkdown></article></div> : null}
+      {editorMode !== 'preview' ? <div className="editor-pane" onContextMenu={openEditorContextMenu}><CodeMirror value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={(view) => { editorViewRef.current = view; reportEditorSelection({ state: view.state } as ViewUpdate) }} onUpdate={reportEditorSelection} onChange={(value) => updateContent(value)} /></div> : null}
+      {editorMode !== 'markdown' ? <div className="editor-pane" onContextMenu={handlePreviewContextMenu}><article className="preview"><ReactMarkdown remarkPlugins={[remarkGfm]} components={previewComponents} urlTransform={(url) => url}>{preview}</ReactMarkdown></article></div> : null}
     </div>
     {wikiResolution ? <div className="wiki-resolution" role="status">
       <div className="wiki-resolution-copy"><strong>{wikiResolution.target}</strong><span>{wikiResolution.candidates.length > 1 ? '找到多个同名条目，请选择要打开的资料。' : '没有找到对应资料，可以先去搜索项目内容。'}</span></div>

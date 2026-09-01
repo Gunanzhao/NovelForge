@@ -1,12 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
-  ArrowRightLeft, BookOpen, ChevronDown, ChevronRight, CircleUserRound, Clock3, Copy, FilePlus2, FolderTree,
-  BarChart3, GalleryVerticalEnd, GitBranch, Globe2, LayoutDashboard, MoreHorizontal, Network, Paperclip, Plus, Search,
+  ArrowDown, ArrowRightLeft, ArrowUp, BarChart3, BookOpen, ChevronDown, ChevronRight, CircleUserRound, Clock3, Copy, FileDown, FilePlus2, FolderTree,
+  GalleryVerticalEnd, GitBranch, Globe2, LayoutDashboard, MoreHorizontal, Network, Paperclip, Plus, Search,
   ShieldCheck, Sparkles, Trash2, WandSparkles, X,
 } from 'lucide-react'
 import { useAppStore } from '../stores/app-store'
 import type { NodeKind, NodeRecord, ViewId } from '../lib/types'
+import { NODE_STATUS_LABELS } from '../lib/types'
+import type { ContextMenuItem } from '../lib/context-menu'
+import { writeClipboardText } from '../lib/clipboard'
+import { useContextMenu } from './ContextMenu'
 
 import { cn } from '../lib/utils'
 import { Button, IconButton } from './ui'
@@ -41,7 +45,7 @@ function flattenTree(nodes: NodeRecord[], volumes: NodeRecord[], openNodes: Set<
   return rows
 }
 
-function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectToggle, onAdd, onRename, onMove, onCopy, onDelete, onDragStart, onDrop }: {
+function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectToggle, onAdd, onRename, onMove, onCopy, onDelete, onContextMenu, onDragStart, onDrop }: {
   node: NodeRecord
   level: number
   open: boolean
@@ -54,13 +58,14 @@ function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectTogg
   onMove: () => void
   onCopy: () => void
   onDelete: () => void
+  onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void
   onDragStart: () => void
   onDrop: () => void
 }) {
   const isContainer = node.kind !== 'section'
   const hasChildren = isContainer
   return <div className="tree-row-wrap">
-    <div className={cn('tree-row', node.kind !== 'volume' && 'tree-document-row', selected && 'selected')} style={{ paddingLeft: 5 + level * 13 }} draggable onDragStart={onDragStart} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); onDrop() }} onDoubleClick={onRename}>
+    <div className={cn('tree-row', node.kind !== 'volume' && 'tree-document-row', selected && 'selected')} style={{ paddingLeft: 5 + level * 13 }} draggable onDragStart={onDragStart} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); onDrop() }} onDoubleClick={onRename} onContextMenu={onContextMenu}>
       {hasChildren ? <IconButton icon={open ? ChevronDown : ChevronRight} label={open ? '收起' : '展开'} onClick={onToggle} className="tree-toggle" /> : <span style={{ width: 30 }} />}
       <input type="checkbox" className="tree-checkbox" checked={selected} onChange={onSelectToggle} onClick={(event) => event.stopPropagation()} aria-label={'选择' + node.title} />
       <button className="tree-main-button" onClick={onSelect}>
@@ -80,11 +85,12 @@ function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectTogg
 }
 
 export function Sidebar({
-  onAddNode, onMoveNode, onCopyNode,
+  onAddNode, onMoveNode, onCopyNode, onExportNode,
 }: {
   onAddNode: (kind: NodeKind, parentId: string | null) => void
   onMoveNode: (node: NodeRecord) => void
   onCopyNode: (node: NodeRecord) => void
+  onExportNode: (node: NodeRecord) => void
 }) {
   const data = useAppStore((state) => state.data)
   const activeView = useAppStore((state) => state.activeView)
@@ -94,8 +100,12 @@ export function Sidebar({
 
   const renameNode = useAppStore((state) => state.renameNode)
   const deleteNode = useAppStore((state) => state.deleteNode)
+  const setNodeStatus = useAppStore((state) => state.setNodeStatus)
   const reorderNode = useAppStore((state) => state.reorderNode)
   const moveNode = useAppStore((state) => state.moveNode)
+  const projectPath = useAppStore((state) => state.projectPath)
+  const setError = useAppStore((state) => state.setError)
+  const { openContextMenu } = useContextMenu()
   const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set())
   const [openNodes, setOpenNodes] = useState<Set<string>>(new Set())
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null)
@@ -151,6 +161,53 @@ export function Sidebar({
       // Store 已经显示具体错误，保留剩余选择方便继续处理。
     }
   }
+  function siblingNodes(node: NodeRecord) {
+    return currentData.nodes.filter((candidate) => candidate.kind === node.kind && candidate.parentId === node.parentId).sort((a, b) => a.orderIndex - b.orderIndex)
+  }
+  function openNodeMenu(event: ReactMouseEvent<HTMLDivElement>, node: NodeRecord) {
+    const preservingSelection = selectedNodeIds.has(node.id) && selectedNodeIds.size > 1
+    const ids = preservingSelection ? [...selectedNodeIds] : [node.id]
+    if (!preservingSelection && (!selectedNodeIds.has(node.id) || selectedNodeIds.size !== 1)) setSelectedNodeIds(new Set([node.id]))
+    const selectedNodes = currentData.nodes.filter((candidate) => ids.includes(candidate.id))
+    if (preservingSelection) {
+      const allChapters = selectedNodes.length > 0 && selectedNodes.every((candidate) => candidate.kind === 'chapter')
+      const statusItems: ContextMenuItem[] = allChapters ? Object.entries(NODE_STATUS_LABELS).map(([status, label]) => ({
+        type: 'item' as const,
+        id: 'selection-status-' + status,
+        label,
+        checked: selectedNodes.every((candidate) => candidate.status === status),
+        onSelect: async () => { for (const candidate of selectedNodes) await setNodeStatus(candidate.id, status) },
+      })) : []
+      const items: ContextMenuItem[] = [
+        ...(allChapters ? [{ type: 'item' as const, id: 'selection-status', label: '批量设置状态', children: statusItems, onSelect: () => undefined }] : []),
+        { type: 'item', id: 'selection-trash', label: '批量移入回收站', icon: Trash2, tone: 'danger', onSelect: () => void deleteSelected() },
+        { type: 'separator' },
+        { type: 'item', id: 'selection-clear', label: '清除选择', onSelect: () => setSelectedNodeIds(new Set()) },
+      ]
+      openContextMenu(event, { title: '已选 ' + String(ids.length) + ' 项', location: 'tree.selection', payload: { location: 'tree.selection', projectPath: projectPath ?? undefined, nodeIds: ids }, items, trigger: event.currentTarget })
+      return
+    }
+    const siblings = siblingNodes(node)
+    const siblingIndex = siblings.findIndex((candidate) => candidate.id === node.id)
+    const location = ('tree.' + node.kind) as 'tree.volume' | 'tree.chapter' | 'tree.section'
+    const copyPath = async () => { if (!await writeClipboardText(node.filePath)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') }
+    const items: ContextMenuItem[] = [
+      { type: 'item', id: 'node-open', label: node.kind === 'volume' ? (openNodes.has(node.id) ? '收起' : '展开') : '打开' , icon: node.kind === 'volume' ? (openNodes.has(node.id) ? ChevronDown : ChevronRight) : BookOpen, onSelect: () => node.kind === 'volume' ? toggle(node.id) : void selectNode(node.id) },
+      ...(node.kind !== 'section' ? [{ type: 'item' as const, id: 'node-add', label: node.kind === 'volume' ? '新建章节' : '新建小节', icon: Plus, onSelect: () => onAddNode(node.kind === 'volume' ? 'chapter' : 'section', node.id) }] : []),
+      { type: 'item', id: 'node-rename', label: '重命名', onSelect: () => handleRename(node) },
+      { type: 'item', id: 'node-copy', label: node.kind === 'volume' ? '复制整卷' : node.kind === 'chapter' ? '复制章节' : '复制小节', icon: Copy, onSelect: () => onCopyNode(node) },
+      ...(node.kind !== 'volume' ? [{ type: 'item' as const, id: 'node-move', label: node.kind === 'chapter' ? '移动到其他卷' : '移动到其他章节', icon: ArrowRightLeft, onSelect: () => onMoveNode(node) }] : []),
+      { type: 'item', id: 'node-up', label: '上移', icon: ArrowUp, disabled: siblingIndex <= 0, onSelect: () => void reorderNode(node.id, 'up') },
+      { type: 'item', id: 'node-down', label: '下移', icon: ArrowDown, disabled: siblingIndex < 0 || siblingIndex >= siblings.length - 1, onSelect: () => void reorderNode(node.id, 'down') },
+      ...(node.kind === 'chapter' ? [{ type: 'item' as const, id: 'node-status', label: '写作状态', children: Object.entries(NODE_STATUS_LABELS).map(([status, label]) => ({ type: 'item' as const, id: 'node-status-' + status, label, checked: node.status === status, onSelect: () => void setNodeStatus(node.id, status) })), onSelect: () => undefined }] : []),
+      ...(node.kind !== 'section' ? [{ type: 'item' as const, id: 'node-export', label: node.kind === 'volume' ? '导出此卷' : '导出此章', icon: FileDown, onSelect: () => onExportNode(node) }] : []),
+      { type: 'item', id: 'node-copy-title', label: node.kind === 'chapter' ? '复制章节标题' : '复制标题', icon: Copy, onSelect: async () => { if (!await writeClipboardText(node.title)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
+      { type: 'item', id: 'node-copy-path', label: node.kind === 'chapter' ? '复制文件路径' : '复制目录路径', icon: Copy, onSelect: copyPath },
+      { type: 'separator' },
+      { type: 'item', id: 'node-trash', label: '移入回收站', icon: Trash2, tone: 'danger', onSelect: () => handleDelete(node) },
+    ]
+    openContextMenu(event, { title: node.title, location, payload: { location, projectPath: projectPath ?? undefined, nodeIds: [node.id], nodeKind: node.kind }, items, trigger: event.currentTarget })
+  }
   function handleDrop(target: NodeRecord) {
     const source = draggedNodeId ? currentData.nodes.find((node) => node.id === draggedNodeId) : undefined
     setDraggedNodeId(null)
@@ -173,7 +230,7 @@ export function Sidebar({
       </div>
       <div className="sidebar-section-label"><span>正文结构</span><span>{data.nodes.filter((node) => node.kind === 'chapter').length} 章</span></div>
       <div className="tree" ref={treeRef} onScroll={(event) => setTreeScrollTop(event.currentTarget.scrollTop)}>
-        {volumes.length === 0 ? <div className="tree-muted">还没有卷，点击右上角创建第一卷。</div> : <div className="tree-virtual-content" style={{ height: flatTree.length * treeRowHeight }}><div className="tree-virtual-rows" style={{ top: visibleStart * treeRowHeight }}>{visibleTree.map(({ node, level }) => <NodeRow key={node.id} node={node} level={level} open={openNodes.has(node.id)} selected={selectedNodeIds.has(node.id)} onToggle={() => toggle(node.id)} onSelect={() => node.kind === 'volume' ? toggle(node.id) : void selectNode(node.id)} onSelectToggle={() => toggleSelection(node.id)} onAdd={() => onAddNode(node.kind === 'volume' ? 'chapter' : 'section', node.id)} onRename={() => handleRename(node)} onMove={() => onMoveNode(node)} onCopy={() => onCopyNode(node)} onDelete={() => handleDelete(node)} onDragStart={() => setDraggedNodeId(node.id)} onDrop={() => handleDrop(node)} />)}</div></div>}
+        {volumes.length === 0 ? <div className="tree-muted">还没有卷，点击右上角创建第一卷。</div> : <div className="tree-virtual-content" style={{ height: flatTree.length * treeRowHeight }}><div className="tree-virtual-rows" style={{ top: visibleStart * treeRowHeight }}>{visibleTree.map(({ node, level }) => <NodeRow key={node.id} node={node} level={level} open={openNodes.has(node.id)} selected={selectedNodeIds.has(node.id)} onToggle={() => toggle(node.id)} onSelect={() => node.kind === 'volume' ? toggle(node.id) : void selectNode(node.id)} onSelectToggle={() => toggleSelection(node.id)} onAdd={() => onAddNode(node.kind === 'volume' ? 'chapter' : 'section', node.id)} onRename={() => handleRename(node)} onMove={() => onMoveNode(node)} onCopy={() => onCopyNode(node)} onDelete={() => handleDelete(node)} onContextMenu={(event) => openNodeMenu(event, node)} onDragStart={() => setDraggedNodeId(node.id)} onDrop={() => handleDrop(node)} />)}</div></div>}
       </div>
       {selectedNodeIds.size ? <div className="tree-batch-actions"><span>已选 {selectedNodeIds.size} 项</span><Button variant="danger" onClick={() => void deleteSelected()}><Trash2 size={12} />批量移入回收站</Button><Button variant="ghost" onClick={() => setSelectedNodeIds(new Set())}>清除选择</Button></div> : null}
       <div className="sidebar-section-label"><span>工具</span></div>

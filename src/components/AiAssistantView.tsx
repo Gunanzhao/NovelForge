@@ -15,6 +15,8 @@ export function AiAssistantView() {
   const projectPath = useAppStore((state) => state.projectPath)
   const document = useAppStore((state) => state.document)
   const editorSelection = useAppStore((state) => state.editorSelection)
+  const requestedAiAction = useAppStore((state) => state.requestedAiAction)
+  const consumeAiAction = useAppStore((state) => state.consumeAiAction)
   const updateContent = useAppStore((state) => state.updateContent)
   const setEditorSelection = useAppStore((state) => state.setEditorSelection)
   const setError = useAppStore((state) => state.setError)
@@ -35,6 +37,12 @@ export function AiAssistantView() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [result, setResult] = useState<AiCompletionResult | null>(null)
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!requestedAiAction) return
+    setAction(requestedAiAction)
+    consumeAiAction()
+  }, [consumeAiAction, requestedAiAction])
 
   useEffect(() => {
     if (!result) return

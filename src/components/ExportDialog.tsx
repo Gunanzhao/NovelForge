@@ -15,14 +15,21 @@ const formats: Array<{ id: ExportFormat; label: string; description: string; ico
 
 type ExportOptions = Omit<ExportInput, 'projectPath' | 'format'>
 
+export interface ExportDialogPreset {
+  scope: 'project' | 'volume' | 'chapters'
+  volumePath?: string
+  nodeIds?: string[]
+}
+
 export function ExportDialog({
-  open, onClose, onExport, data, currentNodeId,
+  open, onClose, onExport, data, currentNodeId, preset,
 }: {
   open: boolean
   onClose: () => void
   onExport: (format: ExportFormat, options: ExportOptions) => Promise<void>
   data: ProjectData
   currentNodeId?: string
+  preset?: ExportDialogPreset
 }) {
   const [busy, setBusy] = useState<ExportFormat | null>(null)
   const [scope, setScope] = useState<'project' | 'volume' | 'chapters'>('project')
@@ -39,16 +46,17 @@ export function ExportDialog({
 
   useEffect(() => {
     if (!open) return
-    setScope('project')
-    setVolumePath(volumes[0]?.filePath ?? '')
-    setSelectedChapterIds(currentNodeId && chapters.some((chapter) => chapter.id === currentNodeId) ? new Set([currentNodeId]) : new Set())
+    setScope(preset?.scope ?? 'project')
+    setVolumePath(preset?.volumePath ?? volumes[0]?.filePath ?? '')
+    const presetIds = preset?.nodeIds?.filter((id) => chapters.some((chapter) => chapter.id === id)) ?? []
+    setSelectedChapterIds(presetIds.length ? new Set(presetIds) : currentNodeId && chapters.some((chapter) => chapter.id === currentNodeId) ? new Set([currentNodeId]) : new Set())
     setTitle(data.project.title)
     setAuthor(data.project.author)
     setIncludeToc(true)
     setIncludeVolumeTitles(true)
     setIncludeChapterTitles(true)
     setCoverPath('')
-  }, [chapters, currentNodeId, data.project.author, data.project.title, open, volumes])
+  }, [chapters, currentNodeId, data.project.author, data.project.title, open, preset, volumes])
 
   function toggleChapter(id: string) {
     setSelectedChapterIds((current) => {

@@ -173,9 +173,10 @@ function MenuItemButton({
     aria-disabled={item.disabled || undefined}
     aria-checked={item.checked || undefined}
     aria-haspopup={item.children?.length ? 'menu' : undefined}
+    aria-expanded={item.children?.length && active ? true : undefined}
     onMouseEnter={(event) => item.children?.length ? onOpenSubmenu(item, event.currentTarget) : undefined}
     onFocus={(event) => item.children?.length ? onOpenSubmenu(item, event.currentTarget) : undefined}
-    onClick={() => onSelect(item)}
+    onClick={(event) => item.children?.length ? onOpenSubmenu(item, event.currentTarget) : onSelect(item)}
   >
     <span className="context-menu-item-icon">{item.checked ? <Check size={15} strokeWidth={1.8} /> : item.icon ? <item.icon size={15} strokeWidth={1.8} /> : null}</span>
     <span className="context-menu-item-label">{item.label}</span>
@@ -191,6 +192,7 @@ function ContextMenuSurface({ state, onClose, onError }: ContextMenuSurfaceProps
   const [position, setPosition] = useState({ left: state.point.x, top: state.point.y })
   const [activeIndex, setActiveIndex] = useState(0)
   const [submenu, setSubmenu] = useState<{ item: ContextMenuActionItem; anchor: DOMRect } | null>(null)
+  const [submenuActiveIndex, setSubmenuActiveIndex] = useState(0)
   const items = useMemo(() => normalizeContextMenuItems(state.items), [state.items])
   const enabledItems = useMemo(() => items.filter(isContextMenuAction), [items])
 
@@ -214,6 +216,7 @@ function ContextMenuSurface({ state, onClose, onError }: ContextMenuSurfaceProps
 
   useEffect(() => {
     if (!submenu || !submenuRef.current) return
+    setSubmenuActiveIndex(0)
     const rect = submenuRef.current.getBoundingClientRect()
     const next = submenuContextMenuPosition(submenu.anchor, { width: rect.width || 220, height: rect.height || 280 }, { width: window.innerWidth, height: window.innerHeight })
     submenuRef.current.style.left = next.left + 'px'
@@ -263,6 +266,34 @@ function ContextMenuSurface({ state, onClose, onError }: ContextMenuSurfaceProps
     }
   }
 
+  const onSubmenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const buttons = Array.from(submenuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([aria-disabled="true"])') ?? [])
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      event.stopPropagation()
+      if (!buttons.length) return
+      const next = (submenuActiveIndex + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length
+      setSubmenuActiveIndex(next)
+      buttons[next]?.focus()
+      return
+    }
+    if (event.key === 'ArrowLeft' || event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      if (submenu) {
+        setSubmenu(null)
+        itemRefs.current[submenu.item.id]?.focus()
+      }
+      return
+    }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      event.stopPropagation()
+      const active = document.activeElement
+      if (active instanceof HTMLButtonElement) active.click()
+    }
+  }
+
   return <div
     ref={menuRef}
     className="context-menu"
@@ -287,6 +318,7 @@ function ContextMenuSurface({ state, onClose, onError }: ContextMenuSurfaceProps
       aria-label={submenu.item.label}
       style={{ left: submenu.anchor.right + 4, top: submenu.anchor.top }}
       onMouseEnter={() => undefined}
+      onKeyDown={onSubmenuKeyDown}
       onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }}
     >
       {normalizeContextMenuItems(submenu.item.children).map((item, index) => item.type === 'separator'
@@ -315,10 +347,16 @@ export function ContextMenuProvider({ children, fallbackItems, pluginItems }: Co
     event.stopPropagation()
     const payload = { ...options.payload, location: options.location }
     const extensionItems = pluginItems?.(options.location, payload) ?? []
+    const dangerIndex = options.items.findIndex((item) => isContextMenuAction(item) && item.tone === 'danger')
+    const ordinaryItems = dangerIndex >= 0 ? options.items.slice(0, dangerIndex) : options.items
+    const dangerItems = dangerIndex >= 0 ? options.items.slice(dangerIndex) : []
+    const extensionGroup = extensionItems.length
+      ? [{ type: 'separator' as const }, { type: 'label' as const, id: 'context-plugin-label', label: '扩展' }, ...extensionItems]
+      : []
     setState({
       ...options,
       payload,
-      items: [...options.items, ...(extensionItems.length ? [{ type: 'separator' as const }, { type: 'label' as const, id: 'context-plugin-label', label: '扩展' }, ...extensionItems] : [])],
+      items: [...ordinaryItems, ...extensionGroup, ...dangerItems],
       point: { x: event.clientX, y: event.clientY },
     })
   }, [pluginItems])

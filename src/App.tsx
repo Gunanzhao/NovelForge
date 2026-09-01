@@ -1,15 +1,18 @@
-import { useEffect, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   BookOpen, Check, FileDown, FolderOpen, Menu, Moon, PanelRight, Plus, Search,
   Settings, Sun, Undo2, X,
 } from 'lucide-react'
 import { isDesktop } from './lib/api'
-import type { ExportFormat, ExportInput, NodeKind } from './lib/types'
+import type { ExportFormat, ExportInput, NodeKind, NodeRecord } from './lib/types'
+import type { ContextMenuItem, ContextMenuLocation, ContextMenuPayload } from './lib/context-menu'
+import { dispatchCommand } from './lib/command-registry'
+import { runtimePluginRegistry } from './lib/plugin-registry'
 import { useAppStore } from './stores/app-store'
 import { Dashboard } from './components/Dashboard'
 import { CommandPalette } from './components/CommandPalette'
 import { ConsistencyView } from './components/ConsistencyView'
-import { ExportDialog } from './components/ExportDialog'
+import { ExportDialog, type ExportDialogPreset } from './components/ExportDialog'
 import { EditorPane } from './components/EditorPane'
 import { PlanningView } from './components/PlanningView'
 import { TimelineView } from './components/TimelineView'
@@ -28,6 +31,7 @@ import { TrashView } from './components/TrashView'
 import { QuickOpen } from './components/QuickOpen'
 import { Button, IconButton } from './components/ui'
 import { formatNumber } from './lib/utils'
+import { ContextMenuProvider } from './components/ContextMenu'
 
 function Welcome({ onProject }: { onProject: (mode: 'new' | 'open') => void }) {
   const recentProjects = useAppStore((state) => state.recentProjects)
@@ -100,14 +104,16 @@ export default function App() {
   const loadRecent = useAppStore((state) => state.loadRecent)
   const saveCurrentDocument = useAppStore((state) => state.saveCurrentDocument)
   const closeProject = useAppStore((state) => state.closeProject)
+  const setTheme = useAppStore((state) => state.setTheme)
+  const toggleFocusMode = useAppStore((state) => state.toggleFocusMode)
   const setWorkspacePreferences = useAppStore((state) => state.setWorkspacePreferences)
   const clearError = useAppStore((state) => state.clearError)
   const refreshStats = useAppStore((state) => state.refreshStats)
   const [projectDialog, setProjectDialog] = useState<'new' | 'open' | null>(null)
-  const [exportOpen, setExportOpen] = useState(false)
+  const [exportPreset, setExportPreset] = useState<ExportDialogPreset | null>(null)
   const [nodeDialog, setNodeDialog] = useState<{ kind: NodeKind; parentId: string | null } | null>(null)
   const [transferDialog, setTransferDialog] = useState<{ mode: 'move' | 'copy'; nodeId: string } | null>(null)
-  const openQuickOpen = () => window.dispatchEvent(new Event('novelforge:quick-open'))
+  const openQuickOpen = useCallback(() => window.dispatchEvent(new Event('novelforge:quick-open')), [])
 
   useEffect(() => { loadRecent() }, [loadRecent])
 
@@ -156,7 +162,52 @@ export default function App() {
     return <EntityView kind={activeView} />
   }
 
-  if (!data) return <><Welcome onProject={setProjectDialog} /><CommandPalette onNewProject={() => setProjectDialog('new')} onCloseProject={() => void closeProject()} onQuickOpen={() => undefined} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} />{error ? <div className="toast-error"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</>
+  const pluginItems = useCallback((location: ContextMenuLocation, payload: ContextMenuPayload): ContextMenuItem[] => runtimePluginRegistry.contextMenus(location, payload).map((item) => ({
+    type: 'item' as const,
+    id: 'plugin-' + item.id,
+    label: item.label,
+    disabled: item.contextEnabled === false,
+    onSelect: async () => { await item.execute(payload) },
+  })), [])
+  const fallbackItems = useMemo<ContextMenuItem[]>(() => {
+    if (!data) {
+      return [
+        { type: 'item', id: 'workspace-new-project', label: '新建小说', icon: Plus, shortcut: 'Ctrl+N', onSelect: () => setProjectDialog('new') },
+        { type: 'item', id: 'workspace-open-project', label: '打开项目', icon: FolderOpen, onSelect: () => setProjectDialog('open') },
+        { type: 'separator' },
+        { type: 'item', id: 'workspace-command-palette', label: '打开命令面板', icon: Search, shortcut: 'Ctrl+Shift+P', onSelect: () => dispatchCommand('open-palette') },
+      ]
+    }
+    return [
+      { type: 'item', id: 'workspace-save', label: '保存当前正文', icon: Check, shortcut: 'Ctrl+S', disabled: !document, onSelect: () => { void saveCurrentDocument('右键菜单保存') } },
+      { type: 'item', id: 'workspace-quick-open', label: '快速打开', shortcut: 'Ctrl+P', onSelect: openQuickOpen },
+      { type: 'separator' },
+      { type: 'item', id: 'workspace-search', label: '当前章节搜索', icon: Search, shortcut: 'Ctrl+F', onSelect: () => dispatchCommand('open-search') },
+      { type: 'item', id: 'workspace-full-search', label: '全项目搜索', icon: Search, shortcut: 'Ctrl+Shift+F', onSelect: () => dispatchCommand('open-full-search') },
+      { type: 'item', id: 'workspace-command-palette', label: '打开命令面板', shortcut: 'Ctrl+Shift+P', onSelect: () => dispatchCommand('open-palette') },
+      { type: 'item', id: 'workspace-focus', label: '专注模式', shortcut: 'F11', onSelect: toggleFocusMode },
+      { type: 'separator' },
+      {
+        type: 'item',
+        id: 'workspace-theme',
+        label: '主题',
+        children: [
+          { type: 'item', id: 'theme-light', label: '浅色', checked: theme === 'light', onSelect: () => setTheme('light') },
+          { type: 'item', id: 'theme-dark', label: '深色', checked: theme === 'dark', onSelect: () => setTheme('dark') },
+          { type: 'item', id: 'theme-system', label: '跟随系统', checked: theme === 'system', onSelect: () => setTheme('system') },
+        ],
+        onSelect: () => undefined,
+      },
+      { type: 'item', id: 'workspace-settings', label: '项目设置', icon: Settings, onSelect: () => useAppStore.getState().setView('settings') },
+    ]
+  }, [data, document, openQuickOpen, saveCurrentDocument, setTheme, theme, toggleFocusMode])
+
+  const openExportForNode = useCallback((node: NodeRecord) => {
+    if (node.kind === 'volume') setExportPreset({ scope: 'volume', volumePath: node.filePath })
+    if (node.kind === 'chapter') setExportPreset({ scope: 'chapters', nodeIds: [node.id] })
+  }, [])
+
+  if (!data) return <ContextMenuProvider fallbackItems={fallbackItems} pluginItems={pluginItems}><><Welcome onProject={setProjectDialog} /><CommandPalette onNewProject={() => setProjectDialog('new')} onCloseProject={() => void closeProject()} onQuickOpen={() => undefined} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} />{error ? <div className="toast-error"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</></ContextMenuProvider>
   const layoutStyle = {
     '--sidebar-width': String(workspacePreferences.sidebarWidth) + 'px',
     '--inspector-width': String(workspacePreferences.inspectorWidth) + 'px',
@@ -167,5 +218,5 @@ export default function App() {
     '--paragraph-spacing': String(workspacePreferences.paragraphSpacing) + 'px',
   } as CSSProperties
   const transferNode = transferDialog ? data.nodes.find((node) => node.id === transferDialog.nodeId) ?? null : null
-  return <div className={'app-shell' + (focusMode ? ' focus-mode' : '')}>{focusMode ? null : <TopBar onProject={setProjectDialog} onExport={() => setExportOpen(true)} onCloseProject={() => void closeProject()} />}<div className={'main-layout' + (focusMode ? ' sidebar-closed inspector-closed' : '') + (sidebarOpen ? '' : ' sidebar-closed') + (inspectorOpen ? '' : ' inspector-closed')} style={layoutStyle}><div className="sidebar-region"><Sidebar onAddNode={(kind, parentId) => setNodeDialog({ kind, parentId })} onMoveNode={(node) => node.kind !== 'volume' && setTransferDialog({ mode: 'move', nodeId: node.id })} onCopyNode={(node) => setTransferDialog({ mode: 'copy', nodeId: node.id })} /><ResizeHandle side="sidebar" width={workspacePreferences.sidebarWidth} onResize={(width) => setWorkspacePreferences({ sidebarWidth: width })} /></div><main className="workspace">{viewContent()}</main><div className="inspector-region"><Inspector /><ResizeHandle side="inspector" width={workspacePreferences.inspectorWidth} onResize={(width) => setWorkspacePreferences({ inspectorWidth: width })} /></div></div>{focusMode ? null : <StatusBar />}<CommandPalette onNewProject={() => setProjectDialog('new')} onCloseProject={() => void closeProject()} onQuickOpen={openQuickOpen} /><QuickOpen /><ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} data={data} currentNodeId={document?.node.id} onExport={exportProject} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} /><NodeDialog kind={nodeDialog?.kind ?? null} parentId={nodeDialog?.parentId ?? null} onClose={() => setNodeDialog(null)} /><NodeTransferDialog mode={transferDialog?.mode ?? null} node={transferNode} data={data} onClose={() => setTransferDialog(null)} onSubmit={async (targetParentId, title) => { if (!transferDialog) return; if (transferDialog.mode === 'move') await useAppStore.getState().moveNode(transferDialog.nodeId, targetParentId); else await useAppStore.getState().copyNode(transferDialog.nodeId, targetParentId, title) }} />{error ? <div className="toast-error"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</div>
+  return <ContextMenuProvider fallbackItems={fallbackItems} pluginItems={pluginItems}><div className={'app-shell' + (focusMode ? ' focus-mode' : '')}>{focusMode ? null : <TopBar onProject={setProjectDialog} onExport={() => setExportPreset({ scope: 'project' })} onCloseProject={() => void closeProject()} />}<div className={'main-layout' + (focusMode ? ' sidebar-closed inspector-closed' : '') + (sidebarOpen ? '' : ' sidebar-closed') + (inspectorOpen ? '' : ' inspector-closed')} style={layoutStyle}><div className="sidebar-region"><Sidebar onAddNode={(kind, parentId) => setNodeDialog({ kind, parentId })} onMoveNode={(node) => node.kind !== 'volume' && setTransferDialog({ mode: 'move', nodeId: node.id })} onCopyNode={(node) => setTransferDialog({ mode: 'copy', nodeId: node.id })} onExportNode={openExportForNode} /><ResizeHandle side="sidebar" width={workspacePreferences.sidebarWidth} onResize={(width) => setWorkspacePreferences({ sidebarWidth: width })} /></div><main className="workspace">{viewContent()}</main><div className="inspector-region"><Inspector /><ResizeHandle side="inspector" width={workspacePreferences.inspectorWidth} onResize={(width) => setWorkspacePreferences({ inspectorWidth: width })} /></div></div>{focusMode ? null : <StatusBar />}<CommandPalette onNewProject={() => setProjectDialog('new')} onCloseProject={() => void closeProject()} onQuickOpen={openQuickOpen} /><QuickOpen /><ExportDialog open={Boolean(exportPreset)} preset={exportPreset ?? undefined} onClose={() => setExportPreset(null)} data={data} currentNodeId={document?.node.id} onExport={exportProject} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} /><NodeDialog kind={nodeDialog?.kind ?? null} parentId={nodeDialog?.parentId ?? null} onClose={() => setNodeDialog(null)} /><NodeTransferDialog mode={transferDialog?.mode ?? null} node={transferNode} data={data} onClose={() => setTransferDialog(null)} onSubmit={async (targetParentId, title) => { if (!transferDialog) return; if (transferDialog.mode === 'move') await useAppStore.getState().moveNode(transferDialog.nodeId, targetParentId); else await useAppStore.getState().copyNode(transferDialog.nodeId, targetParentId, title) }} />{error ? <div className="toast-error"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</div></ContextMenuProvider>
 }
