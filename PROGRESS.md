@@ -587,3 +587,10 @@
 - 修正桌面验收辅助脚本对 Windows 原生选择器的控件类型筛选、ValuePattern 超时回退、目录切换后的控件刷新和文件名输入框优先路径。
 - 使用 EdgeDriver 151.0.4129.107（匹配 WebView2 151.0.4129.107）复跑官方 WebDriver + 原生 UI Automation；CORE_EDITOR_TREE_OK、DRAG_DROP_OK、HISTORY_AND_TREE_ACTIONS_OK、ENTITY_CRUD_OK、WIKI_NAVIGATION_OK、SETTINGS_COMMANDS_OK、RECOVERY_FAILURE_OK、NATIVE_DIALOGS_OK、PLANNING_AND_CHECKS_OK、SEARCH_OK、AI_SELECTION_AND_CANCEL_OK、AI_PROVIDER_OK、TRASH_RESTORE_OK、EXPORTS_OK 全部通过。
 - 大文档采样 276 帧、约 137.75 FPS，临时 E2E 目录已清理；此次脚本修复与证据记录作为独立收尾阶段提交。
+
+## 2026-09-01：P2-03 GitHub Actions 远程闭环
+
+- 首次远程 run 33387176701 的 Frontend checks 通过，但 Ubuntu Rust job 在 cargo check 退出 101，cargo test 被跳过；本地 Windows 通过不能替代该平台门禁。
+- commit ed5d0cc 为 Rust job 安装 Tauri 2 官方 Debian 前置依赖，并将 checkout、cache、setup-node 和 pnpm setup 升级到 Node 24 运行时版本。
+- 修复后的 run 33529012970 全部通过：Frontend typecheck、lint、test、build 为 success；Ubuntu Linux 依赖安装、cargo check、cargo test 为 success；两个 check-run 均为 0 annotations。
+- P2-03 关闭，AUDIT_FIX_PLAN.md 的 P1、P2、P3 条目与桌面人工门禁现已全部完成。

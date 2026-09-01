@@ -445,3 +445,16 @@
 - 使用 EdgeDriver 151.0.4129.107（与 WebView2 151.0.4129.107 匹配）运行官方 Tauri WebDriver + Windows UI Automation；修复选择器控件筛选、路径输入回退、目录刷新和文件名输入框后，全部桌面阶段标记通过。
 - 性能结果：100,000 字 editor-pane 采样 276 帧、约 137.75 FPS，替换 726 ms、保存 290 ms；原生文件夹/文件选择器、附件导入、保存失败恢复重启均通过。
 - 失败复跑产生的临时项目目录已删除；用户提供的收尾计划保持未跟踪，不计入实现提交。
+
+## GitHub Actions Ubuntu CI 闭环（2026-09-01）
+
+| 层级 | GitHub Actions run 33529012970 | 结果 |
+| --- | --- | --- |
+| Frontend | pnpm install、typecheck、lint、test、build | success |
+| Linux prerequisites | Tauri 2 Debian WebKitGTK/GTK 依赖安装 | success |
+| Rust compile | Ubuntu cargo check | success |
+| Rust tests | Ubuntu cargo test | success |
+| Check annotations | Frontend checks、Rust checks | 0 annotations |
+
+- 失败基线为 run 33387176701：Frontend checks 通过，Rust cargo check 退出 101，cargo test 被跳过。
+- commit ed5d0cc 增加 Linux 系统依赖并升级 Node 24 action runtime；修复后的两个 job 均为 success，P2-03 远程门禁关闭。

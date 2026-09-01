@@ -39,6 +39,7 @@
 
 ## 未发布 - 2026-08-30
 
+- 修复 GitHub Actions Ubuntu Rust CI：安装 Tauri 2 WebKitGTK/GTK 前置依赖，升级 Node 24 action runtime，并以 run 33529012970 的 Frontend/Rust 全绿结果关闭 P2-03。
 - 审计 P1-01：为正文节点、卷元数据和资料镜像增加稳定 frontmatter；SQLite 损坏后可恢复 UUID、关系、地点树、章节关联和历史快照索引，并对旧项目缺少元数据写入 WARN。
 - 审计 P1-02：统一节点路径分配，阻止回收站原路径复用；章节 sidecar 随正文安全删除、恢复和永久删除，并补充冲突恢复回归。
 - 审计 P1-03：工具栏和快捷键改为 CodeMirror 选区 transaction，补齐基础 Markdown 格式命令并支持可重绑定 Ctrl+B/Ctrl+I。
