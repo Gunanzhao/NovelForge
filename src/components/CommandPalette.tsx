@@ -71,6 +71,15 @@ export function CommandPalette({ onNewProject, onCloseProject, onQuickOpen }: Co
   }, [shortcuts])
 
   useEffect(() => {
+    const onRequestedCommand = (event: Event) => {
+      const id = (event as CustomEvent<unknown>).detail
+      if (typeof id === 'string' && COMMANDS.some((command) => command.id === id)) runCommand(id as CommandId)
+    }
+    window.addEventListener('novelforge:run-command', onRequestedCommand)
+    return () => window.removeEventListener('novelforge:run-command', onRequestedCommand)
+  }, [runCommand])
+
+  useEffect(() => {
     if (!open) return
     setQuery('')
     setActiveIndex(0)

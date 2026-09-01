@@ -415,3 +415,24 @@ code { padding: 1px 4px; border-radius: 3px; background: var(--surface-2); font-
 @media (max-width: 640px) {
   .consistency-toolbar { align-items: stretch; flex-direction: column; }.consistency-filters { overflow: auto; }.attachments-layout { grid-template-columns: minmax(0, 1fr); }.attachments-list-pane { border-right: 0; border-bottom: 1px solid var(--line); }.attachments-toolbar { align-items: stretch; flex-direction: column; }.attachments-toolbar .text-input { width: 100%; }
 }
+
+.context-menu-root { display: contents; }
+.context-menu { position: fixed; z-index: 90; display: grid; width: 236px; max-height: min(520px, calc(100vh - 16px)); overflow: auto; padding: 6px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); box-shadow: 0 16px 42px rgba(40, 32, 22, .16); color: var(--text); animation: context-menu-in 90ms ease-out both; }
+.context-submenu { z-index: 91; width: 220px; }
+.context-menu-title { overflow: hidden; padding: 5px 9px 7px; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 650; }
+.context-menu-item { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: var(--text); text-align: left; font-size: 12px; font-weight: 500; }
+.context-menu-item:hover, .context-menu-item:focus-visible { outline: 0; background: var(--surface-2); }
+.context-menu-item.accent { color: var(--accent); }
+.context-menu-item.danger { color: var(--danger); }
+.context-menu-item.danger:hover, .context-menu-item.danger:focus-visible { background: var(--danger-soft); }
+.context-menu-item:disabled { opacity: .42; }
+.context-menu-item-icon { display: inline-grid; place-items: center; flex: 0 0 auto; width: 15px; height: 15px; color: var(--muted); }
+.context-menu-item.accent .context-menu-item-icon { color: var(--accent); }
+.context-menu-item.danger .context-menu-item-icon { color: var(--danger); }
+.context-menu-item-label { min-width: 0; overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; }
+.context-menu-shortcut { margin-left: auto; color: var(--faint); font-family: Consolas, monospace; font-size: 10px; }
+.context-menu-chevron { flex: 0 0 auto; margin-left: 4px; color: var(--faint); }
+.context-menu-separator { height: 1px; margin: 5px 3px; background: var(--line); }
+.context-menu-label { padding: 5px 9px 3px; color: var(--faint); font-size: 9px; font-weight: 700; letter-spacing: .08em; }
+@keyframes context-menu-in { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .context-menu { animation: none; } }

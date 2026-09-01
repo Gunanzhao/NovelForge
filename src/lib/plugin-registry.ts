@@ -1,4 +1,5 @@
 import { analyzeConsistency } from './consistency-data'
+import type { ContextMenuLocation, ContextMenuPayload } from './context-menu'
 import { generateNames, NAME_CATEGORIES, NAME_STYLES } from './name-generator'
 import type { NameCategory, NameStyle } from './name-generator'
 import type { ConsistencyReport, ProjectData } from './types'
@@ -23,6 +24,11 @@ export interface PluginMenuItem {
   id: string
   label: string
   location: 'file' | 'edit' | 'view' | 'tools' | 'help'
+  contextLocations?: ContextMenuLocation[]
+  contextOrder?: number
+  isEnabled?: (input: unknown) => boolean
+  /** Runtime-only result used to render a disabled item after an enablement error. */
+  contextEnabled?: boolean
   execute: PluginHandler
 }
 
@@ -153,6 +159,20 @@ export class PluginRegistry {
     return [...this.buckets.menus.values()]
   }
 
+  contextMenus(location: ContextMenuLocation, input: ContextMenuPayload): PluginMenuItem[] {
+    return this.menus()
+      .filter((item) => item.contextLocations?.includes(location))
+      .map((item) => {
+        if (!item.isEnabled) return item
+        try {
+          return { ...item, contextEnabled: item.isEnabled(input) }
+        } catch {
+          return { ...item, contextEnabled: false }
+        }
+      })
+      .sort((left, right) => (left.contextOrder ?? 100) - (right.contextOrder ?? 100) || left.id.localeCompare(right.id))
+  }
+
   generators(): PluginGenerator[] {
     return [...this.buckets.generators.values()]
   }
@@ -215,4 +235,11 @@ export function createBuiltinPluginRegistry() {
   const registry = new PluginRegistry()
   for (const plugin of BUILTIN_PLUGINS) registry.register(plugin)
   return registry
+}
+
+export const runtimePluginRegistry = createBuiltinPluginRegistry()
+
+export function registerSourcePlugin(plugin: NovelForgePlugin) {
+  runtimePluginRegistry.register(plugin)
+  return runtimePluginRegistry
 }

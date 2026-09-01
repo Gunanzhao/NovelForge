@@ -53,6 +53,10 @@ export const COMMANDS: CommandDescriptor[] = [
   { id: 'toggle-italic', label: '切换斜体', description: '对当前编辑器选区应用或取消斜体', keywords: ['斜体', 'italic', '编辑'], defaultShortcut: 'Ctrl+I' },
 ]
 
+export function dispatchCommand(id: CommandId) {
+  window.dispatchEvent(new CustomEvent('novelforge:run-command', { detail: id }))
+}
+
 export type ShortcutMap = Record<CommandId, string>
 
 const STORAGE_KEY = 'novelforge:command-shortcuts:v1'

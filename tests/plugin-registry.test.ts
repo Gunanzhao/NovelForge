@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createBuiltinPluginRegistry, PluginRegistry, type NovelForgePlugin } from '../src/lib/plugin-registry'
+import type { ContextMenuPayload } from '../src/lib/context-menu'
 
 describe('plugin registry', () => {
   it('registers the built-in name generator and consistency command', async () => {
@@ -48,5 +49,23 @@ describe('plugin registry', () => {
     expect(registry.listPlugins().map((item) => item.id)).not.toContain('test.duplicate-descriptor')
     expect(registry.commands().map((item) => item.id)).not.toContain('test.new-command')
     expect(() => registry.register(plugin)).toThrow('插件 id 已注册')
+  })
+
+  it('keeps legacy menu descriptors and orders enabled context slots safely', () => {
+    const registry = new PluginRegistry()
+    const payload: ContextMenuPayload = { location: 'editor.selection', selectionText: '选区' }
+    registry.register({
+      id: 'test.context-menu',
+      name: 'Context menu',
+      version: '1.0.0',
+      register(context) {
+        context.registerMenu({ id: 'legacy', label: '旧菜单', location: 'tools', execute: () => undefined })
+        context.registerMenu({ id: 'late', label: '后置', location: 'tools', contextLocations: ['editor.selection'], contextOrder: 200, execute: () => undefined })
+        context.registerMenu({ id: 'early', label: '前置', location: 'tools', contextLocations: ['editor.selection'], contextOrder: 10, isEnabled: (input) => Boolean((input as ContextMenuPayload).selectionText), execute: () => undefined })
+        context.registerMenu({ id: 'disabled', label: '禁用', location: 'tools', contextLocations: ['editor.selection'], isEnabled: () => { throw new Error('bad plugin') }, execute: () => undefined })
+      },
+    })
+    expect(registry.contextMenus('editor.selection', payload).map((item) => item.id)).toEqual(['early', 'disabled', 'late'])
+    expect(registry.contextMenus('editor.cursor', { location: 'editor.cursor' })).toEqual([])
   })
 })
