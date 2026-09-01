@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, BookOpen, GripVertical, Plus, Save, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, BookOpen, Copy, GripVertical, Plus, Save, Trash2 } from 'lucide-react'
 import type { EntityRecord } from '../lib/types'
 import { contentNumber, contentText, reorderItems, sortChapterNodes, sortPlanningEntities } from '../lib/planning-data'
 import { useAppStore } from '../stores/app-store'
+import type { ContextMenuItem } from '../lib/context-menu'
+import { writeClipboardText } from '../lib/clipboard'
 import { Button, Field, Panel, TextInput } from './ui'
+import { useContextMenu } from './ContextMenu'
 
 interface SceneDraft {
   title: string
@@ -42,6 +45,8 @@ export function SceneView({ chapterId, onChapterChange }: { chapterId: string; o
   const saveEntity = useAppStore((state) => state.saveEntity)
   const deleteEntity = useAppStore((state) => state.deleteEntity)
   const setError = useAppStore((state) => state.setError)
+  const { openContextMenu } = useContextMenu()
+  const currentProjectPath = projectPath ?? ''
   const [editingSceneId, setEditingSceneId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [draft, setDraft] = useState<SceneDraft>(blankDraft)
@@ -65,9 +70,37 @@ export function SceneView({ chapterId, onChapterChange }: { chapterId: string; o
     setDraft(creating ? blankDraft() : sceneDraft(selectedScene))
   }, [creating, selectedScene])
 
-  if (!data || !projectPath) return null
-  const currentProjectPath = projectPath
+  function openSceneMenu(event: MouseEvent, scene: EntityRecord) {
+    const sceneIndex = scenes.findIndex((item) => item.id === scene.id)
+    const items: ContextMenuItem[] = [
+      { type: 'item', id: 'scene-open', label: '打开／编辑', icon: BookOpen, onSelect: () => { setCreating(false); setEditingSceneId(scene.id) } },
+      { type: 'item', id: 'scene-copy-title', label: '复制标题', icon: Copy, onSelect: async () => { if (!await writeClipboardText(scene.title)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
+      { type: 'item', id: 'scene-copy-path', label: '复制 Markdown 路径', icon: Copy, onSelect: async () => { if (!await writeClipboardText(scene.filePath)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
+      { type: 'item', id: 'scene-up', label: '上移', icon: ArrowUp, disabled: sceneIndex <= 0, onSelect: () => moveScene(scene.id, -1) },
+      { type: 'item', id: 'scene-down', label: '下移', icon: ArrowDown, disabled: sceneIndex < 0 || sceneIndex >= scenes.length - 1, onSelect: () => moveScene(scene.id, 1) },
+      { type: 'separator' },
+      { type: 'item', id: 'scene-trash', label: '移入回收站', icon: Trash2, tone: 'danger', onSelect: async () => { if (window.confirm('将“' + scene.title + '”移入回收站？')) { await deleteEntity(scene.id); if (editingSceneId === scene.id) setEditingSceneId(null) } } },
+    ]
+    openContextMenu(event, { title: scene.title, location: 'workspace', payload: { location: 'workspace', projectPath: currentProjectPath, entityId: scene.id, entityKind: 'scene' }, items })
+  }
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const list = document.querySelector('.scene-workspace .scene-list')
+    if (!list) return
+    const onContextMenu = (event: Event) => {
+      const target = event.target instanceof Element ? event.target.closest('.scene-list-card') : null
+      if (!target) return
+      const cards = Array.from(list.querySelectorAll('.scene-list-card'))
+      const scene = scenes[cards.indexOf(target)]
+      if (scene) openSceneMenu(event as MouseEvent, scene)
+    }
+    list.addEventListener('contextmenu', onContextMenu)
+    return () => list.removeEventListener('contextmenu', onContextMenu)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProjectPath, scenes])
+
+  if (!data || !projectPath) return null
   function updateField(key: keyof SceneDraft, value: string) {
     setDraft((current) => ({ ...current, [key]: value }))
   }
