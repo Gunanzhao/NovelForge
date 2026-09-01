@@ -601,5 +601,6 @@
 - 新增 Clipboard API + execCommand 回退；输入框、密码框、select、链接、图片和普通选区按规则提供安全菜单，剪切在复制成功后才删除。
 - 正文树支持卷/章/节及多选菜单，编辑器支持 CodeMirror 选区/光标、Markdown 格式、AI 预选、搜索、Wiki 预览和撤销/重做；导出支持项目/卷/章节 preset。
 - 资料、附件、回收站、搜索、历史、时间线、伏笔、关系图、看板和大纲条目接入业务菜单；插件 API 增加 contextLocations、contextOrder、isEnabled 与 ContextMenuPayload，保留旧接口。
-- 阶段提交：67a7208（基础设施）、5b485df（正文树与编辑器集成）；阶段 3 文档与桌面验收提交待门禁完成。
+- 阶段提交：67a7208（基础设施）、5b485df（正文树与编辑器集成）、54efaa7（业务菜单/文档/E2E），另有 1915ca4 修正右键验收脚本选择状态。
 - 当前前端门禁：pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 通过（16 个测试文件 / 70 项测试）。
+- release WebView2 CDP E2E 已通过 CONTEXT_MENU_OK、章节树菜单、四角避让和 Escape 关闭断言；完整既有桌面流程标记亦全部通过。

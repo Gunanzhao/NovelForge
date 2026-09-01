@@ -471,9 +471,10 @@
 | Plugin unit | 旧接口、插槽筛选、排序、异常禁用 | 通过 |
 | React interaction | Provider 右键打开、菜单操作、关闭 | 通过 |
 
-### 尚需桌面验收
+### 桌面验收结果
 
-- 需在 release WebView2 EXE 中逐项验证正文树、编辑器剪贴板、四角避让、明暗主题、原生确认框和插件菜单视觉/鼠标行为；当前自动化脚本尚未加入本轮菜单专用断言。
+- release WebView2 CDP E2E 已覆盖编辑器和章节树右键、四角避让、Escape 关闭及完整既有流程，所有阶段标记通过。
+- 本轮未重复官方 WebDriver/native dialog 流程；原生确认框、剪贴板权限和逐项视觉检查仍可按 DESKTOP_E2E_CHECKLIST.md 进行补充抽查。
 
 ## 全局右键菜单回归（2026-09-02）
 
