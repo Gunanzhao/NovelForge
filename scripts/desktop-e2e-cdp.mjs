@@ -779,6 +779,7 @@ async function run() {
     if (!chapterMenu.labels.some((label) => label.includes('复制章节')) || !chapterMenu.labels.some((label) => label.includes('写作状态'))) {
       throw new Error('章节树右键菜单内容不完整：' + JSON.stringify(chapterMenu.labels))
     }
+    await clickExact(page, '清除选择')
     console.log('CORE_EDITOR_TREE_OK')
 
     await clickRowAction(page, '第二章', '在此新建节')
