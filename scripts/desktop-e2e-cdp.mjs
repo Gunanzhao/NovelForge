@@ -259,6 +259,29 @@ async function clickSelectorContains(page, selector, text) {
   if (!await page.evaluate(expression)) throw new Error('找不到指定控件：' + selector + ' 包含 ' + text)
 }
 
+async function rightClickAt(page, point) {
+  await page.command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y })
+  await page.command('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'right', buttons: 2, clickCount: 1 })
+  await page.command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'right', buttons: 0, clickCount: 1 })
+  await sleep(120)
+}
+
+async function rightClickSelector(page, selector, text) {
+  const expression = "(function(){const item=Array.from(document.querySelectorAll(" + jsString(selector) + ")).find((node)=>" + (text ? "(node.textContent||'').includes(" + jsString(text) + ")" : 'true') + ");if(!item)return null;const rect=item.getBoundingClientRect();return {x:rect.left+Math.min(Math.max(8,rect.width/2),Math.max(8,rect.width-8)),y:rect.top+Math.min(Math.max(8,rect.height/2),Math.max(8,rect.height-8))}})()"
+  const point = await page.evaluate(expression)
+  if (!point) throw new Error('找不到右键目标：' + selector + (text ? ' / ' + text : ''))
+  await rightClickAt(page, point)
+}
+
+async function assertCustomContextMenu(page, label) {
+  await waitForSelector(page, '.context-menu[data-context-menu-surface="true"]', label + '自定义菜单')
+  const result = await page.evaluate("(()=>{const menu=document.querySelector('.context-menu[data-context-menu-surface=\"true\"]');if(!menu)return null;const rect=menu.getBoundingClientRect();return {left:rect.left,top:rect.top,labels:Array.from(menu.querySelectorAll('[role=\"menuitem\"]')).map((item)=>item.textContent?.trim()).filter(Boolean)}})()")
+  if (!result || result.left < 8 || result.top < 8) throw new Error(label + '菜单未完成窗口边缘避让：' + JSON.stringify(result))
+  await pressEscape(page)
+  await waitForCondition(page, "document.querySelector('.context-menu[data-context-menu-surface=\"true\"]') === null", label + '菜单关闭')
+  return result
+}
+
 async function rowPoint(page, text) {
   const expression = "(function(){const row=Array.from(document.querySelectorAll('.tree-row')).find((item)=>(item.textContent||'').includes(" + jsString(text) + "));if(!row)return null;const rect=row.getBoundingClientRect();return {x:rect.left+Math.min(rect.width-18,Math.max(18,rect.width/2)),y:rect.top+rect.height/2}})()"
   const point = await page.evaluate(expression)
@@ -685,6 +708,19 @@ async function run() {
 
     await replaceEditor(page, '# 第一章\n\n[[林月]] 来到雾港。\n\n**关键线索**\n\n- 第一项\n- 第二项')
     await sleep(400)
+    const editorMenu = await (async () => {
+      await rightClickSelector(page, '.cm-content')
+      return assertCustomContextMenu(page, 'CodeMirror')
+    })()
+    if (!editorMenu.labels.some((label) => label.includes('格式')) || !editorMenu.labels.some((label) => label.includes('AI'))) {
+      throw new Error('CodeMirror 右键菜单缺少格式或 AI 操作：' + JSON.stringify(editorMenu.labels))
+    }
+    const viewport = await page.evaluate('({width: window.innerWidth, height: window.innerHeight})')
+    for (const point of [{ x: 2, y: 2 }, { x: viewport.width - 2, y: 2 }, { x: 2, y: viewport.height - 2 }, { x: viewport.width - 2, y: viewport.height - 2 }]) {
+      await rightClickAt(page, point)
+      await assertCustomContextMenu(page, '窗口角落')
+    }
+    console.log('CONTEXT_MENU_OK')
     await selectEditorAll(page)
     await pressControlKey(page, 'b', 'KeyB', 66)
     await waitForCondition(page, "document.querySelector('.cm-content')?.innerText.includes('**')", 'Ctrl+B 选区命令')
@@ -738,6 +774,11 @@ async function run() {
     await clickModalButton(page, '创建')
     await clickRowAction(page, '第二卷', '展开')
     await waitForText(page, '第二章')
+    await rightClickSelector(page, '.tree-row', '第二章')
+    const chapterMenu = await assertCustomContextMenu(page, '章节树')
+    if (!chapterMenu.labels.some((label) => label.includes('复制章节')) || !chapterMenu.labels.some((label) => label.includes('写作状态'))) {
+      throw new Error('章节树右键菜单内容不完整：' + JSON.stringify(chapterMenu.labels))
+    }
     console.log('CORE_EDITOR_TREE_OK')
 
     await clickRowAction(page, '第二章', '在此新建节')

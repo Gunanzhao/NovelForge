@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { BookOpen, CheckCircle2, CircleDashed, GitBranch, Plus, Save, Search, Trash2 } from 'lucide-react'
 import type { EntityRecord, NodeRecord } from '../lib/types'
 import {
@@ -7,7 +7,10 @@ import {
 } from '../lib/planning-data'
 import type { ForeshadowingStatus } from '../lib/planning-data'
 import { useAppStore } from '../stores/app-store'
+import type { ContextMenuItem } from '../lib/context-menu'
+import { writeClipboardText } from '../lib/clipboard'
 import { Button, Field, Panel, TextInput } from './ui'
+import { useContextMenu } from './ContextMenu'
 import '../planning.css'
 
 interface ForeshadowingDraft {
@@ -65,6 +68,7 @@ export function ForeshadowingView() {
   const deleteEntity = useAppStore((state) => state.deleteEntity)
   const selectNode = useAppStore((state) => state.selectNode)
   const setError = useAppStore((state) => state.setError)
+  const { openContextMenu } = useContextMenu()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [filter, setFilter] = useState('')
@@ -165,6 +169,18 @@ export function ForeshadowingView() {
     }
   }
 
+  function openForeshadowingMenu(event: ReactMouseEvent<HTMLDivElement>, item: EntityRecord) {
+    const items: ContextMenuItem[] = [
+      { type: 'item', id: 'foreshadowing-open', label: '打开／编辑', onSelect: () => { setCreating(false); setSelectedId(item.id) } },
+      { type: 'item', id: 'foreshadowing-new', label: '新建同类资料', icon: Plus, onSelect: startNew },
+      { type: 'item', id: 'foreshadowing-copy-title', label: '复制标题', onSelect: async () => { if (!await writeClipboardText(item.title)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
+      { type: 'item', id: 'foreshadowing-copy-path', label: '复制 Markdown 路径', onSelect: async () => { if (!await writeClipboardText(item.filePath)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
+      { type: 'separator' },
+      { type: 'item', id: 'foreshadowing-trash', label: '移入回收站', icon: Trash2, tone: 'danger', onSelect: async () => { if (window.confirm('将“' + item.title + '”移入回收站？')) { await deleteEntity(item.id); if (selectedId === item.id) setSelectedId(null) } } },
+    ]
+    openContextMenu(event, { title: item.title, location: 'workspace', payload: { location: 'workspace', projectPath: currentProjectPath, entityId: item.id, entityKind: 'foreshadowing' }, items, trigger: event.currentTarget })
+  }
+
   return <div className="planning-special-view workspace-view">
     <div className="view-header">
       <div><p className="eyebrow">FORESHADOWING LEDGER</p><h1>伏笔</h1><p>记录伏笔的埋设、计划回收和实际回收，写作时快速检查仍未闭合的线索。</p></div>
@@ -181,7 +197,7 @@ export function ForeshadowingView() {
         <div className="special-list">{visibleEntries.length ? visibleEntries.slice().sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).map((entry) => {
           const status = normalizeForeshadowingStatus(contentText(entry, 'status'))
           const Icon = statusIcon(status)
-          return <div key={entry.id} className={'special-list-item foreshadowing-item' + (entry.id === selectedId && !creating ? ' active' : '')}>
+          return <div key={entry.id} className={'special-list-item foreshadowing-item' + (entry.id === selectedId && !creating ? ' active' : '')} onContextMenu={(event) => openForeshadowingMenu(event, entry)}>
             <button type="button" className="special-list-main" onClick={() => { setCreating(false); setSelectedId(entry.id) }}><span className={'special-list-icon ' + status}><Icon size={14} /></span><span className="special-list-copy"><strong>{entry.title}</strong><small>{foreshadowingStatusLabel(status)} · 首次：{contentText(entry, 'plantedIn') || '未填写'}</small><em>{contentText(entry, 'description') || '尚未填写说明'}</em></span></button>
             <select className={'foreshadowing-status-select ' + status} value={status} disabled={busy} aria-label={entry.title + '状态'} onClick={(event) => event.stopPropagation()} onChange={(event) => void updateStatus(entry, event.target.value as ForeshadowingStatus)}>{FORESHADOWING_STATUSES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
           </div>

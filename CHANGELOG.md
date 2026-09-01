@@ -75,3 +75,9 @@
 - 使用记事本、Edge、LibreOffice Writer、Calibre 9.14.0、SumatraPDF 和 Poppler 完成本机六种导出格式视觉复核；Calibre 目录双击“第二卷”已验证正文跳转。
 - AUDIT_FIX_PLAN.md、TODO.md、SPEC.md、DESKTOP_E2E_CHECKLIST.md、TEST_REPORT.md 与 PROGRESS.md 已校准为当前 V1.0 RC 收尾状态。
 - 稳定官方 WebDriver 原生对话框验收：修复 Windows 选择器控件过滤、路径输入和目录刷新后的控件重解析，匹配 WebView2 151 的 EdgeDriver 复跑全部阶段标记与大文档 FPS。
+
+## 未发布 - 2026-09-02
+
+- 新增全局自定义右键菜单，统一替换应用内容区域的 WebView2 默认菜单，支持工作台、输入控件、链接、图片、正文树、编辑器、资料、附件、回收站、搜索、历史和规划条目。
+- 新增剪贴板安全回退、CodeMirror 选区/光标菜单、Markdown 格式子菜单、AI 任务预选、搜索和导出范围 preset。
+- 扩展插件菜单插槽与 ContextMenuPayload，旧 PluginMenuItem 注册方式继续兼容；新增菜单几何、交互、剪贴板和插件回归测试。

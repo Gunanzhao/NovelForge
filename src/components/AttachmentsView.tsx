@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { BookOpen, Clipboard, ExternalLink, FileArchive, FileText, Image, Paperclip, Plus, Save, Trash2 } from 'lucide-react'
 import { chooseFile, isDesktop, projectApi } from '../lib/api'
 import { contentText, sortChapterNodes } from '../lib/planning-data'
 import type { EntityRecord } from '../lib/types'
 import { useAppStore } from '../stores/app-store'
+import type { ContextMenuItem } from '../lib/context-menu'
+import { writeClipboardText } from '../lib/clipboard'
 import { Button, Field, Panel, TextInput } from './ui'
+import { useContextMenu } from './ContextMenu'
 
 function bytes(value: string) {
   const size = Number(value)
@@ -37,6 +40,7 @@ export function AttachmentsView() {
   const saveEntity = useAppStore((state) => state.saveEntity)
   const deleteEntity = useAppStore((state) => state.deleteEntity)
   const setError = useAppStore((state) => state.setError)
+  const { openContextMenu } = useContextMenu()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [description, setDescription] = useState('')
@@ -115,9 +119,20 @@ export function AttachmentsView() {
     }
   }
 
-  function copyPath() {
-    if (selected) void navigator.clipboard?.writeText(selected.filePath)
+  async function copyPath() {
+    if (selected && !await writeClipboardText(selected.filePath)) setError('无法访问系统剪贴板，请改用 Ctrl+C。')
   }
 
-  return <div className="workspace-view attachments-view"><div className="view-header"><div><p className="eyebrow">RESEARCH ATTACHMENTS</p><h1>资料附件</h1><p>把参考文档、图片和素材复制进项目目录，随项目一起备份；原始文件不会被修改。</p></div><div className="special-summary"><strong>{attachments.length}</strong><span>个附件</span></div></div><div className="attachments-toolbar"><TextInput value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="搜索附件名称或说明" /><Button onClick={() => void importFile()} disabled={busy}><Plus size={14} />{busy ? '导入中…' : '导入附件'}</Button></div><div className="attachments-layout"><aside className="attachments-list-pane"><div className="special-list">{visible.length ? visible.map((attachment) => { const details = metadata(attachment); const Icon = fileIcon(details.mimeType); return <button type="button" key={attachment.id} className={'attachment-list-item' + (attachment.id === selectedId ? ' active' : '')} onClick={() => setSelectedId(attachment.id)}><span className="attachment-icon"><Icon size={16} /></span><span><strong>{attachment.title}</strong><small>{bytes(details.sizeBytes)} · {details.mimeType}</small></span></button> }) : <div className="empty-state"><Paperclip size={25} /><div><strong>{filter ? '没有匹配附件' : '还没有附件'}</strong><span>{filter ? '换一个关键词试试。' : '导入研究资料、图片或参考文档。'}</span></div></div>}</div></aside><section className="special-editor"><Panel className="special-card">{selected ? <><div className="planning-card-head"><div><p className="eyebrow">ATTACHMENT DETAIL</p><h3>{selected.title}</h3></div><span className="planning-state">项目内副本</span></div><div className="planning-form"><div className="attachment-meta-grid"><div><span>文件类型</span><strong>{metadata(selected).mimeType}</strong></div><div><span>大小</span><strong>{bytes(metadata(selected).sizeBytes)}</strong></div></div><Field label="项目路径"><div className="input-with-action"><TextInput readOnly value={selected.filePath} /><Button variant="outline" onClick={copyPath}><Clipboard size={13} />复制</Button></div></Field><Field label="关联章节"><select className="select-input" value={chapterId} onChange={(event) => setChapterId(event.target.value)}><option value="">不关联章节</option>{chapters.map((chapter) => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}</select>{chapterId ? <span className="field-hint"><BookOpen size={11} />附件会显示在对应章节的资料上下文中。</span> : null}</Field><Field label="资料说明"><textarea className="text-area" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="记录这份素材和小说的关系…" /></Field><div className="entity-actions"><Button variant="outline" onClick={() => void openSelected()} disabled={busy}><ExternalLink size={14} />打开文件</Button><Button onClick={() => void saveDescription()} disabled={busy}><Save size={14} />保存说明</Button><Button variant="danger" onClick={() => void remove()} disabled={busy}><Trash2 size={14} />移入回收站</Button></div></div></> : <div className="empty-state"><Paperclip size={25} /><div><strong>选择一个附件</strong><span>从左侧选择附件，或点击“导入附件”开始。</span></div></div>}</Panel></section></div></div>
+  function openAttachmentMenu(event: ReactMouseEvent<HTMLButtonElement>, attachment: EntityRecord) {
+    const items: ContextMenuItem[] = [
+      { type: 'item', id: 'attachment-open', label: '打开文件', icon: ExternalLink, onSelect: async () => { try { await projectApi.openAttachment({ projectPath: currentProjectPath, nodeId: attachment.id }) } catch (error) { setError(error) } } },
+      { type: 'item', id: 'attachment-edit', label: '编辑说明', icon: Save, onSelect: () => setSelectedId(attachment.id) },
+      { type: 'item', id: 'attachment-copy-path', label: '复制项目内路径', icon: Clipboard, onSelect: async () => { if (!await writeClipboardText(attachment.filePath)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
+      { type: 'separator' },
+      { type: 'item', id: 'attachment-trash', label: '移入回收站', icon: Trash2, tone: 'danger', onSelect: async () => { if (window.confirm('将“' + attachment.title + '”移入回收站？')) { await deleteEntity(attachment.id); if (selectedId === attachment.id) setSelectedId(null) } } },
+    ]
+    openContextMenu(event, { title: attachment.title, location: 'attachment', payload: { location: 'attachment', projectPath: currentProjectPath, entityId: attachment.id, entityKind: 'attachment' }, items, trigger: event.currentTarget })
+  }
+
+  return <div className="workspace-view attachments-view"><div className="view-header"><div><p className="eyebrow">RESEARCH ATTACHMENTS</p><h1>资料附件</h1><p>把参考文档、图片和素材复制进项目目录，随项目一起备份；原始文件不会被修改。</p></div><div className="special-summary"><strong>{attachments.length}</strong><span>个附件</span></div></div><div className="attachments-toolbar"><TextInput value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="搜索附件名称或说明" /><Button onClick={() => void importFile()} disabled={busy}><Plus size={14} />{busy ? '导入中…' : '导入附件'}</Button></div><div className="attachments-layout"><aside className="attachments-list-pane"><div className="special-list">{visible.length ? visible.map((attachment) => { const details = metadata(attachment); const Icon = fileIcon(details.mimeType); return <button type="button" key={attachment.id} className={'attachment-list-item' + (attachment.id === selectedId ? ' active' : '')} onClick={() => setSelectedId(attachment.id)} onContextMenu={(event) => openAttachmentMenu(event, attachment)}><span className="attachment-icon"><Icon size={16} /></span><span><strong>{attachment.title}</strong><small>{bytes(details.sizeBytes)} · {details.mimeType}</small></span></button> }) : <div className="empty-state"><Paperclip size={25} /><div><strong>{filter ? '没有匹配附件' : '还没有附件'}</strong><span>{filter ? '换一个关键词试试。' : '导入研究资料、图片或参考文档。'}</span></div></div>}</div></aside><section className="special-editor"><Panel className="special-card">{selected ? <><div className="planning-card-head"><div><p className="eyebrow">ATTACHMENT DETAIL</p><h3>{selected.title}</h3></div><span className="planning-state">项目内副本</span></div><div className="planning-form"><div className="attachment-meta-grid"><div><span>文件类型</span><strong>{metadata(selected).mimeType}</strong></div><div><span>大小</span><strong>{bytes(metadata(selected).sizeBytes)}</strong></div></div><Field label="项目路径"><div className="input-with-action"><TextInput readOnly value={selected.filePath} /><Button variant="outline" onClick={() => void copyPath()}><Clipboard size={13} />复制</Button></div></Field><Field label="关联章节"><select className="select-input" value={chapterId} onChange={(event) => setChapterId(event.target.value)}><option value="">不关联章节</option>{chapters.map((chapter) => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}</select>{chapterId ? <span className="field-hint"><BookOpen size={11} />附件会显示在对应章节的资料上下文中。</span> : null}</Field><Field label="资料说明"><textarea className="text-area" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="记录这份素材和小说的关系…" /></Field><div className="entity-actions"><Button variant="outline" onClick={() => void openSelected()} disabled={busy}><ExternalLink size={14} />打开文件</Button><Button onClick={() => void saveDescription()} disabled={busy}><Save size={14} />保存说明</Button><Button variant="danger" onClick={() => void remove()} disabled={busy}><Trash2 size={14} />移入回收站</Button></div></div></> : <div className="empty-state"><Paperclip size={25} /><div><strong>选择一个附件</strong><span>从左侧选择附件，或点击“导入附件”开始。</span></div></div>}</Panel></section></div></div>
 }

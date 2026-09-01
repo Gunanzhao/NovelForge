@@ -9,6 +9,7 @@ import {
 } from '../lib/workspace-preferences'
 import type { WorkspacePreferences } from '../lib/workspace-preferences'
 import { sortChapterNodes } from '../lib/planning-data'
+import type { AiAction } from '../lib/ai-data'
 
 export interface RecentProject {
   path: string
@@ -55,6 +56,7 @@ interface AppState {
   data: ProjectData | null
   document: DocumentData | null
   editorSelection: EditorSelection | null
+  requestedAiAction: AiAction | null
   activeView: ViewId
   selectedEntityId: string | null
   saveState: SaveState
@@ -78,6 +80,8 @@ interface AppState {
   toggleInspector: () => void
   toggleFocusMode: () => void
   setEditorMode: (mode: AppState['editorMode']) => void
+  openAiAssistant: (action?: AiAction) => void
+  consumeAiAction: () => void
   clearError: () => void
   setError: (error: unknown) => void
   createProject: (input: ProjectInput) => Promise<void>
@@ -116,6 +120,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   data: null,
   document: null,
   editorSelection: null,
+  requestedAiAction: null,
   activeView: 'dashboard',
   selectedEntityId: null,
   saveState: 'idle',
@@ -157,6 +162,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
   toggleFocusMode: () => set((state) => ({ focusMode: !state.focusMode })),
   setEditorMode: (editorMode) => set({ editorMode }),
+  openAiAssistant: (action) => set({ activeView: 'ai', requestedAiAction: action ?? null }),
+  consumeAiAction: () => set({ requestedAiAction: null }),
   clearError: () => set({ error: null }),
   setError: (error) => set({ error: error instanceof Error ? error.message : String(error) }),
 

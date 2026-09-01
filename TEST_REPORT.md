@@ -458,3 +458,35 @@
 
 - 失败基线为 run 33387176701：Frontend checks 通过，Rust cargo check 退出 101，cargo test 被跳过。
 - commit ed5d0cc 增加 Linux 系统依赖并升级 Node 24 action runtime；修复后的两个 job 均为 success，P2-03 远程门禁关闭。
+
+## 全局右键菜单回归（2026-09-02）
+
+| 层级 | 命令 / 范围 | 结果 |
+| --- | --- | --- |
+| Frontend type | pnpm.cmd typecheck | 通过 |
+| Frontend lint | pnpm.cmd lint | 通过，0 error / 0 warning |
+| Frontend tests | pnpm.cmd test -- --run | 通过：16 个测试文件 / 70 项测试 |
+| Context menu unit | 几何避让、分隔线清理、子菜单翻转 | 通过 |
+| Clipboard unit | 受控输入替换/删除、失败不破坏内容 | 通过 |
+| Plugin unit | 旧接口、插槽筛选、排序、异常禁用 | 通过 |
+| React interaction | Provider 右键打开、菜单操作、关闭 | 通过 |
+
+### 尚需桌面验收
+
+- 需在 release WebView2 EXE 中逐项验证正文树、编辑器剪贴板、四角避让、明暗主题、原生确认框和插件菜单视觉/鼠标行为；当前自动化脚本尚未加入本轮菜单专用断言。
+
+## 全局右键菜单回归（2026-09-02）
+
+| 层级 | 命令 / 范围 | 结果 |
+| --- | --- | --- |
+| Frontend type | pnpm.cmd typecheck | 通过 |
+| Frontend lint | pnpm.cmd lint | 通过，0 error / 0 warning |
+| Frontend tests | pnpm.cmd test -- --run | 通过：16 个测试文件 / 70 项测试 |
+| Context menu unit | 几何避让、分隔线清理、子菜单翻转 | 通过 |
+| Clipboard unit | 受控输入替换/删除、失败不破坏内容 | 通过 |
+| Plugin unit | 旧接口、插槽筛选、排序、异常禁用 | 通过 |
+| React interaction | Provider 右键打开、菜单操作、关闭 | 通过 |
+
+### 尚需桌面验收
+
+- 需在 release WebView2 EXE 中逐项验证正文树、编辑器剪贴板、四角避让、明暗主题、原生确认框和插件菜单视觉/鼠标行为；当前自动化脚本尚未加入本轮菜单专用断言。

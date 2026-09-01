@@ -26,6 +26,32 @@ Registry 会校验插件元数据和每个扩展点的唯一 id。一个插件�
 - registerExporter：注册导出格式及执行入口。
 - registerPanel：声明一个专用工作区面板视图。
 
+### 右键菜单插槽
+
+registerMenu 的 location 仍然是必填字段，旧插件无需修改即可注册。若要把菜单项加入 NovelForge 自定义右键菜单，需要额外提供 contextLocations：
+
+~~~ts
+context.registerMenu({
+  id: 'my-plugin.inspect-selection',
+  label: '检查当前选区',
+  location: 'tools',
+  contextLocations: ['editor.selection', 'editor.cursor'],
+  contextOrder: 120,
+  isEnabled(input) {
+    const payload = input as { selectionText?: string }
+    return Boolean(payload.selectionText)
+  },
+  execute(input) {
+    // input 是不含 DOM 引用的 ContextMenuPayload
+    return inspect(input)
+  },
+})
+~~~
+
+可用 contextLocations 包括 workspace、input.text、input.select、link、image、tree.volume、tree.chapter、tree.section、tree.selection、editor.cursor、editor.selection、editor.preview、entity.character、entity.location、entity.world、attachment、trash、search.result 和 history.revision。
+
+匹配项目按 contextOrder ?? 100 升序、再按 id 排序，并统一放在内置普通操作和危险操作之间的“扩展”分组。没有 contextLocations 的旧菜单不会出现在右键菜单中。isEnabled 必须同步返回布尔值；抛出异常时该项目保留显示但置灰。execute 只收到可序列化的 ContextMenuPayload，应用不会把 DOM 元素或任意脚本引用传给插件。源码插件通过 registerSourcePlugin() 注册；V1.0 仍不从磁盘加载或执行任意外部 JavaScript。
+
 所有回调都在应用进程内运行，调用方需要自行处理错误并返回可序列化结果。扩展点 descriptor 的 id 在整个 Registry 内必须唯一，建议使用 plugin-id.feature 命名。
 
 ## 内置插件

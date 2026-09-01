@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { BookOpen, CalendarDays, Clock3, MapPin, Plus, Save, Search, Trash2, Users } from 'lucide-react'
 import type { EntityRecord, NodeRecord } from '../lib/types'
 import { chapterReferenceTokens, contentText, filterTimelineEntities, findChapterByReference, sortChapterNodes, sortTimelineEntities } from '../lib/planning-data'
 import { useAppStore } from '../stores/app-store'
+import type { ContextMenuItem } from '../lib/context-menu'
+import { writeClipboardText } from '../lib/clipboard'
 import { Button, Field, Panel, TextInput } from './ui'
+import { useContextMenu } from './ContextMenu'
 import '../planning.css'
 
 interface TimelineDraft {
@@ -57,6 +60,7 @@ export function TimelineView() {
   const deleteEntity = useAppStore((state) => state.deleteEntity)
   const selectNode = useAppStore((state) => state.selectNode)
   const setError = useAppStore((state) => state.setError)
+  const { openContextMenu } = useContextMenu()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [filter, setFilter] = useState('')
@@ -138,6 +142,18 @@ export function TimelineView() {
     }
   }
 
+  function openEventMenu(event: ReactMouseEvent<HTMLButtonElement>, item: EntityRecord) {
+    const items: ContextMenuItem[] = [
+      { type: 'item', id: 'timeline-open', label: '打开／编辑', onSelect: () => { setCreating(false); setSelectedId(item.id) } },
+      { type: 'item', id: 'timeline-new', label: '新建同类资料', icon: Plus, onSelect: startNew },
+      { type: 'item', id: 'timeline-copy-title', label: '复制标题', onSelect: async () => { if (!await writeClipboardText(item.title)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
+      { type: 'item', id: 'timeline-copy-path', label: '复制 Markdown 路径', onSelect: async () => { if (!await writeClipboardText(item.filePath)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
+      { type: 'separator' },
+      { type: 'item', id: 'timeline-trash', label: '移入回收站', icon: Trash2, tone: 'danger', onSelect: async () => { if (window.confirm('将“' + item.title + '”移入回收站？')) { await deleteEntity(item.id); if (selectedId === item.id) setSelectedId(null) } } },
+    ]
+    openContextMenu(event, { title: item.title, location: 'workspace', payload: { location: 'workspace', projectPath: currentProjectPath, entityId: item.id, entityKind: 'timeline' }, items, trigger: event.currentTarget })
+  }
+
   return <div className="planning-special-view workspace-view">
     <div className="view-header">
       <div><p className="eyebrow">STORY TIMELINE</p><h1>时间线</h1><p>按故事内时间整理关键事件，并把事件和正文章节、人物与地点连接起来。</p></div>
@@ -151,7 +167,7 @@ export function TimelineView() {
     <div className="special-layout">
       <aside className="special-list-pane">
         <div className="special-list-head"><div className="panel-title"><h3>事件列表</h3><span>{visibleEvents.length} / {events.length}</span></div><p>已按日期、时间排序；没有日期的事件排在最后。</p></div>
-        <div className="special-list">{visibleEvents.length ? visibleEvents.map((event) => <button key={event.id} type="button" className={'special-list-item' + (event.id === selectedId && !creating ? ' active' : '')} onClick={() => { setCreating(false); setSelectedId(event.id) }}>
+        <div className="special-list">{visibleEvents.length ? visibleEvents.map((event) => <button key={event.id} type="button" className={'special-list-item' + (event.id === selectedId && !creating ? ' active' : '')} onClick={() => { setCreating(false); setSelectedId(event.id) }} onContextMenu={(contextEvent) => openEventMenu(contextEvent, event)}>
           <span className="special-list-icon"><CalendarDays size={14} /></span>
           <span className="special-list-copy"><strong>{event.title}</strong><small>{[contentText(event, 'date'), contentText(event, 'time'), contentText(event, 'location')].filter(Boolean).join(' · ') || '未填写时间信息'}</small><em>{contentText(event, 'description') || '尚未填写事件描述'}</em></span>
         </button>) : <div className="empty-state"><CalendarDays size={24} /><div><strong>{hasFilter ? '没有匹配事件' : '还没有时间线事件'}</strong><span>{hasFilter ? '换一个筛选条件试试。' : '把故事中的关键节点记录下来，后续可以从章节直接回看。'}</span></div></div>}</div>

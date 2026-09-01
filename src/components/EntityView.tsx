@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { Copy, Plus, Save, Search, Trash2 } from 'lucide-react'
 import { ENTITY_FIELDS, ENTITY_LABELS } from '../lib/types'
 import type { EntityDraft, EntityKind, SearchResult } from '../lib/types'
 import { getObjectString } from '../lib/utils'
 import { projectApi } from '../lib/api'
 import { useAppStore } from '../stores/app-store'
+import type { ContextMenuItem } from '../lib/context-menu'
+import { writeClipboardText } from '../lib/clipboard'
 import { Button, Field, TextInput } from './ui'
+import { useContextMenu } from './ContextMenu'
 
 function blankDraft(kind: EntityKind): EntityDraft {
   return { title: '', tags: '', fields: Object.fromEntries(ENTITY_FIELDS[kind].map((field) => [field.key, ''])) }
@@ -84,6 +87,7 @@ export function EntityView({ kind }: { kind: EntityKind }) {
   const saveEntity = useAppStore((state) => state.saveEntity)
   const deleteEntity = useAppStore((state) => state.deleteEntity)
   const setError = useAppStore((state) => state.setError)
+  const { openContextMenu } = useContextMenu()
   const [draft, setDraft] = useState<EntityDraft>(() => blankDraft(kind))
   const [filter, setFilter] = useState('')
   const [sortMode, setSortMode] = useState<'created' | 'title' | 'updated'>('created')
@@ -190,11 +194,24 @@ export function EntityView({ kind }: { kind: EntityKind }) {
     await deleteEntity(selected.id)
   }
 
+  function openEntityMenu(event: ReactMouseEvent<HTMLButtonElement>, entity: typeof entities[number]) {
+    const location = (kind === 'character' || kind === 'location' || kind === 'world' ? 'entity.' + kind : 'workspace') as 'entity.character' | 'entity.location' | 'entity.world' | 'workspace'
+    const items: ContextMenuItem[] = [
+      { type: 'item', id: 'entity-open', label: '打开／编辑', onSelect: () => selectEntity(kind, entity.id) },
+      { type: 'item', id: 'entity-new', label: '新建同类资料', icon: Plus, onSelect: () => selectEntity(kind, null) },
+      { type: 'item', id: 'entity-copy-wiki', label: '复制 Wiki 链接', icon: Copy, onSelect: async () => { if (!await writeClipboardText('[[' + entity.title + ']]')) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
+      { type: 'item', id: 'entity-copy-path', label: '复制 Markdown 路径', icon: Copy, onSelect: async () => { if (!await writeClipboardText(entity.filePath)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
+      { type: 'separator' },
+      { type: 'item', id: 'entity-trash', label: '移入回收站', icon: Trash2, tone: 'danger', onSelect: async () => { if (window.confirm('将“' + entity.title + '”移入回收站？')) await deleteEntity(entity.id) } },
+    ]
+    openContextMenu(event, { title: entity.title, location, payload: { location, projectPath: currentProjectPath, entityId: entity.id, entityKind: kind }, items, trigger: event.currentTarget })
+  }
+
   return <div className="entity-view">
     <div className="entity-layout">
       <aside className="entity-list-pane">
         <div className="entity-list-head"><div className="panel-title"><h2>{ENTITY_LABELS[kind]}</h2><Button onClick={() => selectEntity(kind, null)}><Plus size={14} />新建</Button></div><div className="entity-filter"><Search size={14} color="var(--faint)" style={{ marginTop: 8, flex: '0 0 auto' }} /><TextInput value={filter} onChange={(event) => setFilter(event.target.value)} placeholder={'搜索' + ENTITY_LABELS[kind]} /></div><select className="select-input entity-sort" value={sortMode} onChange={(event) => setSortMode(event.target.value as 'created' | 'title' | 'updated')} aria-label="资料排序"><option value="created">{kind === 'location' ? '按层级' : '默认顺序'}</option><option value="title">按名称</option><option value="updated">按最近更新</option></select></div>
-        <div className="entity-list">{visibleEntities.length ? visibleEntities.map((entity) => <button className={'entity-list-item' + (entity.id === selectedEntityId ? ' active' : '')} style={kind === 'location' ? { paddingLeft: String(10 + locationDepth(entity, locationEntities) * 16) + 'px' } : undefined} key={entity.id} onClick={() => selectEntity(kind, entity.id)}><strong>{entity.title}</strong><span>{entity.tags.length ? entity.tags.join(' · ') : '未添加标签'}</span></button>) : <div className="tree-muted">还没有{ENTITY_LABELS[kind]}，点击“新建”开始建立资料。</div>}</div>
+        <div className="entity-list">{visibleEntities.length ? visibleEntities.map((entity) => <button className={'entity-list-item' + (entity.id === selectedEntityId ? ' active' : '')} style={kind === 'location' ? { paddingLeft: String(10 + locationDepth(entity, locationEntities) * 16) + 'px' } : undefined} key={entity.id} onClick={() => selectEntity(kind, entity.id)} onContextMenu={(event) => openEntityMenu(event, entity)}><strong>{entity.title}</strong><span>{entity.tags.length ? entity.tags.join(' · ') : '未添加标签'}</span></button>) : <div className="tree-muted">还没有{ENTITY_LABELS[kind]}，点击“新建”开始建立资料。</div>}</div>
       </aside>
       <section className="entity-editor">
         {selected || selectedEntityId === null ? <><div className="entity-editor-header"><div><p className="eyebrow">{ENTITY_LABELS[kind].toUpperCase()} ARCHIVE</p><h1>{selected ? selected.title : '新建' + ENTITY_LABELS[kind]}</h1><p>{selected ? '资料会同时保存为项目目录中的 Markdown 镜像，并进入 SQLite 搜索索引。' : '字段可以随时补充；先保存一个名字也可以。'}</p></div><div className="view-actions">{selected ? <Button variant="outline" onClick={() => void navigator.clipboard?.writeText('[[' + selected.title + ']]')}><Copy size={14} />复制 Wiki 链接</Button> : null}</div></div>

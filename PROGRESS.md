@@ -594,3 +594,12 @@
 - commit ed5d0cc 为 Rust job 安装 Tauri 2 官方 Debian 前置依赖，并将 checkout、cache、setup-node 和 pnpm setup 升级到 Node 24 运行时版本。
 - 修复后的 run 33529012970 全部通过：Frontend typecheck、lint、test、build 为 success；Ubuntu Linux 依赖安装、cargo check、cargo test 为 success；两个 check-run 均为 0 annotations。
 - P2-03 关闭，AUDIT_FIX_PLAN.md 的 P1、P2、P3 条目与桌面人工门禁现已全部完成。
+
+## 2026-09-02：全局自定义右键菜单
+
+- 新增全局 ContextMenuProvider、统一菜单模型、窗口边缘避让、一级子菜单、键盘导航、焦点恢复、外部点击/滚动/失焦关闭和明暗主题样式；应用内容区域不再使用 WebView2 默认右键菜单。
+- 新增 Clipboard API + execCommand 回退；输入框、密码框、select、链接、图片和普通选区按规则提供安全菜单，剪切在复制成功后才删除。
+- 正文树支持卷/章/节及多选菜单，编辑器支持 CodeMirror 选区/光标、Markdown 格式、AI 预选、搜索、Wiki 预览和撤销/重做；导出支持项目/卷/章节 preset。
+- 资料、附件、回收站、搜索、历史、时间线、伏笔、关系图、看板和大纲条目接入业务菜单；插件 API 增加 contextLocations、contextOrder、isEnabled 与 ContextMenuPayload，保留旧接口。
+- 阶段提交：67a7208（基础设施）、5b485df（正文树与编辑器集成）；阶段 3 文档与桌面验收提交待门禁完成。
+- 当前前端门禁：pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 通过（16 个测试文件 / 70 项测试）。
