@@ -20,7 +20,7 @@
 
 - [x] P2-01 AI 上下文：支持当前选区/段落、最近 N 章、指定章节与资料，并提供预算和选区结果应用。
 - [x] P2-02 commands.rs 模块化
-- [x] P2-03 CI
+- [~] P2-03 CI（GitHub Ubuntu Rust check 修复已提交本地，等待远程 Actions 全绿）
 - [x] P2-04 大文件性能
 - [x] P3-01 插件 API 设计
 - [x] P3-02 桌面 E2E（release、官方 WebDriver、原生对话框、量化 FPS、滚动/输入和六种导出阅读器视觉均已完成本机验收）
@@ -60,3 +60,4 @@
 - 2026-08-31：PDF 修复后重跑官方 WebDriver + 原生对话框 + FPS；全部阶段标记通过，100,000 字 editor-pane 276 帧（约 137.7 FPS）。补充真实阅读器截图：Markdown/TXT、HTML、DOCX 的可读性与版式通过，EPUB 目录通过但当前 Calibre 链接未完成正文跳转，五种格式整体与 CodeMirror 主观体感继续保留人工门禁。
 - 2026-08-31：P3-02 人工门禁收尾；在 release WebView2 中完成 100,000 字单章插入、删除、搜索、保存、关闭/重开与滚动输入观察，直连和官方 WebDriver 的 rAF 采样分别为约 142.8/139.0 FPS（修复后重跑约 137.7 FPS）。使用记事本核对 Markdown/TXT、Edge 核对 HTML/PDF、LibreOffice Writer 核对 DOCX、Calibre 9.14 核对 EPUB；Calibre 目录中双击“第二卷”后实际跳转到“第二卷 / 第二章 副本 / 序章”正文页，六种导出均确认中文、标题层级、列表、目录、章节顺序和支持格式的封面可读。P3-02 及人工门禁改为完成。
 - 2026-08-31：官方 WebDriver 最终复跑使用与 WebView2 151.0.4129.107 匹配的 EdgeDriver；修复原生选择器控件过滤、路径输入回退和目录刷新后控件重解析后，NATIVE_DIALOGS_OK、RECOVERY_FAILURE_OK、EXPORTS_OK 及其余全部阶段标记再次通过，100,000 字 editor-pane 276 帧（约 137.75 FPS）。临时 E2E 项目已清理，用户提供的收尾计划文件保持未跟踪。
+- 2026-09-01：远程 run 33387176701 暴露 Ubuntu Rust cargo check 未闭环；P2-03 重新进入验证中。CI 已按 Tauri 2 官方 Debian 前置要求安装 WebKitGTK/GTK 系统依赖，并将 checkout/cache/setup-node/pnpm setup 升级到 Node 24 运行时版本；等待修复提交的远程 Actions 结果后关闭该项。
