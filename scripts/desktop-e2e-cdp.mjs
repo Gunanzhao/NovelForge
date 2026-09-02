@@ -18,6 +18,7 @@ const nativeDialogScript = resolve(root, 'scripts/desktop-dialog-uia.ps1')
 const nativeDialogMode = process.env.NOVELFORGE_E2E_NATIVE_DIALOGS === '1'
 const coverMode = process.env.NOVELFORGE_E2E_COVER === '1'
 const keepProject = process.env.NOVELFORGE_E2E_KEEP_PROJECT === '1'
+const waitTimeoutMs = Number(process.env.NOVELFORGE_E2E_TIMEOUT_MS ?? 20_000)
 const sleep = (milliseconds) => new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds))
 
 if (!existsSync(executable)) throw new Error('release EXE 不存在：' + executable)
@@ -404,7 +405,7 @@ async function selectValue(page, selector, value) {
 }
 
 async function waitForCondition(page, expression, label) {
-  const deadline = Date.now() + 10_000
+  const deadline = Date.now() + (Number.isFinite(waitTimeoutMs) && waitTimeoutMs > 0 ? waitTimeoutMs : 20_000)
   while (Date.now() < deadline) {
     if (await page.evaluate('Boolean(' + expression + ')')) return
     await sleep(200)
