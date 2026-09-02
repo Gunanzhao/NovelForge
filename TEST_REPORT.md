@@ -2,6 +2,8 @@
 
 ## 当前轮次
 
+> 本节为早期结果，已被后续最终验收取代。历史命令、环境和未覆盖项保留用于追溯，当前候选状态见文档末尾的 RC 验收记录。
+
 - 测试时间：2026-08-26
 - 环境：Windows 11 x64，Node 24.18.1，npm 11.16.0，pnpm 11.19.0，Rust 1.97.1，目标 `x86_64-pc-windows-msvc`
 
@@ -490,4 +492,21 @@
 
 ### 尚需桌面验收
 
-- 需在 release WebView2 EXE 中逐项验证正文树、编辑器剪贴板、四角避让、明暗主题、原生确认框和插件菜单视觉/鼠标行为；当前自动化脚本尚未加入本轮菜单专用断言。
+> 本节为早期结果，已被后续最终验收取代。当前菜单专项结果见文档末尾的“V1.0.0-rc.1 当前候选验收”。
+
+## V1.0.0-rc.1 当前候选验收（2026-09-03）
+
+### 已完成
+
+- `pnpm.cmd install --frozen-lockfile`：通过，锁文件与依赖一致。
+- `pnpm.cmd typecheck`、`pnpm.cmd lint`、`pnpm.cmd test -- --run`、`pnpm.cmd build`：全部通过；16 个测试文件 / 72 个测试。
+- `cargo check --manifest-path src-tauri/Cargo.toml`：通过；commands 与 storage 已按领域真实拆分，源码无 `include!` 临时拼接。
+- `cargo test --manifest-path src-tauri/Cargo.toml`：通过；35 个常规测试通过，1 个大型基准按设计 ignored。
+- `cargo test --manifest-path src-tauri/Cargo.toml -- --ignored --nocapture`：通过；1000 章、100 万字大型基准 58.76 秒。
+- `pnpm.cmd tauri:build`：通过；生成 `src-tauri/target/release/novelforge.exe` 和 `NovelForge_1.0.0-rc.1_x64-setup.exe`。
+- 直连 release WebView2 CDP：通过；`CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 及全部既有阶段标记均出现；新增右键粗体、规划区菜单和点击外部关闭断言通过。插件 context 插槽由 `tests/plugin-registry.test.ts` 覆盖。
+
+### 当前限制
+
+- 官方 Tauri WebDriver + 原生 UI Automation 已使用匹配驱动尝试复跑；项目创建、恢复重启等阶段可通过，但原生附件选择器存在系统列表刷新/焦点竞态，当前候选未将该次失败伪装为通过。直连 CDP 结果不受影响；可在稳定桌面焦点环境重试。
+- 当前候选变更尚未推送，因而不能宣称本次 HEAD 的 GitHub Actions 两个 job 已通过；历史 run 33529012970 不作为本次证据。

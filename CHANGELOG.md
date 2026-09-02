@@ -1,5 +1,22 @@
 # 更新日志
 
+## 1.0.0-rc.1
+
+### Added
+
+- 支持普通和命名 Markdown 脚注，预览显示脚注区，HTML/EPUB 输出提供锚点，DOCX/PDF 以章末列表保留内容。
+- 增加 Markdown 安全的英文字母/数字全角与半角转换，代码块、行内代码、URL 和 Markdown 标记保持不变。
+- 扩展 release WebView2 右键菜单验收，覆盖正文树、编辑器、规划条目、边缘避让和明暗主题；插件 context 插槽由 PluginRegistry 单元测试覆盖。
+
+### Changed
+
+- Rust commands 按项目、正文、资料、恢复、回收站、一致性和导出领域拆分；storage 按数据库、文件系统、迁移、镜像、历史、搜索索引和日志拆分。
+- 保持既有 Tauri command 名称、SQLite schema、Markdown 项目格式和浏览器 fallback 兼容。
+
+### Fixed
+
+- 统一 RC 文档中的已完成/待验收状态，早期测试结果保留为历史记录并明确标注。
+
 ## 0.1.0 - 2026-08-26
 
 - 初始化 Tauri 2 + React 写作工作台。

@@ -52,3 +52,17 @@
 - [x] Windows x64 release EXE 与 NSIS 安装包构建、启动冒烟
 - [x] P2/P3 代码收尾：AI 上下文增强、命令与存储模块边界、GitHub Actions CI、10 万字单章验收、内部插件 API
 - [x] 真实桌面验收收尾（直连 CDP、官方 Tauri WebDriver、原生文件选择器/确认框/提示框、恢复重启自动化、两种模式量化 FPS、100,000 字滚动/输入观察和带测试封面的六种导出阅读器视觉复核均已通过；Calibre 目录双击已验证正文跳转）
+
+## V1.0.0-rc.1 当前收尾（2026-09-03）
+
+- [x] Rust commands 按领域真实拆分，`commands/mod.rs` 保留共享 helper 与兼容 re-export，未使用 `include!` 拼接。
+- [x] Rust storage 按数据库、文件系统、迁移、镜像、历史、搜索索引和日志真实拆分。
+- [x] Markdown 普通/命名脚注编辑、预览及 HTML/EPUB 锚点导出；DOCX/PDF 保留脚注内容。
+- [x] Markdown 安全字符全角/半角转换，默认不转换普通空格，中文标点转换保持独立。
+- [x] `pnpm.cmd install --frozen-lockfile`、typecheck、lint、72 项前端测试、build、cargo check/test 通过。
+- [x] 1000 章/100 万字 ignored 基准通过（58.76 秒），10 万字单章常规 Rust 验收通过。
+- [x] `pnpm.cmd tauri:build` 生成 1.0.0-rc.1 release EXE 与 NSIS。
+- [x] 当前 HEAD 直连 release CDP E2E 通过 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 及全部既有阶段标记。
+- [~] 官方 WebDriver + 原生附件选择器复跑：核心流程可运行，但本机出现焦点/列表刷新竞态，需稳定桌面焦点环境复跑后再关闭该证据项。
+- [ ] 当前 HEAD GitHub Actions Frontend/Rust 两个 job：候选尚未推送，待授权推送后确认。
+- [ ] `v1.0.0-rc.1` 远程 tag：待最终发布授权后创建并推送。

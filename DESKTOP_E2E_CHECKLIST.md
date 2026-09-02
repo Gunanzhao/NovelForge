@@ -90,3 +90,17 @@ src-tauri/target/release/novelforge.exe
 - EPUB：Calibre 9.14.0 打开目录和正文；双击目录“第二卷”后页面实际显示“第二卷 / 第二章 副本 / 序章”，第一卷页显示“林月 来到雾港。”及列表。
 - PDF：Edge、SumatraPDF 3.6.1 和 Poppler 均确认嵌入中文字体版本的标题、正文、章节和封面。
 - 官方 WebDriver 最终复跑：EdgeDriver 151.0.4129.107 与 WebView2 151 匹配；原生文件/文件夹选择器、保存失败恢复重启、附件导入、全部阶段标记和 100,000 字 FPS（276 帧、约 137.75 FPS）通过。
+
+## V1.0.0-rc.1 右键菜单专项（2026-09-03）
+
+- [x] 当前 release EXE 直连 CDP：正文树卷/章/节、多选菜单、CodeMirror 无选区/有选区、Wiki 预览、四角避让、一级子菜单、右键粗体、Escape 和点击外部关闭。
+- [x] 规划区条目：大纲、场景卡、时间线、伏笔和看板菜单；场景卡验证打开/编辑、复制标题、复制 Markdown 路径、上移/下移和移入回收站。
+- [x] 明暗主题与危险操作确认沿用既有流程，`CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 及全部旧阶段标记通过。
+- [x] 脚注与字符全角/半角功能随同 release 构建打包，导出结构断言通过。
+- [~] 官方 Tauri WebDriver + 原生 UI Automation：当前候选已多次尝试，核心页面/恢复重启可运行；附件选择器受 Windows 焦点和列表刷新竞态影响，需在稳定桌面焦点环境复跑后关闭该项。
+
+### 当前 RC 运行记录
+
+- 直连命令：`pnpm.cmd test:e2e:desktop`（当前 release，通过）。
+- WebDriver 命令：`$env:NOVELFORGE_E2E_WEBDRIVER='1'; $env:NOVELFORGE_E2E_NATIVE_DIALOGS='1'; pnpm.cmd test:e2e:desktop`（已尝试，附件选择器环境竞态）。
+- 当前 release 产物：`src-tauri/target/release/novelforge.exe`、`src-tauri/target/release/bundle/nsis/NovelForge_1.0.0-rc.1_x64-setup.exe`。

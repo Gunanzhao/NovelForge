@@ -604,3 +604,13 @@
 - 阶段提交：67a7208（基础设施）、5b485df（正文树与编辑器集成）、54efaa7（业务菜单/文档/E2E），另有 1915ca4 修正右键验收脚本选择状态。
 - 当前前端门禁：pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 通过（16 个测试文件 / 70 项测试）。
 - release WebView2 CDP E2E 已通过 CONTEXT_MENU_OK、章节树菜单、四角避让和 Escape 关闭断言；完整既有桌面流程标记亦全部通过。
+
+## 2026-09-03：V1.0.0-rc.1 最终收尾
+
+- 完成 Rust commands 领域实现真实迁移：project、manuscript、entities、recovery、trash、consistency 和 export 不再只有 facade；`commands/mod.rs` 保留共享 helper 与兼容入口，约 33 KB。
+- 完成 storage 领域拆分：database、filesystem、migration、mirror、history、search_index、logging 分别维护实现；`storage/mod.rs` 仅保留聚合入口和共享定义。
+- 增加 Markdown 普通/命名脚注解析与多格式降级导出；预览使用 GFM 脚注样式，HTML/EPUB 提供锚点，DOCX/PDF 保留章末脚注内容。
+- 增加 Markdown 安全的字符全角/半角转换；默认只转换 ASCII 字母和数字，保护 Markdown 标记、行内/围栏代码及 URL，普通空格不自动变为 U+3000。
+- 版本统一为 `1.0.0-rc.1`，CHANGELOG 已更新；当前 release 构建生成 EXE 与 NSIS 安装包。
+- 当前 HEAD 直连 release CDP E2E 已通过 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 和全部既有阶段标记，覆盖新增规划区菜单、右键粗体、四角避让、Escape/外部关闭；插件 context 插槽由前端 PluginRegistry 测试覆盖。
+- 当前候选尚未推送，GitHub Actions 的本次 HEAD 结果和 `v1.0.0-rc.1` 远程 tag 待发布授权后再确认；官方 WebDriver 原生附件选择器复跑记录为系统焦点/列表刷新竞态，未虚报为通过。
