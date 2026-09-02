@@ -57,7 +57,7 @@ function findNativeDriver() {
 
 async function waitForPage(address = '127.0.0.1:' + port) {
   const base = address.startsWith('http://') ? address : 'http://' + address
-  const deadline = Date.now() + 20_000
+  const deadline = Date.now() + (Number.isFinite(waitTimeoutMs) && waitTimeoutMs > 0 ? waitTimeoutMs : 20_000)
   while (Date.now() < deadline) {
     try {
       const pages = await fetch(base + '/json/list').then((response) => response.json())
@@ -73,7 +73,7 @@ async function waitForPage(address = '127.0.0.1:' + port) {
 
 async function waitForNoPage(address = '127.0.0.1:' + port) {
   const base = address.startsWith('http://') ? address : 'http://' + address
-  const deadline = Date.now() + 10_000
+  const deadline = Date.now() + Math.max(10_000, Number.isFinite(waitTimeoutMs) && waitTimeoutMs > 0 ? waitTimeoutMs : 20_000)
   let noPageChecks = 0
   while (Date.now() < deadline) {
     try {
@@ -198,7 +198,7 @@ async function startWebDriver(resetProfile = true) {
     stdio: 'ignore',
   })
   const statusUrl = 'http://127.0.0.1:' + webdriverPort + '/status'
-  const deadline = Date.now() + 20_000
+  const deadline = Date.now() + (Number.isFinite(waitTimeoutMs) && waitTimeoutMs > 0 ? waitTimeoutMs : 20_000)
   while (Date.now() < deadline) {
     try {
       await requestJson(statusUrl)
@@ -450,7 +450,7 @@ async function chooseNativeDialog(page, mode, title, targetPath, triggerText = '
 }
 
 async function waitForText(page, text) {
-  const deadline = Date.now() + 10_000
+  const deadline = Date.now() + (Number.isFinite(waitTimeoutMs) && waitTimeoutMs > 0 ? waitTimeoutMs : 20_000)
   while (Date.now() < deadline) {
     try {
       if ((await bodyText(page)).includes(text)) return
