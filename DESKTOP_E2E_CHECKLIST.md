@@ -102,5 +102,6 @@ src-tauri/target/release/novelforge.exe
 ### 当前 RC 运行记录
 
 - 直连命令：`pnpm.cmd test:e2e:desktop`（当前 release，通过）。
+- 官方 WebDriver WebView2（不启用原生文件对话框）：当前 release 通过全部阶段标记和右键专项标记。
 - WebDriver 命令：`$env:NOVELFORGE_E2E_WEBDRIVER='1'; $env:NOVELFORGE_E2E_NATIVE_DIALOGS='1'; pnpm.cmd test:e2e:desktop`（已尝试，附件选择器环境竞态）。
 - 当前 release 产物：`src-tauri/target/release/novelforge.exe`、`src-tauri/target/release/bundle/nsis/NovelForge_1.0.0-rc.1_x64-setup.exe`。

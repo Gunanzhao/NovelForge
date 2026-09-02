@@ -505,6 +505,7 @@
 - `cargo test --manifest-path src-tauri/Cargo.toml -- --ignored --nocapture`：通过；1000 章、100 万字大型基准 58.76 秒。
 - `pnpm.cmd tauri:build`：通过；生成 `src-tauri/target/release/novelforge.exe` 和 `NovelForge_1.0.0-rc.1_x64-setup.exe`。
 - 直连 release WebView2 CDP：通过；`CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 及全部既有阶段标记均出现；新增右键粗体、规划区菜单、插件扩展项和点击外部关闭断言通过。插件排序/异常启用条件另由 `tests/plugin-registry.test.ts` 覆盖。
+- 官方 Tauri WebDriver WebView2（不启用原生文件对话框）：通过；当前 release 的全部旧阶段及 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 均出现。
 
 ### 当前限制
 
