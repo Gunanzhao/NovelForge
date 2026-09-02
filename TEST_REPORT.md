@@ -504,7 +504,7 @@
 - `cargo test --manifest-path src-tauri/Cargo.toml`：通过；35 个常规测试通过，1 个大型基准按设计 ignored。
 - `cargo test --manifest-path src-tauri/Cargo.toml -- --ignored --nocapture`：通过；1000 章、100 万字大型基准 58.76 秒。
 - `pnpm.cmd tauri:build`：通过；生成 `src-tauri/target/release/novelforge.exe` 和 `NovelForge_1.0.0-rc.1_x64-setup.exe`。
-- 直连 release WebView2 CDP：通过；`CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 及全部既有阶段标记均出现；新增右键粗体、规划区菜单和点击外部关闭断言通过。插件 context 插槽由 `tests/plugin-registry.test.ts` 覆盖。
+- 直连 release WebView2 CDP：通过；`CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 及全部既有阶段标记均出现；新增右键粗体、规划区菜单、插件扩展项和点击外部关闭断言通过。插件排序/异常启用条件另由 `tests/plugin-registry.test.ts` 覆盖。
 
 ### 当前限制
 

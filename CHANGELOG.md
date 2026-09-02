@@ -6,7 +6,7 @@
 
 - 支持普通和命名 Markdown 脚注，预览显示脚注区，HTML/EPUB 输出提供锚点，DOCX/PDF 以章末列表保留内容。
 - 增加 Markdown 安全的英文字母/数字全角与半角转换，代码块、行内代码、URL 和 Markdown 标记保持不变。
-- 扩展 release WebView2 右键菜单验收，覆盖正文树、编辑器、规划条目、边缘避让和明暗主题；插件 context 插槽由 PluginRegistry 单元测试覆盖。
+- 扩展 release WebView2 右键菜单验收，覆盖正文树、编辑器、规划条目、边缘避让、明暗主题和“运行一致性检查”插件扩展项。
 
 ### Changed
 

@@ -203,7 +203,8 @@ function ContextMenuSurface({ state, onClose, onError }: ContextMenuSurfaceProps
   useLayoutEffect(() => {
     const rect = menuRef.current?.getBoundingClientRect()
     if (!rect) return
-    setPosition(clampContextMenuPosition(state.point, { width: rect.width || 236, height: rect.height || 80 }, { width: window.innerWidth, height: window.innerHeight }))
+    const menu = menuRef.current
+    setPosition(clampContextMenuPosition(state.point, { width: menu?.offsetWidth || rect.width || 236, height: menu?.offsetHeight || rect.height || 80 }, { width: window.innerWidth, height: window.innerHeight }))
   }, [state.point, items.length, state.title])
 
   useLayoutEffect(() => {
@@ -218,7 +219,8 @@ function ContextMenuSurface({ state, onClose, onError }: ContextMenuSurfaceProps
     if (!submenu || !submenuRef.current) return
     setSubmenuActiveIndex(0)
     const rect = submenuRef.current.getBoundingClientRect()
-    const next = submenuContextMenuPosition(submenu.anchor, { width: rect.width || 220, height: rect.height || 280 }, { width: window.innerWidth, height: window.innerHeight })
+    const submenuElement = submenuRef.current
+    const next = submenuContextMenuPosition(submenu.anchor, { width: submenuElement.offsetWidth || rect.width || 220, height: submenuElement.offsetHeight || rect.height || 280 }, { width: window.innerWidth, height: window.innerHeight })
     submenuRef.current.style.left = next.left + 'px'
     submenuRef.current.style.top = next.top + 'px'
   }, [submenu])
@@ -303,7 +305,13 @@ function ContextMenuSurface({ state, onClose, onError }: ContextMenuSurfaceProps
     style={{ left: position.left, top: position.top }}
     onContextMenu={(event) => { event.preventDefault(); event.stopPropagation() }}
     onKeyDown={onKeyDown}
-    onMouseLeave={() => window.setTimeout(() => setSubmenu(null), 100)}
+    onMouseLeave={(event) => {
+      const relatedTarget = event.relatedTarget
+      if (relatedTarget instanceof Node && submenuRef.current?.contains(relatedTarget)) return
+      window.setTimeout(() => {
+        if (!submenuRef.current?.matches(':hover')) setSubmenu(null)
+      }, 100)
+    }}
   >
     {state.title ? <div className="context-menu-title">{state.title}</div> : null}
     {items.map((item, index) => item.type === 'separator'
@@ -311,9 +319,10 @@ function ContextMenuSurface({ state, onClose, onError }: ContextMenuSurfaceProps
       : item.type === 'label'
         ? <div className="context-menu-label" key={item.id}>{item.label}</div>
         : <MenuItemButton key={item.id} item={item} active={index === activeIndex} onSelect={(selected) => void selectItem(selected)} onOpenSubmenu={(selected, element) => setSubmenu({ item: selected, anchor: element.getBoundingClientRect() })} registerRef={registerRef} />)}
-    {submenu?.item.children?.length ? <div
+    {submenu?.item.children?.length ? createPortal(<div
       ref={submenuRef}
       className="context-menu context-submenu"
+      data-context-menu-surface="true"
       role="menu"
       aria-label={submenu.item.label}
       style={{ left: submenu.anchor.right + 4, top: submenu.anchor.top }}
@@ -326,7 +335,7 @@ function ContextMenuSurface({ state, onClose, onError }: ContextMenuSurfaceProps
         : item.type === 'label'
           ? <div className="context-menu-label" key={item.id}>{item.label}</div>
           : <MenuItemButton key={item.id} item={item} active={false} onSelect={(selected) => void selectItem(selected)} onOpenSubmenu={() => undefined} registerRef={() => undefined} />)}
-    </div> : null}
+    </div>, document.body) : null}
   </div>
 }
 

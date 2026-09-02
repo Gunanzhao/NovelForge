@@ -12,6 +12,7 @@ describe('plugin registry', () => {
     const names = await registry.generators()[0].generate({ category: 'character', style: '中文现代', count: 3 })
     expect(names).toEqual(['林清明', '沈昭景', '顾景舟'])
     expect(registry.commands().map((command) => command.id)).toContain('builtin.consistency.check')
+    expect(registry.contextMenus('workspace', { location: 'workspace' }).map((item) => item.id)).toContain('builtin.consistency.context')
   })
 
   it('exposes every extension point and rejects duplicate descriptors atomically', () => {

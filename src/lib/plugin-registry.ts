@@ -226,6 +226,16 @@ const consistencyPlugin: NovelForgePlugin = {
         return analyzeConsistency(value.data as ProjectData, documents)
       },
     })
+    context.registerMenu({
+      id: 'builtin.consistency.context',
+      label: '运行一致性检查',
+      location: 'tools',
+      contextLocations: ['workspace'],
+      contextOrder: 120,
+      execute() {
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('novelforge:open-consistency'))
+      },
+    })
   },
 }
 

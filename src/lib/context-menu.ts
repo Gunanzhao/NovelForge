@@ -123,12 +123,13 @@ export function submenuContextMenuPosition(
   viewport: ContextMenuViewport,
   gap = 4,
 ) {
+  const edgeGap = 8
   const right = anchor.right + gap
-  const left = right + size.width <= viewport.width - gap
+  const left = right + size.width <= viewport.width - edgeGap
     ? right
     : anchor.left - size.width - gap
   return {
-    left: Math.min(Math.max(gap, left), Math.max(gap, viewport.width - size.width - gap)),
-    top: clampAxis(anchor.top, size.height, viewport.height, gap),
+    left: Math.min(Math.max(edgeGap, left), Math.max(edgeGap, viewport.width - size.width - edgeGap)),
+    top: clampAxis(anchor.top, size.height, viewport.height, edgeGap),
   }
 }

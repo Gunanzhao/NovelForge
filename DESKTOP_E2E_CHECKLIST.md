@@ -93,7 +93,7 @@ src-tauri/target/release/novelforge.exe
 
 ## V1.0.0-rc.1 右键菜单专项（2026-09-03）
 
-- [x] 当前 release EXE 直连 CDP：正文树卷/章/节、多选菜单、CodeMirror 无选区/有选区、Wiki 预览、四角避让、一级子菜单、右键粗体、Escape 和点击外部关闭。
+- [x] 当前 release EXE 直连 CDP：正文树卷/章/节、多选菜单、CodeMirror 无选区/有选区、Wiki 预览、四角避让、一级子菜单、右键粗体、插件扩展项、Escape 和点击外部关闭。
 - [x] 规划区条目：大纲、场景卡、时间线、伏笔和看板菜单；场景卡验证打开/编辑、复制标题、复制 Markdown 路径、上移/下移和移入回收站。
 - [x] 明暗主题与危险操作确认沿用既有流程，`CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 及全部旧阶段标记通过。
 - [x] 脚注与字符全角/半角功能随同 release 构建打包，导出结构断言通过。

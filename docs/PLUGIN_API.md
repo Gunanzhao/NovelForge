@@ -59,7 +59,7 @@ context.registerMenu({
 createBuiltinPluginRegistry() 当前注册：
 
 - builtin.name-generator：复用本地规则名字生成器，支持类别、风格和数量参数。
-- builtin.consistency：复用结构化一致性检查，输入 { data: ProjectData, documents: Record<string, string> }。
+- builtin.consistency：复用结构化一致性检查，输入 { data: ProjectData, documents: Record<string, string> }；在 workspace 右键菜单提供“运行一致性检查”入口。
 
 内置插件与普通插件使用同一注册协议，便于后续把稳定功能迁移到独立包而不改变工作台调用方式。
 

@@ -727,6 +727,22 @@ async function run() {
       await rightClickAt(page, point)
       await assertCustomContextMenu(page, '窗口角落')
     }
+    await rightClickAt(page, { x: viewport.width - 2, y: viewport.height - 2 })
+    await clickContextMenuItem(page, '主题')
+    await waitForSelector(page, '.context-submenu', '主题子菜单')
+    const submenuRect = await page.evaluate("(()=>{const menu=document.querySelector('.context-submenu');if(!menu)return null;const rect=menu.getBoundingClientRect();return {left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom}})()")
+    const submenuGaps = submenuRect ? { left: submenuRect.left, top: submenuRect.top, right: viewport.width - submenuRect.right, bottom: viewport.height - submenuRect.bottom } : null
+    if (!submenuRect || Math.round(submenuGaps.left) < 8 || Math.round(submenuGaps.top) < 8 || Math.round(submenuGaps.right) < 8 || Math.round(submenuGaps.bottom) < 8) throw new Error('主题子菜单未完成边缘翻转：' + JSON.stringify({ viewport, submenuRect, submenuGaps }))
+    await pressEscape(page)
+    await waitForCondition(page, "document.querySelector('.context-menu[data-context-menu-surface=\"true\"]') === null", '主题子菜单关闭')
+    await rightClickAt(page, { x: viewport.width - 2, y: viewport.height - 2 })
+    const workspaceMenu = await assertCustomContextMenu(page, '工作台插件')
+    if (!workspaceMenu.labels.some((label) => label.includes('运行一致性检查'))) throw new Error('工作台菜单缺少插件扩展项：' + JSON.stringify(workspaceMenu.labels))
+    await rightClickAt(page, { x: viewport.width - 2, y: viewport.height - 2 })
+    await clickContextMenuItem(page, '运行一致性检查')
+    await waitForText(page, '一致性检查')
+    await clickExact(page, '正文')
+    await waitForCondition(page, "document.querySelector('.cm-content') !== null", '插件返回正文')
     console.log('CONTEXT_MENU_OK')
     await selectEditorAll(page)
     await pressControlKey(page, 'b', 'KeyB', 66)
@@ -781,6 +797,11 @@ async function run() {
     await setField(page, '第二卷', '第二卷')
     await clickModalButton(page, '创建')
     await waitForText(page, '第二卷')
+    await rightClickSelector(page, '.tree-row', '第二卷')
+    const volumeMenu = await assertCustomContextMenu(page, '卷树')
+    if (!volumeMenu.labels.some((label) => label.includes('新建章节')) || !volumeMenu.labels.some((label) => label.includes('导出此卷')) || !volumeMenu.labels.some((label) => label.includes('复制目录路径'))) {
+      throw new Error('卷树右键菜单内容不完整：' + JSON.stringify(volumeMenu.labels))
+    }
     await clickRowAction(page, '第二卷', '在此新建章')
     await waitForText(page, '新建章')
     await setField(page, '第二章', '第二章')
@@ -801,6 +822,11 @@ async function run() {
     await clickModalButton(page, '创建')
     await clickRowAction(page, '第二章', '展开')
     await waitForText(page, '开场')
+    await rightClickSelector(page, '.tree-row', '开场')
+    const sectionMenu = await assertCustomContextMenu(page, '小节树')
+    if (!sectionMenu.labels.some((label) => label.includes('打开')) || !sectionMenu.labels.some((label) => label.includes('复制小节')) || !sectionMenu.labels.some((label) => label.includes('移动到其他章节'))) {
+      throw new Error('小节树右键菜单内容不完整：' + JSON.stringify(sectionMenu.labels))
+    }
     if (!webdriverMode) await page.evaluate("window.prompt=()=> '序章'")
     await clickRowAction(page, '开场', '更多操作')
     await waitForText(page, '序章')
@@ -810,6 +836,8 @@ async function run() {
     await ensureTreeRow(page, '第一卷', '第二章')
     if (!(await treeRowUnderParent(page, '第二章', '第一卷'))) throw new Error('拖拽后章节未进入第一卷')
     console.log('DRAG_DROP_OK')
+
+    if (await page.evaluate("Array.from(document.querySelectorAll('button')).some((button)=>(button.textContent||'').trim()==='清除选择')")) await clickExact(page, '清除选择')
 
     await clickRowAction(page, '第二章', '复制节点')
     await waitForText(page, '复制正文节点')
@@ -824,6 +852,11 @@ async function run() {
     await toggleRowSelection(page, '第二章 副本')
     await toggleRowSelection(page, '第二章 副本二')
     await waitForText(page, '已选 2 项')
+    await rightClickSelector(page, '.tree-row', '第二章 副本')
+    const selectionMenu = await assertCustomContextMenu(page, '正文树多选')
+    if (!selectionMenu.labels.some((label) => label.includes('批量设置状态')) || !selectionMenu.labels.some((label) => label.includes('批量移入回收站')) || !selectionMenu.labels.some((label) => label.includes('清除选择'))) {
+      throw new Error('正文树多选右键菜单内容不完整：' + JSON.stringify(selectionMenu.labels))
+    }
     await clickExact(page, '批量移入回收站')
     await sleep(500)
     await clickExact(page, '回收站')
@@ -880,6 +913,11 @@ async function run() {
     await ensureEditor(page, 'Wiki 返回')
     await clickExact(page, '预览')
     await waitForSelector(page, 'a.wiki-link', 'Wiki 预览链接')
+    await rightClickSelector(page, 'a.wiki-link', '林月')
+    const wikiMenu = await assertCustomContextMenu(page, 'Wiki 预览')
+    if (!wikiMenu.labels.some((label) => label.includes('打开资料')) || !wikiMenu.labels.some((label) => label.includes('复制 Wiki 链接')) || !wikiMenu.labels.some((label) => label.includes('搜索目标'))) {
+      throw new Error('Wiki 预览右键菜单内容不完整：' + JSON.stringify(wikiMenu.labels))
+    }
     await clickSelector(page, 'a.wiki-link', '林月')
     await waitForCondition(page, "document.querySelector('.entity-list-head h2')?.textContent?.trim() === '人物'", 'Wiki 跳转人物')
     await clickExact(page, '正文')
@@ -976,6 +1014,9 @@ async function run() {
     if (!sceneMenu.labels.some((label) => label.includes('打开／编辑')) || !sceneMenu.labels.some((label) => label.includes('复制 Markdown 路径')) || !sceneMenu.labels.some((label) => label.includes('移入回收站'))) {
       throw new Error('场景卡右键菜单内容不完整：' + JSON.stringify(sceneMenu.labels))
     }
+    await rightClickSelector(page, '.scene-list-card', '场景 E2E')
+    await clickContextMenuItem(page, '移入回收站')
+    await waitForCondition(page, "document.querySelector('.scene-list-card') === null", '场景卡危险操作确认')
 
     await clickExact(page, '时间线')
     await waitForText(page, '时间线')
@@ -1050,7 +1091,11 @@ async function run() {
     await clickExact(page, '回收站')
     await waitForSelector(page, '.trash-view', '回收站视图')
     await waitForCondition(page, "document.querySelectorAll('.trash-actions button').length > 0", '回收站删除条目加载')
-    await clickSelector(page, '.trash-actions button', '恢复')
+    for (let restoreIndex = 0; restoreIndex < 10; restoreIndex += 1) {
+      if (!await page.evaluate("document.querySelectorAll('.trash-actions button').length > 0")) break
+      await clickSelector(page, '.trash-actions button', '恢复')
+      await sleep(500)
+    }
     await waitForSelector(page, '.trash-view .empty-state', '回收站恢复后为空')
     console.log('TRASH_RESTORE_OK')
 

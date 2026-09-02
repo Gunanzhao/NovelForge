@@ -38,7 +38,7 @@
 - [x] RC-01：commands 已从兼容入口迁移到 project、manuscript、entities、recovery、trash、consistency、export 领域实现；`commands/mod.rs` 仅保留共享 helper、模块声明和测试/旧调用所需 re-export。
 - [x] RC-02：storage 已拆分为 database、filesystem、migration、mirror、history、search_index、logging；`storage/mod.rs` 仅保留聚合入口和共享定义。
 - [x] RC-03/04：Markdown 脚注和安全字符全角/半角转换已实现并有前端、fallback、Rust 回归测试。
-- [x] RC-05（直连）：当前 release CDP 已覆盖正文树、CodeMirror 选区/光标、Wiki、场景卡、大纲、时间线、伏笔、看板、四角避让、右键粗体、Escape/外部关闭；标记包含 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK`。插件 context 插槽由 PluginRegistry 单元测试覆盖。
+- [x] RC-05（直连）：当前 release CDP 已覆盖正文树、CodeMirror 选区/光标、Wiki、场景卡、大纲、时间线、伏笔、看板、四角避让、右键粗体、Escape/外部关闭和内置插件扩展项；标记包含 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK`。插件排序/异常启用条件由 PluginRegistry 单元测试覆盖。
 - [x] RC-06/07：README、SPEC、TODO、PROGRESS、TEST_REPORT、DECISIONS、DESKTOP_E2E_CHECKLIST、CHANGELOG 已增加当前 RC 记录；版本统一为 `1.0.0-rc.1`，新增 `RELEASE_CHECKLIST.md`。
 - [x] RC-08 本地门禁：前端 72 项测试、Rust 35 项常规测试、1000 章/100 万字基准（58.76 秒）、release EXE/NSIS 均已通过。
 - [~] RC-05 官方 WebDriver 原生附件选择器：当前本机复跑出现系统焦点/列表刷新竞态，核心流程可运行但尚未将该次运行标记为通过。

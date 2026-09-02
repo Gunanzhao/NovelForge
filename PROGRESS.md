@@ -612,5 +612,5 @@
 - 增加 Markdown 普通/命名脚注解析与多格式降级导出；预览使用 GFM 脚注样式，HTML/EPUB 提供锚点，DOCX/PDF 保留章末脚注内容。
 - 增加 Markdown 安全的字符全角/半角转换；默认只转换 ASCII 字母和数字，保护 Markdown 标记、行内/围栏代码及 URL，普通空格不自动变为 U+3000。
 - 版本统一为 `1.0.0-rc.1`，CHANGELOG 已更新；当前 release 构建生成 EXE 与 NSIS 安装包。
-- 当前 HEAD 直连 release CDP E2E 已通过 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 和全部既有阶段标记，覆盖新增规划区菜单、右键粗体、四角避让、Escape/外部关闭；插件 context 插槽由前端 PluginRegistry 测试覆盖。
+- 当前 HEAD 直连 release CDP E2E 已通过 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 和全部既有阶段标记，覆盖新增规划区菜单、右键粗体、四角避让、Escape/外部关闭和“运行一致性检查”插件扩展项。
 - 当前候选尚未推送，GitHub Actions 的本次 HEAD 结果和 `v1.0.0-rc.1` 远程 tag 待发布授权后再确认；官方 WebDriver 原生附件选择器复跑记录为系统焦点/列表刷新竞态，未虚报为通过。

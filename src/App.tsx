@@ -135,6 +135,12 @@ export default function App() {
     if (data) void refreshStats()
   }, [data, refreshStats])
 
+  useEffect(() => {
+    const openConsistency = () => useAppStore.getState().setView('consistency')
+    window.addEventListener('novelforge:open-consistency', openConsistency)
+    return () => window.removeEventListener('novelforge:open-consistency', openConsistency)
+  }, [])
+
   async function exportProject(format: ExportFormat, options: Omit<ExportInput, 'projectPath' | 'format'> = {}) {
     try {
       const path = await useAppStore.getState().exportProject(format, options)
