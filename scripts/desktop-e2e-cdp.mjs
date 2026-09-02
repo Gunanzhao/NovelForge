@@ -282,6 +282,12 @@ async function assertCustomContextMenu(page, label) {
   return result
 }
 
+async function clickContextMenuItem(page, label) {
+  const expression = "(function(){const item=Array.from(document.querySelectorAll('.context-menu[data-context-menu-surface=\"true\"] [role=\"menuitem\"]')).find((node)=>(node.textContent||'').trim().includes(" + jsString(label) + "));item?.click();return Boolean(item)})()"
+  if (!await page.evaluate(expression)) throw new Error('找不到自定义菜单项：' + label)
+  await sleep(120)
+}
+
 async function rowPoint(page, text) {
   const expression = "(function(){const row=Array.from(document.querySelectorAll('.tree-row')).find((item)=>(item.textContent||'').includes(" + jsString(text) + "));if(!row)return null;const rect=row.getBoundingClientRect();return {x:rect.left+Math.min(rect.width-18,Math.max(18,rect.width/2)),y:rect.top+rect.height/2}})()"
   const point = await page.evaluate(expression)
@@ -706,6 +712,7 @@ async function run() {
     }
     if (process.env.NOVELFORGE_E2E_SNAPSHOT === '1') return
 
+    await waitForSelector(page, '.cm-content', '初始正文编辑器')
     await replaceEditor(page, '# 第一章\n\n[[林月]] 来到雾港。\n\n**关键线索**\n\n- 第一项\n- 第二项')
     await sleep(400)
     const editorMenu = await (async () => {
@@ -727,6 +734,12 @@ async function run() {
     await selectEditorAll(page)
     await pressControlKey(page, 'i', 'KeyI', 73)
     await waitForCondition(page, "document.querySelector('.cm-content')?.innerText.includes('*')", 'Ctrl+I 选区命令')
+    await replaceEditor(page, '# 第一章\n\n[[林月]] 来到雾港。\n\n**关键线索**\n\n- 第一项\n- 第二项')
+    await selectEditorAll(page)
+    await rightClickSelector(page, '.cm-content')
+    await clickContextMenuItem(page, '格式')
+    await clickContextMenuItem(page, '粗体')
+    await waitForCondition(page, "document.querySelector('.cm-content')?.innerText.includes('**')", '右键粗体选区命令')
     await replaceEditor(page, '# 第一章\n\n[[林月]] 来到雾港。\n\n**关键线索**\n\n- 第一项\n- 第二项')
     await sleep(250)
     await clickExact(page, '保存')
@@ -932,6 +945,74 @@ async function run() {
       await waitForText(page, view)
     }
     console.log('PLANNING_AND_CHECKS_OK')
+
+    await clickExact(page, '写作规划')
+    await waitForText(page, '写作规划')
+    await rightClickSelector(page, '.planning-list-item', '第一章')
+    const outlineMenu = await assertCustomContextMenu(page, '大纲层级')
+    if (!outlineMenu.labels.some((label) => label.includes('打开／编辑')) || !outlineMenu.labels.some((label) => label.includes('复制标题'))) {
+      throw new Error('大纲右键菜单内容不完整：' + JSON.stringify(outlineMenu.labels))
+    }
+    await clickSelectorContains(page, '.planning-list-item', '第一章')
+    await clickExact(page, '保存大纲')
+    await sleep(500)
+    await rightClickSelector(page, '.planning-list-item', '第一章')
+    const savedOutlineMenu = await assertCustomContextMenu(page, '已保存大纲')
+    if (!savedOutlineMenu.labels.some((label) => label.includes('复制 Markdown 路径')) || !savedOutlineMenu.labels.some((label) => label.includes('移入回收站'))) {
+      throw new Error('已保存大纲右键菜单缺少路径或回收站操作：' + JSON.stringify(savedOutlineMenu.labels))
+    }
+
+    await clickSelector(page, '.planning-tabs button', '场景卡')
+    await waitForText(page, '场景卡')
+    const firstChapterValue = await page.evaluate("(()=>{const select=document.querySelector('.scene-workspace select.select-input');return Array.from(select?.options||[]).find((option)=>option.textContent?.trim()==='第一章')?.value||null})()")
+    if (!firstChapterValue) throw new Error('场景卡没有找到第一章选项')
+    await selectValue(page, '.scene-workspace select.select-input', firstChapterValue)
+    await clickText(page, '新建场景')
+    await setField(page, '例如：雾港的钟声', '场景 E2E')
+    await clickExact(page, '保存场景卡')
+    await waitForText(page, '场景 E2E')
+    await rightClickSelector(page, '.scene-list-card', '场景 E2E')
+    const sceneMenu = await assertCustomContextMenu(page, '场景卡')
+    if (!sceneMenu.labels.some((label) => label.includes('打开／编辑')) || !sceneMenu.labels.some((label) => label.includes('复制 Markdown 路径')) || !sceneMenu.labels.some((label) => label.includes('移入回收站'))) {
+      throw new Error('场景卡右键菜单内容不完整：' + JSON.stringify(sceneMenu.labels))
+    }
+
+    await clickExact(page, '时间线')
+    await waitForText(page, '时间线')
+    await clickText(page, '新建事件')
+    await setField(page, '例如：雾港第一次停电', '时间线 E2E')
+    await clickExact(page, '保存事件')
+    await waitForText(page, '时间线 E2E')
+    await rightClickSelector(page, '.special-list-item', '时间线 E2E')
+    const timelineMenu = await assertCustomContextMenu(page, '时间线')
+    if (!timelineMenu.labels.some((label) => label.includes('打开／编辑')) || !timelineMenu.labels.some((label) => label.includes('复制标题')) || !timelineMenu.labels.some((label) => label.includes('移入回收站'))) {
+      throw new Error('时间线右键菜单内容不完整：' + JSON.stringify(timelineMenu.labels))
+    }
+
+    await clickExact(page, '伏笔')
+    await waitForText(page, '伏笔')
+    await clickText(page, '新建伏笔')
+    await setField(page, '例如：钟楼里缺失的第十三口钟', '伏笔 E2E')
+    await clickExact(page, '保存伏笔')
+    await waitForText(page, '伏笔 E2E')
+    await rightClickSelector(page, '.foreshadowing-item', '伏笔 E2E')
+    const foreshadowingMenu = await assertCustomContextMenu(page, '伏笔')
+    if (!foreshadowingMenu.labels.some((label) => label.includes('打开／编辑')) || !foreshadowingMenu.labels.some((label) => label.includes('复制标题')) || !foreshadowingMenu.labels.some((label) => label.includes('移入回收站'))) {
+      throw new Error('伏笔右键菜单内容不完整：' + JSON.stringify(foreshadowingMenu.labels))
+    }
+
+    await clickExact(page, '写作规划')
+    await waitForText(page, '写作规划')
+    await clickSelector(page, '.planning-tabs button', '写作看板')
+    await waitForText(page, '写作看板')
+    await rightClickSelector(page, '.kanban-card', '第一章')
+    const kanbanMenu = await assertCustomContextMenu(page, '写作看板')
+    if (!kanbanMenu.labels.some((label) => label.includes('写作状态'))) throw new Error('看板右键菜单缺少写作状态：' + JSON.stringify(kanbanMenu.labels))
+    await rightClickSelector(page, '.kanban-card', '第一章')
+    await waitForSelector(page, '.context-menu[data-context-menu-surface="true"]', '看板菜单外部关闭')
+    await page.evaluate("document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))")
+    await waitForCondition(page, "document.querySelector('.context-menu[data-context-menu-surface=\"true\"]') === null", '看板菜单点击外部关闭')
+    console.log('PLANNING_CONTEXT_MENU_OK')
 
     await clickText(page, '全文搜索')
     await waitForText(page, '全文搜索')
