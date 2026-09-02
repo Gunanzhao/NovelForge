@@ -174,6 +174,28 @@ function nodeVolumeOrder(store: FallbackStore, current: NodeRecord) {
   return Number.MAX_SAFE_INTEGER
 }
 
+function escapeHtml(value: string) {
+  return value.replace(/&/gu, '&amp;').replace(/</gu, '&lt;').replace(/>/gu, '&gt;').replace(/"/gu, '&quot;').replace(/'/gu, '&#39;')
+}
+
+function fallbackHtml(markdown: string) {
+  const definitions = new Map<string, string>()
+  const bodyLines: string[] = []
+  for (const line of markdown.split(/\r?\n/u)) {
+    const definition = line.match(/^\s*\[\^([^\]\s]+)\]:\s*(.*)$/u)
+    if (definition) definitions.set(definition[1], definition[2])
+    else bodyLines.push(line)
+  }
+  const renderLine = (line: string) => {
+    const heading = /^(#{1,6})\s+(.+)$/u.exec(line)
+    const escaped = escapeHtml(line).replace(/\[\^([^\]\s]+)\]/gu, (_match, id: string) => '<sup class="footnote-ref"><a href="#fn-' + encodeURIComponent(id) + '">[' + escapeHtml(id) + ']</a></sup>')
+    return heading ? '<h' + heading[1].length + '>' + escaped.slice(heading[1].length + 1) + '</h' + heading[1].length + '>' : '<p>' + escaped + '</p>'
+  }
+  const body = bodyLines.filter(Boolean).map(renderLine).join('')
+  const footnotes = [...definitions.entries()].map(([id, definition]) => '<li id="fn-' + encodeURIComponent(id) + '">' + escapeHtml(definition) + '</li>').join('')
+  return body + (footnotes ? '<section class="footnotes"><h2>脚注</h2><ol>' + footnotes + '</ol></section>' : '')
+}
+
 export function exportText(store: FallbackStore, format: 'markdown' | 'txt' | 'html', input: ExportInput) {
   const title = input.title?.trim() || store.data.project.title
   const author = input.author?.trim() || store.data.project.author
@@ -212,11 +234,8 @@ export function exportText(store: FallbackStore, format: 'markdown' | 'txt' | 'h
     : ''
   const markdown = '# ' + title + '\n\n作者：' + author + '\n\n' + toc + rendered
   if (format === 'html') {
-    const htmlBody = markdown.split('\n').filter(Boolean).map((line) => {
-      const heading = /^(#{1,6}) (.+)$/u.exec(line)
-      return heading ? '<h' + heading[1].length + '>' + heading[2] + '</h' + heading[1].length + '>' : '<p>' + line + '</p>'
-    }).join('')
-    return '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>' + title + '</title></head><body><h1>' + title + '</h1><p>作者：' + author + '</p>' + htmlBody + '</body></html>'
+    const htmlBody = fallbackHtml(markdown)
+    return '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>' + escapeHtml(title) + '</title></head><body><h1>' + escapeHtml(title) + '</h1><p>作者：' + escapeHtml(author) + '</p>' + htmlBody + '</body></html>'
   }
   return format === 'markdown' ? markdown : title + '\n作者：' + author + '\n\n' + rendered
 }

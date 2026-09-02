@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  applyMarkdownCommand, convertPunctuation, wikiLinkHref, wikiMarkdown, wikiTargetFromHref,
-  wikiTargets, writingHints,
+  applyMarkdownCommand, convertFullwidth, convertHalfwidth, convertPunctuation, parseFootnotes,
+  wikiLinkHref, wikiMarkdown, wikiTargetFromHref, wikiTargets, writingHints,
 } from '../src/lib/markdown'
 import {
   categoryEntityKind, generateNames, readFavoriteNames, toggleFavoriteName, writeFavoriteNames,
@@ -25,6 +25,22 @@ describe('Markdown writing helpers', () => {
     const source = '他说：“好”。,\n\n\n\n下一段  '
     expect(writingHints(source).map((hint) => hint.type)).toEqual(['punctuation', 'spacing', 'blank'])
     expect(convertPunctuation('你好,世界!', 'full')).toBe('你好，世界！')
+  })
+
+  it('converts character width without changing Markdown markers, code or URLs', () => {
+    const tick = String.fromCharCode(96)
+    const source = '**ABC123** ' + tick + 'ABC123' + tick + ' [链接](https://example.com/ABC123)\n\n~~~md\nABC123\n~~~\n中文 ABC123'
+    expect(convertFullwidth(source)).toBe('**ＡＢＣ１２３** ' + tick + 'ABC123' + tick + ' [链接](https://example.com/ABC123)\n\n~~~md\nABC123\n~~~\n中文 ＡＢＣ１２３')
+    expect(convertHalfwidth(convertFullwidth(source))).toBe(source)
+  })
+
+  it('recognizes Chinese, named and repeated footnotes while ignoring code examples', () => {
+    const tick = String.fromCharCode(96)
+    const source = '正文[^1] 和正文[^note][^1]。\n\n[^1]: 中文说明\n[^note]: 命名说明\n\n' + tick + '[^code]' + tick + '\n\n```md\n[^fenced]: 不应被识别\n```'
+    expect(parseFootnotes(source)).toEqual([
+      { id: '1', definition: '中文说明', referenceCount: 2 },
+      { id: 'note', definition: '命名说明', referenceCount: 1 },
+    ])
   })
 
   it('applies inline commands to selected Unicode text and toggles them off', () => {

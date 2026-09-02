@@ -19,7 +19,7 @@ describe('browser fallback project workflow', () => {
     expect(chapter).toBeDefined()
     if (!chapter) return
 
-    const chapterContent = '# 第一章' + '\n\n' + '林月走进雾港。'
+    const chapterContent = '# 第一章' + '\n\n' + '林月走进雾港[^港]。\n\n[^港]: 港口的旧称。'
     const saved = await fallbackInvoke<DocumentData>('save_document', {
       input: { projectPath: input.path, nodeId: chapter.id, content: chapterContent, reason: '测试保存' },
     })
@@ -48,6 +48,9 @@ describe('browser fallback project workflow', () => {
     const chapterExport = exportText(stored, 'markdown', { projectPath: input.path, format: 'markdown', scope: 'chapters', nodeIds: [chapter.id] })
     expect(chapterExport).toContain('第一章')
     expect(chapterExport).toContain('林月走进雾港')
+    const htmlExport = exportText(stored, 'html', { projectPath: input.path, format: 'html', scope: 'chapters', nodeIds: [chapter.id] })
+    expect(htmlExport).toContain('class="footnotes"')
+    expect(htmlExport).toContain('港口的旧称')
     for (const format of ['txt', 'html'] as const) {
       const path = await fallbackInvoke<string>('export_project', { input: { projectPath: input.path, format } })
       expect(path.endsWith('.' + format)).toBe(true)

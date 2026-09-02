@@ -238,6 +238,90 @@ export function convertPunctuation(markdown: string, direction: 'full' | 'half')
   return markdown.replace(/，/g, ',').replace(/。/g, '.').replace(/？/g, '?').replace(/！/g, '!').replace(/：/g, ':').replace(/；/g, ';')
 }
 
+export interface WidthConversionOptions {
+  convertSpace?: boolean
+}
+
+function protectWidthSensitiveSegments(markdown: string) {
+  const protectedSegments: string[] = []
+  const placeholder = (value: string) => {
+    const index = protectedSegments.push(value) - 1
+    return '\uE000' + String.fromCodePoint(0xE100 + index) + '\uE001'
+  }
+  let source = markdown.replace(/(?:```|~~~)[^\n]*\n[\s\S]*?(?:```|~~~)/gu, placeholder)
+  const inlineCode = new RegExp(String.fromCharCode(96) + '[^' + String.fromCharCode(96) + '\\n]*' + String.fromCharCode(96), 'gu')
+  source = source.replace(inlineCode, placeholder)
+  source = source.replace(/\b(?:https?|ftp):\/\/[^\s<>)]+/giu, placeholder)
+  return { source, protectedSegments }
+}
+
+function convertWidthCharacter(character: string, direction: 'full' | 'half', convertSpace: boolean) {
+  const codePoint = character.codePointAt(0) ?? 0
+  if (direction === 'full' && ((codePoint >= 0x30 && codePoint <= 0x39) || (codePoint >= 0x41 && codePoint <= 0x5a) || (codePoint >= 0x61 && codePoint <= 0x7a))) {
+    return String.fromCodePoint(codePoint + 0xfee0)
+  }
+  if (direction === 'half' && ((codePoint >= 0xff10 && codePoint <= 0xff19) || (codePoint >= 0xff21 && codePoint <= 0xff3a) || (codePoint >= 0xff41 && codePoint <= 0xff5a))) {
+    return String.fromCodePoint(codePoint - 0xfee0)
+  }
+  if (convertSpace && direction === 'full' && character === ' ') return '\u3000'
+  if (convertSpace && direction === 'half' && character === '\u3000') return ' '
+  return character
+}
+
+export function convertWidth(markdown: string, direction: 'full' | 'half', options: WidthConversionOptions = {}) {
+  const { source, protectedSegments } = protectWidthSensitiveSegments(markdown)
+  const converted = Array.from(source, (character) => convertWidthCharacter(character, direction, options.convertSpace === true)).join('')
+  return converted.replace(/\uE000([\uE100-\uF8FF])\uE001/gu, (_match, marker: string) => protectedSegments[(marker.codePointAt(0) ?? 0) - 0xE100] ?? '')
+}
+
+export function convertFullwidth(markdown: string, options?: WidthConversionOptions) {
+  return convertWidth(markdown, 'full', options)
+}
+
+export function convertHalfwidth(markdown: string, options?: WidthConversionOptions) {
+  return convertWidth(markdown, 'half', options)
+}
+
+export interface FootnoteInfo {
+  id: string
+  definition: string
+  referenceCount: number
+}
+
+export function parseFootnotes(markdown: string): FootnoteInfo[] {
+  const definitions = new Map<string, string>()
+  const references = new Map<string, number>()
+  let fenced = false
+  let fenceCharacter = ''
+  const lines = markdown.split(/\r\n|\n|\r/u)
+  for (const line of lines) {
+    const fence = line.match(/^\s*(~{3,})/u) || line.match(new RegExp('^\\s*(' + String.fromCharCode(96) + '{3,})', 'u'))
+    if (fence) {
+      if (!fenced) {
+        fenced = true
+        fenceCharacter = fence[1][0]
+      } else if (fence[1][0] === fenceCharacter) {
+        fenced = false
+        fenceCharacter = ''
+      }
+      continue
+    }
+    if (fenced) continue
+    const definition = line.match(/^\s*\[\^([^\]\s]+)\]:\s*(.*)$/u)
+    if (definition) {
+      definitions.set(definition[1], definition[2])
+      continue
+    }
+    const withoutCode = line.replace(new RegExp(String.fromCharCode(96) + '[^' + String.fromCharCode(96) + '\\n]*' + String.fromCharCode(96), 'gu'), '')
+    for (const reference of withoutCode.matchAll(/\[\^([^\]\s]+)\]/gu)) {
+      const id = reference[1]
+      references.set(id, (references.get(id) ?? 0) + 1)
+    }
+  }
+  const ids = new Set([...definitions.keys(), ...references.keys()])
+  return [...ids].map((id) => ({ id, definition: definitions.get(id) ?? '', referenceCount: references.get(id) ?? 0 }))
+}
+
 export function cleanWritingWhitespace(markdown: string) {
   return markdown
     .split(/\r?\n/u)
