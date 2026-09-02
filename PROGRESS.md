@@ -614,4 +614,4 @@
 - 版本统一为 `1.0.0-rc.1`，CHANGELOG 已更新；当前 release 构建生成 EXE 与 NSIS 安装包。
 - 当前 HEAD 直连 release CDP E2E 已通过 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 和全部既有阶段标记，覆盖新增规划区菜单、右键粗体、四角避让、Escape/外部关闭和“运行一致性检查”插件扩展项。
 - 官方 Tauri WebDriver（不启用原生文件对话框）在当前 release 上复跑通过全部阶段标记；原生 UI Automation 仅剩附件选择器的系统焦点/列表刷新竞态。
-- 当前候选尚未推送，GitHub Actions 的本次 HEAD 结果和 `v1.0.0-rc.1` 远程 tag 待发布授权后再确认；官方 WebDriver 原生附件选择器复跑记录为系统焦点/列表刷新竞态，未虚报为通过。
+- 当前候选已推送到 GitHub `main`（HEAD `5f47776`）；run `33667077924` 的 Frontend/Rust 两个 job 均为 success。`v1.0.0-rc.1` 远程 tag 尚未创建；官方 WebDriver 原生附件选择器复跑仍记录为系统焦点/列表刷新竞态，未虚报为通过。

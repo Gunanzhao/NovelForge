@@ -386,6 +386,8 @@
 
 ## P3-02 官方 WebDriver 与原生对话框验证（2026-08-31）
 
+> 本节记录 2026-08-31 旧候选的成功复跑；2026-09-03 当前候选的原生附件选择器状态以文末 RC 验收记录为准。
+
 - 命令：设置 EDGE_DRIVER_PATH 指向与 WebView2 151 匹配的官方 msedgedriver.exe，并设置 NOVELFORGE_E2E_WEBDRIVER=1、NOVELFORGE_E2E_NATIVE_DIALOGS=1 后运行 pnpm.cmd test:e2e:desktop。
 - 结果：通过；tauri-driver 2.0.6 + Microsoft Edge WebDriver 151.0.4129.107 建立 WebView2 会话，原生文件夹/文件选择器由 Windows UI Automation 完成，确认/提示框由 WebDriver 对话框事件处理。
 - 新增回归：真实应用重启后的保存失败与恢复提示、恢复内容预览/写回/清理、拖拽和批量恢复、Wiki 跳转、设置/命令面板、原生附件导入。
@@ -461,7 +463,9 @@
 - 失败基线为 run 33387176701：Frontend checks 通过，Rust cargo check 退出 101，cargo test 被跳过。
 - commit ed5d0cc 增加 Linux 系统依赖并升级 Node 24 action runtime；修复后的两个 job 均为 success，P2-03 远程门禁关闭。
 
-## 全局右键菜单回归（2026-09-02）
+## 全局右键菜单回归（2026-09-02，早期记录）
+
+> 本节为第一次菜单回归记录；汇总结果和当前候选状态见后文，历史证据保留用于追溯。
 
 | 层级 | 命令 / 范围 | 结果 |
 | --- | --- | --- |
@@ -478,7 +482,7 @@
 - release WebView2 CDP E2E 已覆盖编辑器和章节树右键、四角避让、Escape 关闭及完整既有流程，所有阶段标记通过。
 - 本轮未重复官方 WebDriver/native dialog 流程；原生确认框、剪贴板权限和逐项视觉检查仍可按 DESKTOP_E2E_CHECKLIST.md 进行补充抽查。
 
-## 全局右键菜单回归（2026-09-02）
+## 全局右键菜单回归（2026-09-02，汇总记录）
 
 | 层级 | 命令 / 范围 | 结果 |
 | --- | --- | --- |
@@ -510,4 +514,4 @@
 ### 当前限制
 
 - 官方 Tauri WebDriver + 原生 UI Automation 已使用匹配驱动尝试复跑；项目创建、恢复重启等阶段可通过，但原生附件选择器存在系统列表刷新/焦点竞态，当前候选未将该次失败伪装为通过。直连 CDP 结果不受影响；可在稳定桌面焦点环境重试。
-- 当前候选变更尚未推送，因而不能宣称本次 HEAD 的 GitHub Actions 两个 job 已通过；历史 run 33529012970 不作为本次证据。
+- 当前候选已推送到 GitHub `main`（HEAD `5f47776`）；run `33667077924` 的 Frontend checks 与 Rust checks 均为 success。历史 run `33529012970` 仍不作为本次 HEAD 证据。

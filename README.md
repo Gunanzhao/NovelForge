@@ -58,4 +58,4 @@ pnpm tauri build
 
 当前版本已覆盖构建任务文档中的 MVP、写作规划、关系图、一致性、附件、结构管理、多格式导出、AI 辅助、数据恢复与大型正文树性能能力；1000 章 / 100 万字真实文件与 SQLite 性能验收已通过，Windows x64 release EXE 与 NSIS 安装包已构建并完成进程级冒烟。直连 CDP、官方 Tauri WebDriver、原生文件选择器、恢复重启、100,000 字单章滚动/输入观察和 rAF/overflow 采样均有回归记录；E2E 还支持可选测试封面夹具并保留项目供外部阅读器复核，Markdown/TXT/HTML/DOCX/EPUB/PDF 六种格式均已在对应阅读器完成本机视觉核对。没有 API Key 时核心写作流程和本地 AI 草稿模式完全可用。
 
-当前 RC 的直连 release CDP 专项已再次通过正文树、CodeMirror、Wiki 预览、场景/大纲/时间线/伏笔/看板菜单、边缘避让和外部关闭；官方 WebDriver 的原生附件选择器在本机复跑时出现焦点/列表刷新竞态，详见 `TEST_REPORT.md`，不影响直连结果。当前候选未推送，CI 不宣称为本次 HEAD 已通过。
+当前 RC 的直连 release CDP 专项已再次通过正文树、CodeMirror、Wiki 预览、场景/大纲/时间线/伏笔/看板菜单、边缘避让和外部关闭；官方 WebDriver 的原生附件选择器在本机复跑时出现焦点/列表刷新竞态，详见 `TEST_REPORT.md`，不影响直连结果。当前候选已推送到 GitHub `main`（HEAD `5f47776`），run `33667077924` 的 Frontend/Rust 两个 job 均已成功；`v1.0.0-rc.1` 远程 tag 尚未创建。

@@ -64,5 +64,5 @@
 - [x] `pnpm.cmd tauri:build` 生成 1.0.0-rc.1 release EXE 与 NSIS。
 - [x] 当前 HEAD 直连 release CDP E2E 通过 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 及全部既有阶段标记。
 - [~] 官方 WebDriver + 原生附件选择器复跑：核心流程可运行，但本机出现焦点/列表刷新竞态，需稳定桌面焦点环境复跑后再关闭该证据项。
-- [ ] 当前 HEAD GitHub Actions Frontend/Rust 两个 job：候选尚未推送，待授权推送后确认。
+- [x] 当前 HEAD GitHub Actions Frontend/Rust 两个 job：已推送 HEAD `5f47776`，run `33667077924` 两个 job 均 success。
 - [ ] `v1.0.0-rc.1` 远程 tag：待最终发布授权后创建并推送。
