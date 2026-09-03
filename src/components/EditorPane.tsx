@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { redo, undo } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
@@ -8,10 +8,8 @@ import {
   Bold, Code2, Columns3, Copy, Eye, Heading1, Image, Italic, Link, List, ListChecks, ListOrdered,
   Maximize2, Minus, PenLine, Quote, Redo2, Save, Search, Scissors, Sparkles, Strikethrough, Undo2,
 } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import {
-  applyMarkdownCommand, wikiMarkdown, wikiRanges, wikiTargetFromHref, type MarkdownCommand,
+  applyMarkdownCommand, wikiRanges, wikiTargetFromHref, type MarkdownCommand,
 } from '../lib/markdown'
 import type { ContextMenuItem } from '../lib/context-menu'
 import { readClipboardText, writeClipboardText } from '../lib/clipboard'
@@ -20,6 +18,7 @@ import { ENTITY_LABELS, NODE_STATUS_LABELS, type EntityRecord } from '../lib/typ
 import { useAppStore } from '../stores/app-store'
 import { Button, IconButton } from './ui'
 import { useContextMenu } from './ContextMenu'
+import { MarkdownPreview } from './MarkdownPreview'
 
 function wikiDecorationSet(source: string): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
@@ -229,28 +228,7 @@ export function EditorPane() {
     return () => window.removeEventListener('novelforge:wiki-link-click', onWikiLinkClick)
   }, [resolveWikiTarget])
 
-  const previewComponents = useMemo(() => ({
-    a: ({ node, href, children, ...anchorProps }: ComponentProps<'a'> & { node?: unknown }) => {
-      void node
-      const target = wikiTargetFromHref(href)
-      if (!target) return <a {...anchorProps} href={href}>{children}</a>
-      const candidates = (data?.entities ?? []).filter((entity) => wikiTitleKey(entity.title) === wikiTitleKey(target))
-      const duplicate = candidates.length > 1
-      return <a
-        {...anchorProps}
-        href={href}
-        className={'wiki-link' + (duplicate ? ' ambiguous' : candidates.length ? '' : ' missing')}
-        aria-label={duplicate ? target + '（多个同名条目）' : candidates.length ? target : target + '（未建档）'}
-        onClick={(event) => {
-          event.preventDefault()
-          resolveWikiTarget(target)
-        }}
-      >{children}</a>
-    },
-  }), [data?.entities, resolveWikiTarget])
-
   if (!document) return <div className="editor-placeholder"><div><PenLine size={27} /><strong>选择一个章节开始写作</strong><span>正文以 Markdown 文件保存，切换章节不会加载整本小说。</span></div></div>
-  const preview = wikiMarkdown(document.content)
 
   return <div className="manuscript-view">
     <div className="editor-header">
@@ -263,7 +241,7 @@ export function EditorPane() {
     </div>
     <div className={'editor-body mode-' + editorMode}>
       {editorMode !== 'preview' ? <div className="editor-pane" onContextMenu={openEditorContextMenu}><CodeMirror value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={(view) => { editorViewRef.current = view; reportEditorSelection({ state: view.state } as ViewUpdate) }} onUpdate={reportEditorSelection} onChange={(value) => updateContent(value)} /></div> : null}
-      {editorMode !== 'markdown' ? <div className="editor-pane" onContextMenu={handlePreviewContextMenu}><article className="preview"><ReactMarkdown remarkPlugins={[remarkGfm]} components={previewComponents} urlTransform={(url) => url}>{preview}</ReactMarkdown></article></div> : null}
+      {editorMode !== 'markdown' ? <div className="editor-pane" onContextMenu={handlePreviewContextMenu}><article className="preview"><MarkdownPreview markdown={document.content} entities={data?.entities} onWikiLink={resolveWikiTarget} /></article></div> : null}
     </div>
     {wikiResolution ? <div className="wiki-resolution" role="status">
       <div className="wiki-resolution-copy"><strong>{wikiResolution.target}</strong><span>{wikiResolution.candidates.length > 1 ? '找到多个同名条目，请选择要打开的资料。' : '没有找到对应资料，可以先去搜索项目内容。'}</span></div>
