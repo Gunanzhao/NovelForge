@@ -14,7 +14,7 @@
 
 ### Release
 
-- 版本升级为 `1.0.0-rc.2`；已公开的 `v1.0.0-rc.1` 不移动。rc.2 Windows NSIS 安装包将在远程发布授权后附加到 GitHub Pre-release。
+- 版本升级为 `1.0.0-rc.2`；已公开的 `v1.0.0-rc.1` 不移动。GitHub [Pre-release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.0.0-rc.2) 已发布并附加 Windows NSIS 安装包 `NovelForge_1.0.0-rc.2_x64-setup.exe`。
 
 ## 1.0.0-rc.1
 

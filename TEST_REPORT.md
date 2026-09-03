@@ -540,4 +540,5 @@
 
 - `pnpm.cmd install --frozen-lockfile`、typecheck、lint、`pnpm.cmd test -- --run`（17 文件 / 75 项）、build、cargo check、cargo test、ignored 大型基准（50.90 秒）和 `pnpm.cmd tauri:build` 全部通过。
 - rc.2 代码提交 `961ad26`，release 产物为 `src-tauri/target/release/novelforge.exe` 与 `NovelForge_1.0.0-rc.2_x64-setup.exe`；旧 `v1.0.0-rc.1` tag 未移动。
-- rc.2 远程 tag、最新 HEAD CI 和 GitHub Pre-release 将在获得本轮远程发布授权后记录；`main` Required Checks 仍是管理员待办。
+- rc.2 远程 tag 已验证：`v1.0.0-rc.2` 指向 `961ad26`，`main` 指向 `5aac219`；GitHub Actions run #11（`33712235453`）Frontend/Rust 均 success。
+- GitHub [Pre-release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.0.0-rc.2) 已发布，NSIS 资产 `NovelForge_1.0.0-rc.2_x64-setup.exe` 状态为 uploaded，大小 5,127,968 bytes，SHA-256 为 `C760969ECC72DEA0A7B6FFC5026C49B72597C68972FA41AAC9697412FA2ABD1A`；`main` Required Checks 仍是管理员待办。

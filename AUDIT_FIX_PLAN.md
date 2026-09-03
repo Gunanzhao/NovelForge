@@ -56,7 +56,7 @@
 - [x] FIX-03 Native Dialog：地址栏导航、ValuePattern、条件等待、刷新控件重解析和最多三次有限重试；rc.2 release WebDriver 真实完成文件夹选择和附件导入并输出 `NATIVE_DIALOGS_OK`。
 - [x] FIX-04 文档已区分 rc.1 历史记录与 rc.2 Final Validation，并同步 README、SPEC、TODO、PROGRESS、TEST_REPORT、RELEASE_CHECKLIST、CHANGELOG、DECISIONS。
 - [x] 本地前端/Rust 全量门禁、1000 章 / 100 万字基准（50.90 秒）、Windows rc.2 release 构建、CDP 和官方 WebDriver 全部通过。
-- [ ] rc.2 远程 tag、最新 HEAD Actions、GitHub Pre-release/安装包上传：待远程发布授权。
+- [x] rc.2 远程 tag、最新 HEAD Actions、GitHub Pre-release/安装包上传：`main`=`5aac219`、tag=`961ad26`、run #11（`33712235453`）success；[Pre-release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.0.0-rc.2) 已附加 NSIS 安装包。
 - [ ] `main` Required Checks：GitHub Settings / Rulesets 管理员待办。
 
 ## 记录

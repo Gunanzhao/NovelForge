@@ -8,7 +8,8 @@
 - [x] FIX-03 rc.2 release CDP 与官方 WebDriver + Native Dialog 全阶段通过，含 `NATIVE_DIALOGS_OK`。
 - [x] 前端 17 文件 / 75 项测试、Rust 常规测试 35 项、1000 章 / 100 万字基准（50.90 秒）和 `pnpm.cmd tauri:build` 通过。
 - [x] rc.2 产物：`src-tauri/target/release/novelforge.exe`、`src-tauri/target/release/bundle/nsis/NovelForge_1.0.0-rc.2_x64-setup.exe`。
-- [ ] 推送 rc.2 代码/tag、确认最新 HEAD CI、创建 GitHub Pre-release 并上传 NSIS：待本轮远程发布授权。
+- [x] 推送 rc.2 代码/tag、确认最新 HEAD CI、创建 GitHub Pre-release 并上传 NSIS：`main`=`5aac219`，`v1.0.0-rc.2`=`961ad26`，run #11（`33712235453`）success；[Pre-release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.0.0-rc.2) 已发布。
+- [x] NSIS 资产已核验：`NovelForge_1.0.0-rc.2_x64-setup.exe`，5,127,968 bytes，SHA-256 `C760969ECC72DEA0A7B6FFC5026C49B72597C68972FA41AAC9697412FA2ABD1A`。
 
 ## 1.0.0-rc.1 历史记录
 

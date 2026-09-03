@@ -624,4 +624,4 @@
 - FIX-02：宽度转换覆盖完整 ASCII 可见字符范围，Markdown 标记、代码、URL、链接地址、Wiki/脚注语法、frontmatter 和表格结构均受保护；新增完整范围与可逆性测试。
 - FIX-03：Native Dialog 自动化改用地址栏导航、UIA ValuePattern 优先、刷新控件重解析、条件等待和最多三次有限重试；rc.2 release 真实通过 `NATIVE_DIALOGS_OK`。
 - rc.2 本地门禁：前端 17 文件 / 75 项测试、Rust 35 项常规测试、1000 章 / 100 万字基准 50.90 秒、release EXE/NSIS、CDP 与官方 WebDriver 全部通过。
-- rc.2 代码提交 `961ad26`；远程推送/tag/Pre-release 仍需本轮发布授权，旧 rc.1 tag 不移动。
+- rc.2 代码提交 `961ad26`；`main` 已推送至 `5aac219`，`v1.0.0-rc.2` 已创建且旧 rc.1 tag 不移动；GitHub Actions run #11（`33712235453`）通过，[Pre-release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.0.0-rc.2) 与 NSIS 安装包已发布。

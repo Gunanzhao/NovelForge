@@ -79,5 +79,5 @@
 - [x] 前端 17 个测试文件 / 75 项测试、typecheck、lint、build 通过；Rust 35 项常规测试、cargo check 通过。
 - [x] 1000 章 / 100 万字 ignored 基准通过（50.90 秒）；`pnpm.cmd tauri:build` 生成 rc.2 EXE 与 NSIS。
 - [x] rc.2 release CDP 与官方 WebDriver（含 Native Dialog）全部阶段标记通过，包括 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`NATIVE_DIALOGS_OK`、`EXPORTS_OK`。
-- [ ] rc.2 远程 tag、最新 HEAD GitHub Actions 和 GitHub Pre-release：待远程发布授权后完成；已公开 rc.1 不移动。
+- [x] rc.2 远程 tag、最新 HEAD GitHub Actions 和 GitHub Pre-release 已完成：`main`=`5aac219`，`v1.0.0-rc.2`=`961ad26`，run #11（`33712235453`）success；[Pre-release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.0.0-rc.2) 已附加 NSIS 安装包；已公开 rc.1 不移动。
 - [ ] `main` Required Checks：保留为 GitHub Settings / Rulesets 管理员待办。

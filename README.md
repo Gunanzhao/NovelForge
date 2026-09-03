@@ -65,4 +65,5 @@ pnpm tauri build
 - FIX-01：编辑器预览使用 ReactMarkdown + remark-gfm 真正渲染普通/命名脚注，提供中文脚注标签、引用锚点和返回正文锚点；组件级测试覆盖多次引用、中文内容和代码区排除。
 - FIX-02：字符全角/半角转换覆盖 U+0021–U+007E 与 U+FF01–U+FF5E，保护 Markdown 标记、代码、URL、链接地址、Wiki/脚注语法、frontmatter 和表格结构；普通空格仍需显式选项。
 - FIX-03：Native Dialog UI Automation 改为地址栏导航、ValuePattern 优先、控件重解析和最多三次有限重试；rc.2 release 已通过 `NATIVE_DIALOGS_OK` 及全部桌面阶段标记。
-- rc.2 发布候选代码提交为 `961ad26`，旧 `v1.0.0-rc.1` tag 未移动；正式 GitHub Pre-release 需在远程授权后创建。
+- rc.2 发布候选代码提交为 `961ad26`，旧 `v1.0.0-rc.1` tag 未移动；`main` 已推送至 `5aac219`，GitHub Actions run #11（`33712235453`）通过。
+- GitHub Pre-release：[v1.0.0-rc.2](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.0.0-rc.2) 已发布并附带 NSIS 安装包 `NovelForge_1.0.0-rc.2_x64-setup.exe`（SHA-256：`C760969ECC72DEA0A7B6FFC5026C49B72597C68972FA41AAC9697412FA2ABD1A`）。
