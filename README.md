@@ -52,13 +52,13 @@ pnpm tauri build
 
 正文不进入数据库专有格式，而是保存在项目 manuscript/ 下的普通 Markdown 文件。SQLite 数据库位于 .novelforge/database.sqlite，恢复文件位于 .novelforge/recovery/，历史位于 .novelforge/history/。删除内容先移动到 trash/，不会直接永久删除。
 
-详细产品范围见 SPEC.md，任务状态见 TODO.md 和 PROGRESS.md；插件扩展协议见 docs/PLUGIN_API.md，审计收尾记录见 AUDIT_FIX_PLAN.md。
+本 README 汇总产品范围、构建方式、数据安全边界和当前发布状态。
 
 ## 当前范围
 
-当前版本已覆盖构建任务文档中的 MVP、写作规划、关系图、一致性、附件、结构管理、多格式导出、AI 辅助、数据恢复与大型正文树性能能力；1000 章 / 100 万字真实文件与 SQLite 性能验收已通过，Windows x64 release EXE 与 NSIS 安装包已构建并完成进程级冒烟。直连 CDP、官方 Tauri WebDriver、原生文件选择器、恢复重启、100,000 字单章滚动/输入观察和 rAF/overflow 采样均有回归记录；E2E 还支持可选测试封面夹具并保留项目供外部阅读器复核，Markdown/TXT/HTML/DOCX/EPUB/PDF 六种格式均已在对应阅读器完成本机视觉核对。没有 API Key 时核心写作流程和本地 AI 草稿模式完全可用。
+当前版本已覆盖 MVP、写作规划、关系图、一致性、附件、结构管理、多格式导出、AI 辅助、数据恢复与大型正文树性能能力；1000 章 / 100 万字真实文件与 SQLite 性能验收已通过，Windows x64 release EXE 与 NSIS 安装包已构建并完成进程级冒烟。Markdown/TXT/HTML/DOCX/EPUB/PDF 六种格式均已完成本机视觉核对；没有 API Key 时核心写作流程和本地 AI 草稿模式完全可用。
 
-当前 RC 的直连 release CDP 专项已再次通过正文树、CodeMirror、Wiki 预览、场景/大纲/时间线/伏笔/看板菜单、边缘避让和外部关闭；官方 WebDriver 的原生附件选择器在本机复跑时出现焦点/列表刷新竞态，详见 `TEST_REPORT.md`，不影响直连结果。发布候选代码提交 `40ae175` 已推送到 GitHub `main`，run `33699593424` 的 Frontend/Rust 两个 job 均已成功；随后发布记录提交 `1751dfd` 的 run `33705658724` 也均成功；`v1.0.0-rc.1` 已创建并指向 `40ae175`。
+rc.2 的直连 release CDP、官方 Tauri WebDriver、原生文件选择器、恢复重启、右键菜单、剪贴板和导出验收均通过；发布提交 `961ad26`，`main` 发布记录提交 `7bdf34f`，GitHub Actions run #12 的 Frontend/Rust 两个 job 均成功。旧 `v1.0.0-rc.1` tag 保持不变。
 
 ## V1.0.0-rc.2 最终修正（2026-09-03）
 
