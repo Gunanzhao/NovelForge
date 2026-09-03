@@ -65,4 +65,4 @@
 - [x] 当前 HEAD 直连 release CDP E2E 通过 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 及全部既有阶段标记。
 - [~] 官方 WebDriver + 原生附件选择器复跑：核心流程可运行，但本机出现焦点/列表刷新竞态，需稳定桌面焦点环境复跑后再关闭该证据项。
 - [x] 当前 HEAD GitHub Actions Frontend/Rust 两个 job：已推送 HEAD `18c0f81`，run `33668961869` 两个 job 均 success。
-- [ ] `v1.0.0-rc.1` 远程 tag：待最终发布授权后创建并推送。
+- [x] `v1.0.0-rc.1` 远程 tag：已创建并推送，指向已通过 CI 的 HEAD `40ae175`。

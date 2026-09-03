@@ -24,8 +24,8 @@
 - [x] 当前 release 直连 CDP E2E：旧阶段及 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 全部通过。
 - [x] 当前 release 官方 Tauri WebDriver WebView2（不启用原生文件对话框）：旧阶段及 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 全部通过。
 - [~] 官方 WebDriver + Native Dialog：附件选择器在本机出现焦点/列表刷新竞态，待稳定桌面焦点环境复跑。
-- [x] 当前 HEAD GitHub Actions Frontend checks / Rust checks：HEAD `18c0f81` 已推送，run `33668961869` 两个 job 均 success。
-- [ ] 创建并推送 `v1.0.0-rc.1`：需最终发布授权；当前未创建远程 tag。
+- [x] 当前 HEAD GitHub Actions Frontend checks / Rust checks：HEAD `40ae175` 已推送，run `33699593424` 两个 job 均 success。
+- [x] 创建并推送 `v1.0.0-rc.1`：已按发布确认创建并推送，指向 HEAD `40ae175`。
 
 ## 仓库维护建议
 
