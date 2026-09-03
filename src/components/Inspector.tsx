@@ -55,7 +55,7 @@ export function Inspector() {
   }
 
   function width(direction: 'full' | 'half') {
-    if (!window.confirm('这会转换正文中的英文字母和数字（代码、链接和 Markdown 标记会保留），是否继续？')) return
+    if (!window.confirm('这会转换正文中的 ASCII 字符为全角或半角（代码、链接地址、Wiki/脚注语法和 Markdown 标记会保留），是否继续？')) return
     updateContent(direction === 'full' ? convertFullwidth(document!.content) : convertHalfwidth(document!.content))
   }
 

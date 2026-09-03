@@ -34,6 +34,42 @@ describe('Markdown writing helpers', () => {
     expect(convertHalfwidth(convertFullwidth(source))).toBe(source)
   })
 
+  it('converts the complete ASCII width range while preserving Markdown structure and destinations', () => {
+    const half = [
+      '---\ntitle: Frontmatter!@#\n---',
+      'ABC123 !@#$%^&*() []{}<>?/\\|',
+      '**ABC** *italic*',
+      '# 标题',
+      '- 列表',
+      '1. 有序列表',
+      '`!@# inline code`',
+      '```md\n!@# fenced code\n```',
+      'https://example.com/a?x=1&y=2',
+      '[链接!](relative/path?q=1)',
+      '![图片!](image.png)',
+      '[[目标!]]',
+      '正文[^note]。\n\n[^note]: 脚注!@#',
+    ].join('\n')
+    const full = convertFullwidth(half)
+    expect(full).toContain('ＡＢＣ１２３ ！＠＃＄％＾＆＊（） ［］｛｝＜＞？／\\|')
+    expect(full).toContain('**ＡＢＣ** *ｉｔａｌｉｃ*')
+    expect(full).toContain('# 标题')
+    expect(full).toContain('- 列表')
+    expect(full).toContain('1. 有序列表')
+    expect(full).toContain('`!@# inline code`')
+    expect(full).toContain('```md\n!@# fenced code\n```')
+    expect(full).toContain('https://example.com/a?x=1&y=2')
+    expect(full).toContain('[链接！](relative/path?q=1)')
+    expect(full).toContain('![图片！](image.png)')
+    expect(full).toContain('[[目标!]]')
+    expect(full).toContain('正文[^note]。')
+    expect(full).toContain('[^note]: 脚注！＠＃')
+    expect(full).toContain('---\ntitle: Frontmatter!@#\n---')
+    expect(convertHalfwidth(full)).toBe(half)
+    expect(convertFullwidth('中英 A B', { convertSpace: true })).toBe('中英　Ａ　Ｂ')
+    expect(convertHalfwidth('中英　Ａ　Ｂ', { convertSpace: true })).toBe('中英 A B')
+  })
+
   it('recognizes Chinese, named and repeated footnotes while ignoring code examples', () => {
     const tick = String.fromCharCode(96)
     const source = '正文[^1] 和正文[^note][^1]。\n\n[^1]: 中文说明\n[^note]: 命名说明\n\n' + tick + '[^code]' + tick + '\n\n```md\n[^fenced]: 不应被识别\n```'
