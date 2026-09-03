@@ -30,7 +30,8 @@ const remarkRehypeOptions = {
 export function MarkdownPreview({ markdown, entities = [], onWikiLink }: MarkdownPreviewProps) {
   const preview = useMemo(() => wikiMarkdown(markdown), [markdown])
   const components = useMemo(() => ({
-    a: ({ href, children, ...anchorProps }: ComponentProps<'a'>) => {
+    a: ({ node, href, children, ...anchorProps }: ComponentProps<'a'> & { node?: unknown }) => {
+      void node
       const target = wikiTargetFromHref(href)
       if (!target) return <a {...anchorProps} href={href}>{children}</a>
       const candidates = entities.filter((entity) => wikiTitleKey(entity.title) === wikiTitleKey(target))
