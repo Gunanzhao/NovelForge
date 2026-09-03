@@ -49,6 +49,8 @@
 
 ## 最终验收
 
+> 本节记录上一候选的历史验收；2026-09-03 当前 RC 的状态以“V1.0.0-rc.1 当前收尾”为准。
+
 - [x] Windows x64 release EXE 与 NSIS 安装包构建、启动冒烟
 - [x] P2/P3 代码收尾：AI 上下文增强、命令与存储模块边界、GitHub Actions CI、10 万字单章验收、内部插件 API
 - [x] 真实桌面验收收尾（直连 CDP、官方 Tauri WebDriver、原生文件选择器/确认框/提示框、恢复重启自动化、两种模式量化 FPS、100,000 字滚动/输入观察和带测试封面的六种导出阅读器视觉复核均已通过；Calibre 目录双击已验证正文跳转）
@@ -64,5 +66,5 @@
 - [x] `pnpm.cmd tauri:build` 生成 1.0.0-rc.1 release EXE 与 NSIS。
 - [x] 当前 HEAD 直连 release CDP E2E 通过 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 及全部既有阶段标记。
 - [~] 官方 WebDriver + 原生附件选择器复跑：核心流程可运行，但本机出现焦点/列表刷新竞态，需稳定桌面焦点环境复跑后再关闭该证据项。
-- [x] 当前 HEAD GitHub Actions Frontend/Rust 两个 job：已推送 HEAD `18c0f81`，run `33668961869` 两个 job 均 success。
-- [x] `v1.0.0-rc.1` 远程 tag：已创建并推送，指向已通过 CI 的 HEAD `40ae175`。
+- [x] 发布候选代码 GitHub Actions Frontend/Rust 两个 job：提交 `40ae175` 的 run `33699593424` 均 success；发布记录提交 `1751dfd` 的 run `33705658724` 也均 success。
+- [x] `v1.0.0-rc.1` 远程 tag：已创建并推送，指向已通过 CI 的发布候选代码提交 `40ae175`。

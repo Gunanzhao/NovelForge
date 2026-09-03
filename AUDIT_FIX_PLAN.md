@@ -18,6 +18,8 @@
 
 ## 后续跟踪
 
+> 本节记录 2026-08-31 候选的历史完成状态；2026-09-03 当前 RC 的最终状态以文末“V1.0.0-rc.1 追踪”为准。
+
 - [x] P2-01 AI 上下文：支持当前选区/段落、最近 N 章、指定章节与资料，并提供预算和选区结果应用。
 - [x] P2-02 commands.rs 模块化
 - [x] P2-03 CI（GitHub Actions run 33529012970 的 Frontend checks 与 Ubuntu Rust checks 全部通过）
@@ -42,8 +44,8 @@
 - [x] RC-06/07：README、SPEC、TODO、PROGRESS、TEST_REPORT、DECISIONS、DESKTOP_E2E_CHECKLIST、CHANGELOG 已增加当前 RC 记录；版本统一为 `1.0.0-rc.1`，新增 `RELEASE_CHECKLIST.md`。
 - [x] RC-08 本地门禁：前端 72 项测试、Rust 35 项常规测试、1000 章/100 万字基准（58.76 秒）、release EXE/NSIS 均已通过。
 - [~] RC-05 官方 WebDriver 原生附件选择器：当前本机复跑出现系统焦点/列表刷新竞态，核心流程可运行但尚未将该次运行标记为通过。
-- [x] RC-08 当前 HEAD GitHub Actions：HEAD `40ae175` 已推送，run `33699593424` 的 Frontend/Rust 两个 job 均 success。
-- [x] RC-07 远程发布 tag：`v1.0.0-rc.1` 已创建并推送，指向已通过 CI 的 HEAD `40ae175`。
+- [x] RC-08 发布候选代码 GitHub Actions：提交 `40ae175` 已推送，run `33699593424` 的 Frontend/Rust 两个 job 均 success；发布记录提交 `1751dfd` 的 run `33705658724` 也均 success。
+- [x] RC-07 远程发布 tag：`v1.0.0-rc.1` 已创建并推送，指向已通过 CI 的发布候选代码提交 `40ae175`。
 
 ## 记录
 
@@ -73,4 +75,4 @@
 - 2026-08-31：P3-02 人工门禁收尾；在 release WebView2 中完成 100,000 字单章插入、删除、搜索、保存、关闭/重开与滚动输入观察，直连和官方 WebDriver 的 rAF 采样分别为约 142.8/139.0 FPS（修复后重跑约 137.7 FPS）。使用记事本核对 Markdown/TXT、Edge 核对 HTML/PDF、LibreOffice Writer 核对 DOCX、Calibre 9.14 核对 EPUB；Calibre 目录中双击“第二卷”后实际跳转到“第二卷 / 第二章 副本 / 序章”正文页，六种导出均确认中文、标题层级、列表、目录、章节顺序和支持格式的封面可读。P3-02 及人工门禁改为完成。
 - 2026-08-31：官方 WebDriver 最终复跑使用与 WebView2 151.0.4129.107 匹配的 EdgeDriver；修复原生选择器控件过滤、路径输入回退和目录刷新后控件重解析后，NATIVE_DIALOGS_OK、RECOVERY_FAILURE_OK、EXPORTS_OK 及其余全部阶段标记再次通过，100,000 字 editor-pane 276 帧（约 137.75 FPS）。临时 E2E 项目已清理，用户提供的收尾计划文件保持未跟踪。
 - 2026-09-01：远程 run 33387176701 暴露 Ubuntu Rust cargo check 未闭环；commit ed5d0cc 按 Tauri 2 官方 Debian 前置要求安装 WebKitGTK/GTK 系统依赖，并将 checkout/cache/setup-node/pnpm setup 升级到 Node 24 运行时版本。修复后的 run 33529012970 中 Linux 依赖安装、cargo check、cargo test 与全部 Frontend checks 均通过，两个 check-run 均为 success 且 0 annotations；P2-03 正式关闭。
-- 2026-09-03：按用户授权将 HEAD `40ae175` 推送到 GitHub `main`；run `33699593424` 的 Frontend checks 与 Rust checks 均 success。随后按发布确认创建并推送远程 `v1.0.0-rc.1` tag；原生附件选择器仍保留系统焦点/列表刷新竞态记录。
+- 2026-09-03：按用户授权将发布候选代码提交 `40ae175` 推送到 GitHub `main`；run `33699593424` 的 Frontend checks 与 Rust checks 均 success。随后按发布确认创建并推送远程 `v1.0.0-rc.1` tag；发布记录提交 `1751dfd` 的 run `33705658724` 也均 success；原生附件选择器仍保留系统焦点/列表刷新竞态记录。

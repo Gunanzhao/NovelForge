@@ -514,4 +514,4 @@
 ### 当前限制
 
 - 官方 Tauri WebDriver + 原生 UI Automation 已使用匹配驱动尝试复跑；项目创建、恢复重启等阶段可通过，但原生附件选择器存在系统列表刷新/焦点竞态，当前候选未将该次失败伪装为通过。直连 CDP 结果不受影响；可在稳定桌面焦点环境重试。
-- 当前候选已推送到 GitHub `main`（HEAD `40ae175`）；run `33699593424` 的 Frontend checks 与 Rust checks 均为 success。`v1.0.0-rc.1` 已创建并指向该提交；历史 run `33529012970` 仍不作为本次 HEAD 证据。
+- 发布候选代码提交 `40ae175` 已推送到 GitHub `main`；run `33699593424` 的 Frontend checks 与 Rust checks 均为 success；随后发布记录提交 `1751dfd` 的 run `33705658724` 也均为 success。`v1.0.0-rc.1` 已创建并指向 `40ae175`；历史 run `33529012970` 仍不作为本次发布候选证据。
