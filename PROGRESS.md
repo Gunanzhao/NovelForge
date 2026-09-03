@@ -605,6 +605,8 @@
 - 当前前端门禁：pnpm.cmd typecheck、pnpm.cmd lint、pnpm.cmd test -- --run 通过（16 个测试文件 / 70 项测试）。
 - release WebView2 CDP E2E 已通过 CONTEXT_MENU_OK、章节树菜单、四角避让和 Escape 关闭断言；完整既有桌面流程标记亦全部通过。
 
+> 历史记录：下方 rc.1 收尾保留用于追溯；rc.2 的最终验证见文末最新条目。
+
 ## 2026-09-03：V1.0.0-rc.1 最终收尾
 
 - 完成 Rust commands 领域实现真实迁移：project、manuscript、entities、recovery、trash、consistency 和 export 不再只有 facade；`commands/mod.rs` 保留共享 helper 与兼容入口，约 33 KB。
@@ -615,3 +617,11 @@
 - 当前 HEAD 直连 release CDP E2E 已通过 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`EXPORTS_OK` 和全部既有阶段标记，覆盖新增规划区菜单、右键粗体、四角避让、Escape/外部关闭和“运行一致性检查”插件扩展项。
 - 官方 Tauri WebDriver（不启用原生文件对话框）在当前 release 上复跑通过全部阶段标记；原生 UI Automation 仅剩附件选择器的系统焦点/列表刷新竞态。
 - 发布候选代码提交 `40ae175` 已推送到 GitHub `main`；run `33699593424` 的 Frontend/Rust 两个 job 均为 success。随后发布记录提交 `1751dfd` 的 run `33705658724` 也均为 success；`v1.0.0-rc.1` 已创建并指向 `40ae175`；官方 WebDriver 原生附件选择器复跑仍记录为系统焦点/列表刷新竞态，未虚报为通过。
+
+## 2026-09-03：V1.0.0-rc.2 最终修正
+
+- FIX-01：新增 `MarkdownPreview`，使用 ReactMarkdown/remark-gfm 真实渲染中文普通/命名脚注；配置引用与返回正文锚点及中文无障碍标签，新增 2 项组件级测试。
+- FIX-02：宽度转换覆盖完整 ASCII 可见字符范围，Markdown 标记、代码、URL、链接地址、Wiki/脚注语法、frontmatter 和表格结构均受保护；新增完整范围与可逆性测试。
+- FIX-03：Native Dialog 自动化改用地址栏导航、UIA ValuePattern 优先、刷新控件重解析、条件等待和最多三次有限重试；rc.2 release 真实通过 `NATIVE_DIALOGS_OK`。
+- rc.2 本地门禁：前端 17 文件 / 75 项测试、Rust 35 项常规测试、1000 章 / 100 万字基准 50.90 秒、release EXE/NSIS、CDP 与官方 WebDriver 全部通过。
+- rc.2 代码提交 `961ad26`；远程推送/tag/Pre-release 仍需本轮发布授权，旧 rc.1 tag 不移动。

@@ -1,5 +1,21 @@
 # 更新日志
 
+## 1.0.0-rc.2
+
+### Added
+
+- 编辑器预览真实渲染普通/命名 Markdown 脚注，提供中文无障碍标签、引用锚点和返回正文锚点；新增 React 组件级脚注回归测试。
+- 字符全角/半角转换扩展为完整 ASCII 可见字符范围，并保护 Markdown 结构、代码、URL、链接地址、Wiki/脚注语法、frontmatter 和表格结构。
+
+### Fixed
+
+- 稳定 Windows Native Dialog UI Automation：地址栏导航、ValuePattern 优先、控件树重解析、条件等待和最多三次有限重试；不依赖文件列表索引。
+- Inspector 宽度转换确认文案与完整 ASCII 产品规格一致。
+
+### Release
+
+- 版本升级为 `1.0.0-rc.2`；已公开的 `v1.0.0-rc.1` 不移动。rc.2 Windows NSIS 安装包将在远程发布授权后附加到 GitHub Pre-release。
+
 ## 1.0.0-rc.1
 
 ### Added

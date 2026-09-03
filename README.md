@@ -2,7 +2,7 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2 + React + TypeScript + Vite + Rust + SQLite。
 
-当前候选版本：`1.0.0-rc.1`。本候选包含 Markdown 脚注、Markdown 安全的字符全角/半角转换、按领域拆分的 Rust commands/storage，以及最新全局右键菜单的 release CDP 验收。
+当前候选版本：`1.0.0-rc.2`。本候选完成 Markdown 脚注预览、完整 ASCII 字符全角/半角转换、Native Dialog 自动化稳定性修正，以及全局右键菜单的 release 验收；已公开的 `v1.0.0-rc.1` 保持不变。
 
 ## 已实现
 
@@ -59,3 +59,10 @@ pnpm tauri build
 当前版本已覆盖构建任务文档中的 MVP、写作规划、关系图、一致性、附件、结构管理、多格式导出、AI 辅助、数据恢复与大型正文树性能能力；1000 章 / 100 万字真实文件与 SQLite 性能验收已通过，Windows x64 release EXE 与 NSIS 安装包已构建并完成进程级冒烟。直连 CDP、官方 Tauri WebDriver、原生文件选择器、恢复重启、100,000 字单章滚动/输入观察和 rAF/overflow 采样均有回归记录；E2E 还支持可选测试封面夹具并保留项目供外部阅读器复核，Markdown/TXT/HTML/DOCX/EPUB/PDF 六种格式均已在对应阅读器完成本机视觉核对。没有 API Key 时核心写作流程和本地 AI 草稿模式完全可用。
 
 当前 RC 的直连 release CDP 专项已再次通过正文树、CodeMirror、Wiki 预览、场景/大纲/时间线/伏笔/看板菜单、边缘避让和外部关闭；官方 WebDriver 的原生附件选择器在本机复跑时出现焦点/列表刷新竞态，详见 `TEST_REPORT.md`，不影响直连结果。发布候选代码提交 `40ae175` 已推送到 GitHub `main`，run `33699593424` 的 Frontend/Rust 两个 job 均已成功；随后发布记录提交 `1751dfd` 的 run `33705658724` 也均成功；`v1.0.0-rc.1` 已创建并指向 `40ae175`。
+
+## V1.0.0-rc.2 最终修正（2026-09-03）
+
+- FIX-01：编辑器预览使用 ReactMarkdown + remark-gfm 真正渲染普通/命名脚注，提供中文脚注标签、引用锚点和返回正文锚点；组件级测试覆盖多次引用、中文内容和代码区排除。
+- FIX-02：字符全角/半角转换覆盖 U+0021–U+007E 与 U+FF01–U+FF5E，保护 Markdown 标记、代码、URL、链接地址、Wiki/脚注语法、frontmatter 和表格结构；普通空格仍需显式选项。
+- FIX-03：Native Dialog UI Automation 改为地址栏导航、ValuePattern 优先、控件重解析和最多三次有限重试；rc.2 release 已通过 `NATIVE_DIALOGS_OK` 及全部桌面阶段标记。
+- rc.2 发布候选代码提交为 `961ad26`，旧 `v1.0.0-rc.1` tag 未移动；正式 GitHub Pre-release 需在远程授权后创建。

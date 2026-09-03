@@ -35,6 +35,8 @@
 - [x] P2/P3 自动门禁：前端 63 项测试、Rust 33 项常规测试、1000 章/100 万字基准、release/NSIS 构建和启动冒烟
 - [x] P3-02 人工门禁：CodeMirror 大文档滚动/输入和 Markdown/TXT/HTML/DOCX/EPUB/PDF 六种导出文件已在本机真实窗口完成视觉确认
 
+> 历史记录：本节为 rc.1 候选追踪；当前 rc.2 最终状态见下方 Final Validation。
+
 ## V1.0.0-rc.1 追踪（2026-09-03）
 
 - [x] RC-01：commands 已从兼容入口迁移到 project、manuscript、entities、recovery、trash、consistency、export 领域实现；`commands/mod.rs` 仅保留共享 helper、模块声明和测试/旧调用所需 re-export。
@@ -46,6 +48,16 @@
 - [~] RC-05 官方 WebDriver 原生附件选择器：当前本机复跑出现系统焦点/列表刷新竞态，核心流程可运行但尚未将该次运行标记为通过。
 - [x] RC-08 发布候选代码 GitHub Actions：提交 `40ae175` 已推送，run `33699593424` 的 Frontend/Rust 两个 job 均 success；发布记录提交 `1751dfd` 的 run `33705658724` 也均 success。
 - [x] RC-07 远程发布 tag：`v1.0.0-rc.1` 已创建并推送，指向已通过 CI 的发布候选代码提交 `40ae175`。
+
+## V1.0.0-rc.2 Final Validation（2026-09-03）
+
+- [x] FIX-01 脚注预览：ReactMarkdown/remark-gfm 真实输出脚注区、中文标签、引用和返回锚点；组件级测试覆盖编号/命名/重复引用、中文及代码排除。
+- [x] FIX-02 宽度转换：完整 ASCII 可见字符范围 U+0021–U+007E ↔ U+FF01–U+FF5E，保护 Markdown 标记、代码、URL、链接地址、Wiki/脚注语法、frontmatter、表格结构和普通空格语义。
+- [x] FIX-03 Native Dialog：地址栏导航、ValuePattern、条件等待、刷新控件重解析和最多三次有限重试；rc.2 release WebDriver 真实完成文件夹选择和附件导入并输出 `NATIVE_DIALOGS_OK`。
+- [x] FIX-04 文档已区分 rc.1 历史记录与 rc.2 Final Validation，并同步 README、SPEC、TODO、PROGRESS、TEST_REPORT、RELEASE_CHECKLIST、CHANGELOG、DECISIONS。
+- [x] 本地前端/Rust 全量门禁、1000 章 / 100 万字基准（50.90 秒）、Windows rc.2 release 构建、CDP 和官方 WebDriver 全部通过。
+- [ ] rc.2 远程 tag、最新 HEAD Actions、GitHub Pre-release/安装包上传：待远程发布授权。
+- [ ] `main` Required Checks：GitHub Settings / Rulesets 管理员待办。
 
 ## 记录
 

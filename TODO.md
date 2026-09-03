@@ -55,6 +55,8 @@
 - [x] P2/P3 代码收尾：AI 上下文增强、命令与存储模块边界、GitHub Actions CI、10 万字单章验收、内部插件 API
 - [x] 真实桌面验收收尾（直连 CDP、官方 Tauri WebDriver、原生文件选择器/确认框/提示框、恢复重启自动化、两种模式量化 FPS、100,000 字滚动/输入观察和带测试封面的六种导出阅读器视觉复核均已通过；Calibre 目录双击已验证正文跳转）
 
+> 历史记录：以下 rc.1 收尾条目保留用于追溯；本轮 rc.2 最终状态以文末“V1.0.0-rc.2 Final Validation”为准。
+
 ## V1.0.0-rc.1 当前收尾（2026-09-03）
 
 - [x] Rust commands 按领域真实拆分，`commands/mod.rs` 保留共享 helper 与兼容 re-export，未使用 `include!` 拼接。
@@ -68,3 +70,14 @@
 - [~] 官方 WebDriver + 原生附件选择器复跑：核心流程可运行，但本机出现焦点/列表刷新竞态，需稳定桌面焦点环境复跑后再关闭该证据项。
 - [x] 发布候选代码 GitHub Actions Frontend/Rust 两个 job：提交 `40ae175` 的 run `33699593424` 均 success；发布记录提交 `1751dfd` 的 run `33705658724` 也均 success。
 - [x] `v1.0.0-rc.1` 远程 tag：已创建并推送，指向已通过 CI 的发布候选代码提交 `40ae175`。
+
+## V1.0.0-rc.2 Final Validation（2026-09-03）
+
+- [x] FIX-01：ReactMarkdown/remark-gfm 真实渲染普通、命名、多次引用和中文脚注；引用与返回正文锚点匹配，代码区伪脚注不解析；组件级测试已加入。
+- [x] FIX-02：完整 ASCII 可见字符 U+0021–U+007E 与 U+FF01–U+FF5E 可逆转换；Markdown 标记、代码、URL、链接地址、Wiki/脚注语法、frontmatter 和表格结构受保护，普通空格默认不转换。
+- [x] FIX-03：Native Dialog 使用地址栏导航、ValuePattern、控件重解析、条件等待和最多三次有限重试；rc.2 release `NATIVE_DIALOGS_OK` 通过。
+- [x] 前端 17 个测试文件 / 75 项测试、typecheck、lint、build 通过；Rust 35 项常规测试、cargo check 通过。
+- [x] 1000 章 / 100 万字 ignored 基准通过（50.90 秒）；`pnpm.cmd tauri:build` 生成 rc.2 EXE 与 NSIS。
+- [x] rc.2 release CDP 与官方 WebDriver（含 Native Dialog）全部阶段标记通过，包括 `CONTEXT_MENU_OK`、`PLANNING_CONTEXT_MENU_OK`、`NATIVE_DIALOGS_OK`、`EXPORTS_OK`。
+- [ ] rc.2 远程 tag、最新 HEAD GitHub Actions 和 GitHub Pre-release：待远程发布授权后完成；已公开 rc.1 不移动。
+- [ ] `main` Required Checks：保留为 GitHub Settings / Rulesets 管理员待办。

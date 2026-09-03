@@ -91,6 +91,8 @@ src-tauri/target/release/novelforge.exe
 - PDF：Edge、SumatraPDF 3.6.1 和 Poppler 均确认嵌入中文字体版本的标题、正文、章节和封面。
 - 官方 WebDriver 最终复跑：EdgeDriver 151.0.4129.107 与 WebView2 151 匹配；原生文件/文件夹选择器、保存失败恢复重启、附件导入、全部阶段标记和 100,000 字 FPS（276 帧、约 137.75 FPS）通过。
 
+> 历史记录：以下 rc.1 右键专项记录保留；rc.2 最终桌面结果见文末。
+
 ## V1.0.0-rc.1 右键菜单专项（2026-09-03）
 
 - [x] 当前 release EXE 直连 CDP：正文树卷/章/节、多选菜单、CodeMirror 无选区/有选区、Wiki 预览、四角避让、一级子菜单、右键粗体、插件扩展项、Escape 和点击外部关闭。
@@ -105,3 +107,10 @@ src-tauri/target/release/novelforge.exe
 - 官方 WebDriver WebView2（不启用原生文件对话框）：当前 release 通过全部阶段标记和右键专项标记。
 - WebDriver 命令：`$env:NOVELFORGE_E2E_WEBDRIVER='1'; $env:NOVELFORGE_E2E_NATIVE_DIALOGS='1'; pnpm.cmd test:e2e:desktop`（已尝试，附件选择器环境竞态）。
 - 当前 release 产物：`src-tauri/target/release/novelforge.exe`、`src-tauri/target/release/bundle/nsis/NovelForge_1.0.0-rc.1_x64-setup.exe`。
+
+## V1.0.0-rc.2 最终桌面验收（2026-09-03）
+
+- [x] rc.2 release CDP 与官方 WebDriver WebView2 全阶段及右键专项通过。
+- [x] 官方 WebDriver + Native Dialog 使用地址栏导航、ValuePattern、条件等待、控件重解析和有限重试，真实完成项目文件夹选择、恢复重启和附件导入，输出 `NATIVE_DIALOGS_OK`。
+- [x] rc.2 产物：`src-tauri/target/release/novelforge.exe`、`src-tauri/target/release/bundle/nsis/NovelForge_1.0.0-rc.2_x64-setup.exe`。
+- [x] Native Dialog 失败重试不会跳过测试、不会无限循环，也不依赖固定文件列表索引。

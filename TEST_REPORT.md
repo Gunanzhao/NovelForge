@@ -496,7 +496,7 @@
 
 ### 尚需桌面验收
 
-> 本节为早期结果，已被后续最终验收取代。当前菜单专项结果见文档末尾的“V1.0.0-rc.1 当前候选验收”。
+> 本节为早期 rc.1 结果，已被后续最终验收取代；当前 rc.2 结果见文档末尾的 Final Validation。
 
 ## V1.0.0-rc.1 当前候选验收（2026-09-03）
 
@@ -515,3 +515,29 @@
 
 - 官方 Tauri WebDriver + 原生 UI Automation 已使用匹配驱动尝试复跑；项目创建、恢复重启等阶段可通过，但原生附件选择器存在系统列表刷新/焦点竞态，当前候选未将该次失败伪装为通过。直连 CDP 结果不受影响；可在稳定桌面焦点环境重试。
 - 发布候选代码提交 `40ae175` 已推送到 GitHub `main`；run `33699593424` 的 Frontend checks 与 Rust checks 均为 success；随后发布记录提交 `1751dfd` 的 run `33705658724` 也均为 success。`v1.0.0-rc.1` 已创建并指向 `40ae175`；历史 run `33529012970` 仍不作为本次发布候选证据。
+
+## V1.0.0-rc.2 Final Validation（2026-09-03）
+
+### FIX-01 脚注预览
+
+- `MarkdownPreview` 使用 ReactMarkdown + remark-gfm，并配置中文 `footnoteLabel` / `footnoteBackLabel`。
+- 组件级 `tests/editor-footnote.test.tsx` 已验证编号脚注、命名脚注、重复引用、中文内容、引用/返回锚点以及 inline/fenced code 排除。
+- Rust/HTML/EPUB/DOCX/PDF/TXT 导出回归继续通过，现有脚注内容与锚点行为未退化。
+
+### FIX-02 全角 / 半角
+
+- `convertFullwidth` / `convertHalfwidth` 覆盖 U+0021–U+007E 与 U+FF01–U+FF5E，支持显式空格转换选项并保持可逆。
+- 测试覆盖 ASCII 标点、字母数字、Markdown 粗体/斜体/标题/列表、inline/fenced code、URL、Markdown link/image、Wiki Link、脚注、frontmatter、中文和中英混合内容。
+- UI、README、SPEC、CHANGELOG、TODO、PROGRESS、DECISIONS 与本报告均采用“完整 ASCII 可见字符”定义；中文标点转换仍为独立功能。
+
+### FIX-03 桌面 E2E
+
+- rc.2 release CDP：`CONTEXT_MENU_OK`、`CORE_EDITOR_TREE_OK`、`DRAG_DROP_OK`、`HISTORY_AND_TREE_ACTIONS_OK`、`ENTITY_CRUD_OK`、`WIKI_NAVIGATION_OK`、`SETTINGS_COMMANDS_OK`、`RECOVERY_FAILURE_OK`、`PLANNING_AND_CHECKS_OK`、`PLANNING_CONTEXT_MENU_OK`、`SEARCH_OK`、`AI_SELECTION_AND_CANCEL_OK`、`AI_PROVIDER_OK`、`TRASH_RESTORE_OK`、`EXPORTS_OK` 全部通过。
+- rc.2 官方 Tauri WebDriver + Native Dialog：同一批阶段标记全部通过，并真实完成项目文件夹选择、恢复重启和附件导入，输出 `NATIVE_DIALOGS_OK`。
+- 自动化增强包含地址栏导航、UIA ValuePattern 优先、刷新期间控件重解析、条件等待和最多三次有限重试；不依赖文件列表固定索引，也不允许无限重试。
+
+### 本地门禁与发布状态
+
+- `pnpm.cmd install --frozen-lockfile`、typecheck、lint、`pnpm.cmd test -- --run`（17 文件 / 75 项）、build、cargo check、cargo test、ignored 大型基准（50.90 秒）和 `pnpm.cmd tauri:build` 全部通过。
+- rc.2 代码提交 `961ad26`，release 产物为 `src-tauri/target/release/novelforge.exe` 与 `NovelForge_1.0.0-rc.2_x64-setup.exe`；旧 `v1.0.0-rc.1` tag 未移动。
+- rc.2 远程 tag、最新 HEAD CI 和 GitHub Pre-release 将在获得本轮远程发布授权后记录；`main` Required Checks 仍是管理员待办。

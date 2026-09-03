@@ -1,4 +1,16 @@
-# NovelForge 1.0.0-rc.1 发布清单
+# NovelForge 1.0.0 RC 发布清单
+
+## 1.0.0-rc.2 当前发布清单
+
+- [x] 版本文件已升级为 `1.0.0-rc.2`；已公开 `v1.0.0-rc.1` 保持不变。
+- [x] FIX-01 ReactMarkdown 脚注预览、中文无障碍标签、引用/返回锚点及组件级测试通过。
+- [x] FIX-02 完整 ASCII 可见字符全角/半角转换、Markdown 安全保护和可逆性测试通过。
+- [x] FIX-03 rc.2 release CDP 与官方 WebDriver + Native Dialog 全阶段通过，含 `NATIVE_DIALOGS_OK`。
+- [x] 前端 17 文件 / 75 项测试、Rust 常规测试 35 项、1000 章 / 100 万字基准（50.90 秒）和 `pnpm.cmd tauri:build` 通过。
+- [x] rc.2 产物：`src-tauri/target/release/novelforge.exe`、`src-tauri/target/release/bundle/nsis/NovelForge_1.0.0-rc.2_x64-setup.exe`。
+- [ ] 推送 rc.2 代码/tag、确认最新 HEAD CI、创建 GitHub Pre-release 并上传 NSIS：待本轮远程发布授权。
+
+## 1.0.0-rc.1 历史记录
 
 ## 版本与产物
 

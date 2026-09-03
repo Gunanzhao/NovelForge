@@ -41,3 +41,9 @@ AI 上下文增强、命令与存储模块边界、持续集成、10 万字单�
 - Markdown 编辑器保留普通和命名脚注语法；预览显示引用与脚注区，HTML/EPUB 使用锚点，DOCX/PDF 以章节末尾列表保留脚注内容。
 - Inspector 增加“字符转全角/半角”，默认只转换 ASCII 字母/数字并保护 Markdown 标记、代码块、行内代码和 URL；中文标点转换仍是独立功能，普通空格默认不转换。
 - 全局右键菜单的 release CDP 回归扩展到正文树、CodeMirror、Wiki、场景卡、大纲、时间线、伏笔和看板；菜单支持边缘避让、子菜单、明暗主题、Escape 与外部点击关闭。
+
+## V1.0.0-rc.2 最终修正（2026-09-03）
+
+- 编辑器预览继续使用 ReactMarkdown/remark-gfm，并显式配置中文脚注标签、引用与返回正文锚点；脚注不在 inline code 或 fenced code 中解析。
+- “字符转全角/半角”定义为完整 ASCII 可见字符范围 U+0021–U+007E 与对应 U+FF01–U+FF5E 的可逆转换；Markdown 标记、代码、URL、链接地址、Wiki/脚注语法、frontmatter 和表格结构受保护，普通空格默认不转换。
+- Windows Native Dialog 验收通过地址栏导航、UIA ValuePattern、条件等待、控件重解析和最多三次有限重试完成；不依赖不稳定的文件列表索引。
