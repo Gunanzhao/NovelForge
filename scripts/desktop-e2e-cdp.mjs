@@ -430,23 +430,36 @@ function runNativeDialogHelper(mode, title, targetPath) {
   const child = spawn(powershell, [
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', nativeDialogScript,
     '-Mode', mode, '-Path', targetPath, '-Title', title,
-  ], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] })
+  ], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
   return new Promise((resolvePromise, reject) => {
+    let stdout = ''
     let stderr = ''
+    child.stdout?.on('data', (chunk) => { stdout += String(chunk) })
     child.stderr?.on('data', (chunk) => { stderr += String(chunk) })
     child.once('error', reject)
     child.once('exit', (code, signal) => {
-      if (code === 0) resolvePromise()
+      if (code === 0) resolvePromise(stdout.trim())
       else reject(new Error('原生文件对话框辅助失败：' + (stderr.trim() || 'exit=' + code + ' signal=' + signal)))
     })
   })
 }
 
 async function chooseNativeDialog(page, mode, title, targetPath, triggerText = '选择') {
-  const helper = runNativeDialogHelper(mode, title, targetPath)
-  await sleep(150)
-  await clickExact(page, triggerText)
-  await helper
+  let lastError
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      // Start UI Automation before the click so a fast native dialog cannot
+      // be missed, then let its own condition waits drive the interaction.
+      const helper = runNativeDialogHelper(mode, title, targetPath)
+      await clickExact(page, triggerText)
+      await helper
+      return
+    } catch (error) {
+      lastError = error
+      if (attempt < 3) await sleep(250 * attempt)
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
 async function waitForText(page, text) {
@@ -460,6 +473,11 @@ async function waitForText(page, text) {
     await sleep(200)
   }
   throw new Error('页面未出现文本：' + text + '\n当前页面：\n' + await bodyText(page))
+}
+
+async function waitForInputValue(page, placeholder, value, label) {
+  const expression = "Array.from(document.querySelectorAll('input,textarea')).some((item)=>(item.getAttribute('placeholder')||item.getAttribute('aria-label')||'').includes(" + jsString(placeholder) + ") && item.value === " + jsString(value) + ")"
+  await waitForCondition(page, expression, label)
 }
 
 function findManuscriptFile(directory) {
@@ -513,7 +531,10 @@ async function runRecoveryFlow(page, projectPath, projectTitle, restartPage) {
   } else {
     await clickText(page, '打开项目')
     await waitForText(page, '打开小说项目')
-    if (nativeDialogMode) await chooseNativeDialog(page, 'folder', '选择项目文件夹', projectPath)
+    if (nativeDialogMode) {
+      await chooseNativeDialog(page, 'folder', '选择项目文件夹', projectPath)
+      await waitForInputValue(page, '选择项目文件夹', projectPath, '原生重开项目路径回填')
+    }
     else await setField(page, '选择项目文件夹', projectPath)
     await clickModalButton(page, '打开项目')
   }
@@ -693,7 +714,10 @@ async function run() {
       console.log(await bodyText(page))
       console.log(await page.evaluate("Array.from(document.querySelectorAll('input,textarea')).map((item) => ({tag: item.tagName, type: item.getAttribute('type'), placeholder: item.getAttribute('placeholder'), aria: item.getAttribute('aria-label'), value: item.value}))"))
     }
-    if (nativeDialogMode) await chooseNativeDialog(page, 'folder', '选择项目文件夹', projectPath)
+    if (nativeDialogMode) {
+      await chooseNativeDialog(page, 'folder', '选择项目文件夹', projectPath)
+      await waitForInputValue(page, '选择项目文件夹', projectPath, '原生新建项目路径回填')
+    }
     else await setField(page, '选择项目文件夹', projectPath)
     if (nativeDialogMode && process.env.NOVELFORGE_E2E_VERBOSE === '1') {
       console.log('NATIVE_PATH_INPUT', await page.evaluate("Array.from(document.querySelectorAll('input')).map((item) => ({placeholder: item.placeholder, value: item.value}))"))

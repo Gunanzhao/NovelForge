@@ -39,6 +39,10 @@ while ([DateTime]::UtcNow -lt $deadline -and $null -eq $dialog) {
 if ($null -eq $dialog) {
   throw "找不到原生文件对话框：$Title"
 }
+$buttonType = New-Object System.Windows.Automation.PropertyCondition(
+  [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+  [System.Windows.Automation.ControlType]::Button
+)
 
 function Resolve-Dialog {
   $direct = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $windowCondition)
@@ -129,7 +133,48 @@ function Find-FileNameEdit([System.Windows.Automation.AutomationElement]$parent)
     $element = $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $combined)
     if ($null -ne $element) { return $element }
   }
+  # Windows common dialogs can expose the file name host without a stable
+  # AutomationId while the folder view is refreshing. Prefer an enabled edit
+  # that is not the address bar as a final, non-index-based fallback.
+  $editType = New-Object System.Windows.Automation.PropertyCondition(
+    [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+    [System.Windows.Automation.ControlType]::Edit
+  )
+  $edits = $parent.FindAll([System.Windows.Automation.TreeScope]::Descendants, $editType)
+  for ($index = $edits.Count - 1; $index -ge 0; $index--) {
+    $candidate = $edits.Item($index)
+    try {
+      if ($candidate.Current.IsEnabled -and $candidate.Current.AutomationId -ne '41477') { return $candidate }
+    } catch {
+      # The common dialog may replace this control between enumeration calls.
+    }
+  }
   return $null
+}
+
+function Wait-DialogClosed([int]$seconds) {
+  $deadline = [DateTime]::UtcNow.AddSeconds($seconds)
+  while ([DateTime]::UtcNow -lt $deadline) {
+    if ($null -eq (Resolve-Dialog)) { return $true }
+    Start-Sleep -Milliseconds 120
+  }
+  return $false
+}
+
+function Submit-FilePathByKeyboard([System.Windows.Automation.AutomationElement]$parent, [string]$filePath, [int]$seconds) {
+  try {
+    $parent.SetFocus()
+    # Alt+N is the stable Windows common-dialog accelerator for “File name”.
+    # It works even while the list view is rebuilding and avoids list indexes.
+    [System.Windows.Forms.SendKeys]::SendWait('%n')
+    Start-Sleep -Milliseconds 120
+    [System.Windows.Forms.SendKeys]::SendWait('^a')
+    [System.Windows.Forms.SendKeys]::SendWait($filePath)
+    [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+    return Wait-DialogClosed $seconds
+  } catch {
+    return $false
+  }
 }
 
 function Find-AddressEdit([System.Windows.Automation.AutomationElement]$parent) {
@@ -156,28 +201,60 @@ function Find-AddressEdit([System.Windows.Automation.AutomationElement]$parent) 
   return $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $combinedByName)
 }
 
+function Dialog-LocationMatches([System.Windows.Automation.AutomationElement]$parent, [string]$directoryPath) {
+  $expected = [IO.Path]::GetFullPath($directoryPath).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+  try {
+    $address = Find-AddressEdit $parent
+    if ($null -ne $address) {
+      $valuePattern = $address.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+      $value = [string]$valuePattern.Current.Value
+      if ($value -and $value.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) -ieq $expected) { return $true }
+    }
+  } catch {
+    # Some Explorer builds expose the address only as a toolbar name.
+  }
+  try {
+    $descendants = $parent.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
+    for ($index = 0; $index -lt $descendants.Count; $index++) {
+      $name = [string]$descendants.Item($index).Current.Name
+      if (-not $name) { continue }
+      if ($name -match '^地址:\s*(.+)$') {
+        $location = $Matches[1].Trim().TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+        if ($location -ieq $expected) { return $true }
+      }
+    }
+  } catch {
+    # The control tree can be rebuilt while the folder view refreshes.
+  }
+  return $false
+}
+
 function Set-EditText([System.Windows.Automation.AutomationElement]$element, [string]$value) {
   if ($null -eq $element) { throw '原生文件对话框输入控件为空' }
   $valuePattern = $null
+  $valuePatternError = $null
+  # Prefer UIA ValuePattern: SendKeys can race the Explorer address bar and
+  # append to its existing drive-qualified value (for example E:E:\...).
+  try {
+    $valuePattern = $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+    $valuePattern.SetValue($value)
+    if ($valuePattern.Current.Value -eq $value) { return }
+  } catch {
+    $valuePatternError = $_.Exception.Message
+  }
   try {
     $element.SetFocus()
     [System.Windows.Forms.SendKeys]::SendWait('^a')
     [System.Windows.Forms.SendKeys]::SendWait($value)
-    Start-Sleep -Milliseconds 150
-    $valuePattern = $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
-    if ($valuePattern.Current.Value -eq $value) { return }
-  } catch {
-    $sendKeysError = $_.Exception.Message
-  }
-  try {
-    if ($null -eq $valuePattern) {
-      $valuePattern = $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+    $sendKeysDeadline = [DateTime]::UtcNow.AddSeconds(2)
+    while ([DateTime]::UtcNow -lt $sendKeysDeadline) {
+      if ($null -eq $valuePattern) { $valuePattern = $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern) }
+      if ($valuePattern.Current.Value -eq $value) { return }
+      Start-Sleep -Milliseconds 100
     }
-    $valuePattern.SetValue($value)
-    if ($valuePattern.Current.Value -eq $value) { return }
-    throw "ValuePattern 写入后值不匹配"
+    throw "SendKeys 写入后值不匹配"
   } catch {
-    throw "原生文件对话框无法填写路径：$value；SendKeys=$sendKeysError；ValuePattern=$($_.Exception.Message)"
+    throw "原生文件对话框无法填写路径：$value；ValuePattern=$valuePatternError；SendKeys=$($_.Exception.Message)"
   }
 }
 
@@ -193,26 +270,36 @@ function Navigate-To([System.Windows.Automation.AutomationElement]$parent, [stri
   if ($null -eq $address) { throw "原生文件对话框缺少地址栏：$Title" }
   Set-EditText $address $directory.FullName
   [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
-  Start-Sleep -Milliseconds 500
-  return $directory.Name
+  $directoryDeadline = [DateTime]::UtcNow.AddSeconds(8)
+  while ([DateTime]::UtcNow -lt $directoryDeadline) {
+    $freshDialog = Resolve-Dialog
+    if ($null -ne $freshDialog) {
+      try {
+        if (Dialog-LocationMatches $freshDialog $directory.FullName) { return $directory.Name }
+      } catch {
+        # Address and breadcrumb controls are replaced while Explorer refreshes.
+      }
+    }
+    Start-Sleep -Milliseconds 120
+  }
+  throw "原生文件对话框导航未完成：$($directory.FullName)"
 }
 
 $target = [IO.Path]::GetFullPath($Path)
 $leaf = [IO.Path]::GetFileName($target.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar))
 if ($Mode -eq 'folder') {
   if (-not [IO.Directory]::Exists($target)) { throw "目标文件夹不存在：$target" }
-  $folderEdit = Find-Edit $dialog
-  if ($null -eq $folderEdit) { throw "原生文件夹选择器缺少文件夹输入框：$Title" }
-  Set-EditText $folderEdit $target
+  # The folder-name edit treats a drive-qualified path as relative on some
+  # Windows builds (producing E:E:\...). Navigate through the address bar
+  # instead, then invoke the picker’s “选择文件夹” button.
+  Navigate-To $dialog $target | Out-Null
+  $freshDialog = Resolve-Dialog
+  if ($null -ne $freshDialog) { $dialog = $freshDialog }
 } else {
   $parentDirectory = [IO.DirectoryInfo]::new($target).Parent
   if ($null -eq $parentDirectory) { throw "无法确定原生选择器目标父目录：$target" }
   Navigate-To $dialog $parentDirectory.FullName | Out-Null
 }
-$buttonType = New-Object System.Windows.Automation.PropertyCondition(
-  [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
-  [System.Windows.Automation.ControlType]::Button
-)
 $refreshDeadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
 while ([DateTime]::UtcNow -lt $refreshDeadline) {
   $refreshedDialog = Resolve-Dialog
@@ -225,6 +312,10 @@ while ([DateTime]::UtcNow -lt $refreshDeadline) {
 
 $candidate = $null
 if ($Mode -eq 'file') {
+  if (Submit-FilePathByKeyboard $dialog $target 3) {
+    Write-Output 'NATIVE_DIALOG_OK'
+    exit 0
+  }
   $fileNameEdit = $null
   $fileEditDeadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
   while ([DateTime]::UtcNow -lt $fileEditDeadline -and $null -eq $fileNameEdit) {
@@ -246,28 +337,38 @@ if ($Mode -eq 'file') {
   if ($null -ne $fileNameEdit) {
     Set-EditText $fileNameEdit $target
     [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
-    Start-Sleep -Milliseconds 700
-    if ($null -eq (Resolve-Dialog)) { Write-Output 'NATIVE_DIALOG_OK'; exit 0 }
+    if (Wait-DialogClosed 5) { Write-Output 'NATIVE_DIALOG_OK'; exit 0 }
   }
   $listCondition = New-Object System.Windows.Automation.PropertyCondition(
     [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
     [System.Windows.Automation.ControlType]::ListItem
   )
   $listDeadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+  $items = @()
   while ([DateTime]::UtcNow -lt $listDeadline -and $null -eq $candidate) {
-    $items = $dialog.FindAll([System.Windows.Automation.TreeScope]::Descendants, $listCondition)
+    $freshDialog = Resolve-Dialog
+    if ($null -ne $freshDialog) { $dialog = $freshDialog }
+    try { $items = $dialog.FindAll([System.Windows.Automation.TreeScope]::Descendants, $listCondition) } catch { $items = @() }
     for ($index = 0; $index -lt $items.Count -and $null -eq $candidate; $index++) {
-      if ($items.Item($index).Current.Name -eq $leaf) { $candidate = $items.Item($index) }
+      try {
+        if ($items.Item($index).Current.Name -eq $leaf) { $candidate = $items.Item($index) }
+      } catch {
+        # Ignore a stale list item and re-enumerate on the next poll.
+      }
     }
     if ($null -eq $candidate) {
       $listViewCondition = New-Object System.Windows.Automation.PropertyCondition(
         [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
         'listview'
       )
-      $listView = $dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $listViewCondition)
+      try { $listView = $dialog.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $listViewCondition) } catch { $listView = $null }
       if ($null -ne $listView) {
-        $listView.SetFocus()
-        [System.Windows.Forms.SendKeys]::SendWait($leaf)
+        try {
+          $listView.SetFocus()
+          [System.Windows.Forms.SendKeys]::SendWait($leaf)
+        } catch {
+          # The list view can be replaced during a refresh; retry next poll.
+        }
       }
     }
     if ($null -eq $candidate) { Start-Sleep -Milliseconds 100 }
@@ -277,12 +378,11 @@ if ($Mode -eq 'file') {
     if ($null -ne $fileNameEdit) {
       Set-EditText $fileNameEdit $target
       [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
-      Start-Sleep -Milliseconds 500
-      if ($null -eq (Resolve-Dialog)) { Write-Output 'NATIVE_DIALOG_OK'; exit 0 }
+      if (Wait-DialogClosed 5) { Write-Output 'NATIVE_DIALOG_OK'; exit 0 }
     }
     $visibleNames = for ($index = 0; $index -lt $items.Count; $index++) {
       $item = $items.Item($index)
-      if ($item.Current.Name) { $item.Current.Name }
+      try { if ($item.Current.Name) { $item.Current.Name } } catch {}
     }
     throw "原生文件对话框未找到目标项：$target；当前列表：$($visibleNames -join ', ')"
   }
