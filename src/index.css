@@ -438,3 +438,83 @@ code { padding: 1px 4px; border-radius: 3px; background: var(--surface-2); font-
 .context-menu-label { padding: 5px 9px 3px; color: var(--faint); font-size: 9px; font-weight: 700; letter-spacing: .08em; }
 @keyframes context-menu-in { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .context-menu { animation: none; } }
+.mention-inspector {
+  display: grid;
+  gap: 10px;
+}
+
+.mention-inspector .panel-title h3 {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.mention-summary {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.mention-group {
+  display: grid;
+  gap: 6px;
+}
+
+.mention-group > strong {
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.mention-row,
+.mention-candidate {
+  align-items: center;
+  background: color-mix(in srgb, var(--panel) 82%, var(--accent) 18%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.mention-row {
+  cursor: pointer;
+  width: 100%;
+}
+
+.mention-row:hover {
+  border-color: var(--accent);
+}
+
+.mention-row small,
+.mention-candidate small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.mention-candidate {
+  align-items: stretch;
+  display: grid;
+  gap: 5px;
+}
+
+.mention-candidate > div:first-child {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.mention-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.mention-actions .button {
+  font-size: 10px;
+  min-height: 25px;
+  padding: 3px 6px;
+}

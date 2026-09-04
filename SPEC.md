@@ -47,3 +47,11 @@ AI 上下文增强、命令与存储模块边界、持续集成、10 万字单�
 - 编辑器预览继续使用 ReactMarkdown/remark-gfm，并显式配置中文脚注标签、引用与返回正文锚点；脚注不在 inline code 或 fenced code 中解析。
 - “字符转全角/半角”定义为完整 ASCII 可见字符范围 U+0021–U+007E 与对应 U+FF01–U+FF5E 的可逆转换；Markdown 标记、代码、URL、链接地址、Wiki/脚注语法、frontmatter 和表格结构受保护，普通空格默认不转换。
 - Windows Native Dialog 验收通过地址栏导航、UIA ValuePattern、条件等待、控件重解析和最多三次有限重试完成；不依赖不稳定的文件列表索引。
+
+## V1.1 自动资料识别
+
+- 当前章节正文由纯本地 Mention Scanner 防抖扫描，不调用 AI，也不扫描整本小说的每个输入字符。
+- 扫描识别人名、地点和世界观资料的标题及别名，并用本地规则提出新资料候选。
+- fenced code、inline code、URL、Markdown 链接目标、图片路径和 Wiki Link 不参与识别；重叠命中优先已知资料和更长名称。
+- 永久忽略项使用 `mention-ignore` 资料实体，镜像保存在 `mentions/`；数据库丢失时可由 Markdown 镜像恢复。
+- Mention 索引属于可计算数据，可由正文与资料重新生成，不成为事实来源。

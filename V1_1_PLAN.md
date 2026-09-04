@@ -17,13 +17,13 @@
 
 ## 功能阶段
 
-- [~] P1 自动资料识别
-  - [ ] 纯本地 Mention Scanner 与 Markdown 排除规则
-  - [ ] 当前章节防抖扫描和按需全文重建
-  - [ ] 已知资料、别名、候选、单次/永久忽略
-  - [ ] 创建资料与显式“创建并插入 Wiki”
-  - [ ] 单元、集成和桌面 E2E 覆盖
-- [ ] P2 剧情线 Story Arc
+- [x] P1 自动资料识别
+  - [x] 纯本地 Mention Scanner 与 Markdown 排除规则
+  - [x] 当前章节防抖扫描和可重建全文索引
+  - [x] 已知资料、别名、候选、单次/永久忽略
+  - [x] 创建资料与显式“创建并插入 Wiki”
+  - [x] 单元、集成和旧功能回归；桌面流程纳入最终 E2E 阶段
+- [~] P2 剧情线 Story Arc
   - [ ] 剧情线实体、状态、章节关联和 milestone
   - [ ] 专用视图、Inspector 与一致性健康提示
   - [ ] 删除、恢复、无效引用和排序测试
@@ -51,8 +51,8 @@
 - [ ] 旧项目无需手动转换即可打开
 - [ ] 正文继续保存为普通 Markdown
 - [ ] Story Arc、Inbox、Prompt Preset 和 Checklist 有可恢复镜像
-- [ ] Mention 与人物统计可由正文和资料重新扫描生成
-- [ ] 浏览器 fallback 可运行
+- [x] Mention 可由正文和资料重新扫描生成
+- [x] P1 浏览器 fallback 可运行
 
 ## 最终质量门禁
 
@@ -77,4 +77,3 @@
 - [ ] README、SPEC、TODO、PROGRESS、DECISIONS、CHANGELOG、TEST_REPORT 与实际状态一致
 - [ ] 所有阶段提交仅保存在本地，开发完成后统一推送
 - [ ] 创建并验证 `v1.1.0-rc.1` GitHub Release
-

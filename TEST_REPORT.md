@@ -542,3 +542,13 @@
 - rc.2 代码提交 `961ad26`，release 产物为 `src-tauri/target/release/novelforge.exe` 与 `NovelForge_1.0.0-rc.2_x64-setup.exe`；旧 `v1.0.0-rc.1` tag 未移动。
 - rc.2 远程 tag 已验证：`v1.0.0-rc.2` 指向 `961ad26`，`main` 指向 `5aac219`；GitHub Actions run #11（`33712235453`）Frontend/Rust 均 success。
 - GitHub [Pre-release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.0.0-rc.2) 已发布，NSIS 资产 `NovelForge_1.0.0-rc.2_x64-setup.exe` 状态为 uploaded，大小 5,127,968 bytes，SHA-256 为 `C760969ECC72DEA0A7B6FFC5026C49B72597C68972FA41AAC9697412FA2ABD1A`；`main` Required Checks 仍是管理员待办。
+# V1.1 P1 自动资料识别验证（2026-09-05）
+
+| 层级 | 验证 | 结果 |
+| --- | --- | --- |
+| Mention 单元测试 | 中文/英文、别名、重叠、Markdown 排除、永久忽略、删除/重命名重扫、Wiki 插入 | 9 项通过 |
+| 前端回归 | `pnpm typecheck`、`pnpm lint`、`pnpm test` | 通过；22 文件 / 121 项 |
+| Rust 恢复 | `mention-ignore` Markdown 镜像在数据库删除后重建 | 通过 |
+| Rust 回归 | `cargo check --locked`、`cargo test --locked` | 通过；43 项常规测试，1 项 ignored |
+
+P1 扫描结果和出现索引均可重新计算；测试没有把缓存存在当成恢复证据。桌面交互将在 V1.1 最终 E2E 脚本中与 P2–P6 一并执行。

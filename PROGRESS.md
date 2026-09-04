@@ -625,3 +625,10 @@
 - FIX-03：Native Dialog 自动化改用地址栏导航、UIA ValuePattern 优先、刷新控件重解析、条件等待和最多三次有限重试；rc.2 release 真实通过 `NATIVE_DIALOGS_OK`。
 - rc.2 本地门禁：前端 17 文件 / 75 项测试、Rust 35 项常规测试、1000 章 / 100 万字基准 50.90 秒、release EXE/NSIS、CDP 与官方 WebDriver 全部通过。
 - rc.2 代码提交 `961ad26`；`main` 已推送至 `5aac219`，`v1.0.0-rc.2` 已创建且旧 rc.1 tag 不移动；GitHub Actions run #11（`33712235453`）通过，[Pre-release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.0.0-rc.2) 与 NSIS 安装包已发布。
+# V1.1 P1 自动资料识别（2026-09-05）
+
+- 新增纯本地 `mention-detection` 扫描器和 Inspector“本章识别”面板。
+- 已有资料支持人物、地点、世界观标题与别名命中；规则候选支持中英文人物、中文地点和世界观词。
+- 扫描屏蔽 fenced/inline code、URL、Markdown 链接目标、图片路径和 Wiki Link；重叠名称按已知资料和长名称优先。
+- 支持创建资料、创建并插入 Wiki、单次忽略和项目永久忽略；永久忽略镜像可在 SQLite 丢失后恢复。
+- 阶段门禁：22 个前端测试文件 / 121 项测试通过；Rust 43 项常规测试通过、1 项大型基准按设计忽略；typecheck、lint、cargo check 均通过。

@@ -1,5 +1,5 @@
 export type NodeKind = 'volume' | 'chapter' | 'section'
-export type EntityKind = 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note' | 'relationship' | 'attachment'
+export type EntityKind = 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note' | 'relationship' | 'attachment' | 'mention-ignore'
 export type ViewId = 'dashboard' | 'manuscript' | EntityKind | 'consistency' | 'statistics' | 'ai' | 'search' | 'trash' | 'settings'
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type ThemeMode = 'light' | 'dark' | 'system'
@@ -129,6 +129,7 @@ export const ENTITY_LABELS: Record<EntityKind, string> = {
   note: '笔记',
   relationship: '人物关系',
   attachment: '附件',
+  'mention-ignore': '识别忽略项',
 }
 
 export const NODE_STATUS_LABELS: Record<string, string> = {
@@ -151,13 +152,13 @@ export const ENTITY_FIELDS: Record<EntityKind, Array<{ key: string; label: strin
     { key: 'firstAppearance', label: '首次登场' }, { key: 'status', label: '当前状态' }, { key: 'notes', label: '备注', multiline: true },
   ],
   location: [
-    { key: 'type', label: '类型' }, { key: 'parentId', label: '所属地点' }, { key: 'description', label: '描述', multiline: true },
+    { key: 'alias', label: '别名' }, { key: 'type', label: '类型' }, { key: 'parentId', label: '所属地点' }, { key: 'description', label: '描述', multiline: true },
     { key: 'population', label: '人口' }, { key: 'climate', label: '气候', multiline: true }, { key: 'history', label: '历史', multiline: true },
     { key: 'factions', label: '势力' }, { key: 'importantCharacters', label: '重要人物' }, { key: 'importantEvents', label: '重要事件' },
     { key: 'relatedChapters', label: '相关章节' }, { key: 'image', label: '图片路径' }, { key: 'notes', label: '备注', multiline: true },
   ],
   world: [
-    { key: 'category', label: '分类' }, { key: 'summary', label: '摘要', multiline: true },
+    { key: 'alias', label: '别名' }, { key: 'category', label: '分类' }, { key: 'summary', label: '摘要', multiline: true },
     { key: 'description', label: '正文', multiline: true }, { key: 'notes', label: '备注', multiline: true },
   ],
   timeline: [
@@ -189,6 +190,9 @@ export const ENTITY_FIELDS: Record<EntityKind, Array<{ key: string; label: strin
   attachment: [
     { key: 'originalName', label: '原始文件名' }, { key: 'mimeType', label: '类型' }, { key: 'sizeBytes', label: '文件大小' },
     { key: 'description', label: '说明', multiline: true },
+  ],
+  'mention-ignore': [
+    { key: 'text', label: '忽略词' }, { key: 'kind', label: '候选类型' },
   ],
 }
 

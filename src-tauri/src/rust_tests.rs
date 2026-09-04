@@ -96,6 +96,52 @@ fn entity_markdown_keeps_human_readable_mirror() {
 }
 
 #[test]
+fn mention_ignore_mirror_recovers_after_database_loss() {
+    let root = test_root("mention-ignore-recovery");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "识别恢复".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "现代".to_string(),
+        target_words: 1000,
+    })
+    .expect("create project");
+    let saved = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "mention-ignore".to_string(),
+        id: None,
+        title: "老师".to_string(),
+        content: serde_json::json!({"text": "老师", "kind": "character"}),
+        tags: vec!["自动识别忽略".to_string()],
+    })
+    .expect("save ignored mention");
+    let ignored = saved
+        .entities
+        .iter()
+        .find(|entity| entity.kind == "mention-ignore")
+        .expect("ignored mention")
+        .clone();
+    assert!(root.join("project").join(&ignored.file_path).is_file());
+
+    fs::remove_file(root.join("project/.novelforge/database.sqlite"))
+        .expect("remove database");
+    let reopened = super::commands::open_project(project_path).expect("rebuild project");
+    let recovered = reopened
+        .entities
+        .iter()
+        .find(|entity| entity.kind == "mention-ignore")
+        .expect("recover ignored mention");
+    assert_eq!(recovered.id, ignored.id);
+    assert_eq!(
+        recovered.content.get("text").and_then(serde_json::Value::as_str),
+        Some("老师")
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn real_command_workflow_persists_markdown_and_recoverable_trash() {
     let root = test_root("command-workflow");
     let project_path = root.join("雾港来信").to_string_lossy().to_string();

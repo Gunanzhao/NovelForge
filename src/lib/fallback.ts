@@ -27,7 +27,7 @@ interface FallbackStore {
 const memory = new Map<string, FallbackStore>()
 const STORAGE_PREFIX = 'novelforge-fallback:'
 const NODE_STATUSES = new Set(['not-started', 'draft', 'first-draft', 'editing', 'done', 'locked'])
-const ENTITY_KINDS = new Set(['character', 'location', 'world', 'timeline', 'foreshadowing', 'outline', 'scene', 'note', 'relationship', 'attachment'])
+const ENTITY_KINDS = new Set(['character', 'location', 'world', 'timeline', 'foreshadowing', 'outline', 'scene', 'note', 'relationship', 'attachment', 'mention-ignore'])
 
 function uid() {
   return globalThis.crypto?.randomUUID?.() ?? ('fallback-' + Date.now() + '-' + Math.random().toString(16).slice(2))
