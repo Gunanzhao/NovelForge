@@ -692,3 +692,181 @@ code { padding: 1px 4px; border-radius: 3px; background: var(--surface-2); font-
     grid-template-columns: 1fr;
   }
 }
+
+.character-appearance-panel,
+.appearance-details {
+  display: grid;
+  gap: 12px;
+}
+
+.appearance-metrics {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.appearance-metrics > div {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+}
+
+.appearance-metrics span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.appearance-metrics strong {
+  font-size: 13px;
+}
+
+.appearance-columns {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.appearance-columns > div {
+  min-width: 0;
+}
+
+.appearance-columns h4 {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 8px 0 5px;
+}
+
+.appearance-columns button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 6px;
+  text-align: left;
+  width: 100%;
+}
+
+.appearance-columns button:hover {
+  background: var(--hover);
+}
+
+.appearance-columns button small {
+  color: var(--muted);
+}
+
+.character-statistics-view {
+  overflow: auto;
+}
+
+.character-statistics-layout {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 220px minmax(0, 1fr);
+  padding: 0 24px 16px;
+}
+
+.character-statistics-layout > aside {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  display: grid;
+  gap: 4px;
+  max-height: 430px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.character-statistics-layout > aside h3 {
+  margin: 0 0 6px;
+}
+
+.character-statistics-layout > aside button {
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: var(--text);
+  cursor: pointer;
+  padding: 7px;
+  text-align: left;
+}
+
+.character-statistics-layout > aside button:hover,
+.character-statistics-layout > aside button.active {
+  background: var(--hover);
+  color: var(--accent);
+}
+
+.character-matrix {
+  margin: 0 24px 24px;
+}
+
+.matrix-controls {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 11px;
+  gap: 5px;
+  margin: 8px 0;
+}
+
+.character-matrix-scroll {
+  max-height: 520px;
+  overflow: auto;
+}
+
+.character-matrix table {
+  border-collapse: collapse;
+  font-size: 11px;
+  min-width: 100%;
+}
+
+.character-matrix th,
+.character-matrix td {
+  border: 1px solid var(--line);
+  padding: 6px 8px;
+  text-align: center;
+}
+
+.character-matrix thead th,
+.character-matrix tbody th {
+  background: var(--panel);
+  position: sticky;
+  z-index: 1;
+}
+
+.character-matrix thead th {
+  top: 0;
+}
+
+.character-matrix tbody th {
+  left: 0;
+  min-width: 140px;
+  text-align: left;
+}
+
+.character-matrix th button {
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.character-matrix td span {
+  color: var(--accent);
+}
+
+@media (max-width: 900px) {
+  .appearance-metrics,
+  .appearance-columns,
+  .character-statistics-layout {
+    grid-template-columns: 1fr;
+  }
+}

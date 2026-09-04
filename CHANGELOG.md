@@ -9,6 +9,8 @@
 - 可重建的章节/实体出现索引，为人物出场统计提供统一数据来源。
 - P2 剧情线：支持五种状态、颜色、优先级、多章节关联、有序 milestone、拖拽排序、章节跳转和 Inspector 快速关联。
 - 剧情线健康检查新增 `broken-story-arc-chapter`、`story-arc-stale`、`story-arc-completed-with-open-milestone` 和 `story-arc-orphan-milestone`。
+- P3 人物出场统计：人物资料页提供首次/最近登场、章节与提及计数、共同人物、主要地点和章节跳转。
+- 新增按 40 章 × 12 人物窗口化的章节人物矩阵，以及可主动触发的全文重新扫描。
 
 ### Data safety
 

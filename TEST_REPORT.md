@@ -561,3 +561,12 @@ P1 扫描结果和出现索引均可重新计算；测试没有把缓存存在�
 | Rust 集成 | 四类 issue code、Markdown 镜像和数据库重建 | 通过 |
 | 前端回归 | `pnpm typecheck`、`pnpm lint`、`pnpm test` | 通过；23 文件 / 128 项 |
 | Rust 回归 | `cargo check --locked`、`cargo test --locked` | 通过；44 项常规测试，1 项 ignored |
+# V1.1 P3 人物出场统计验证（2026-09-05）
+
+| 层级 | 验证 | 结果 |
+| --- | --- | --- |
+| 统计单元测试 | 小节归并、首次/最近、提及计数、共同人物、主要地点 | 通过 |
+| 缓存与读取 | 45 个文档分批加载、缓存复用、强制重扫 | 通过 |
+| 大矩阵窗口 | 1000 章、100 人物仅返回当前分页窗口 | 通过 |
+| 前端回归 | `pnpm typecheck`、`pnpm lint`、`pnpm test` | 通过；24 文件 / 131 项 |
+| Rust 回归 | `cargo check --locked`、`cargo test --locked` | 通过；44 项常规测试，1 项 ignored |

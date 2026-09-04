@@ -51,8 +51,8 @@
 
 - [x] P1 自动资料识别：本地规则扫描、已知资料/别名命中、Markdown 安全排除、重叠消解、单次/永久忽略和显式 Wiki 插入
 - [x] P2 剧情线 Story Arc：专用视图、章节多选关联、milestone 拖拽/排序、Inspector、回收站/恢复和一致性健康提示
-- [~] P3 人物出场统计
-- [ ] P4 AI Prompt Preset
+- [x] P3 人物出场统计：首次/最近登场、章节与提及计数、共同人物、主要地点、章节跳转和窗口化人物矩阵
+- [~] P4 AI Prompt Preset
 - [ ] P5 灵感 Inbox
 - [ ] P6 章节完成 Checklist
 
