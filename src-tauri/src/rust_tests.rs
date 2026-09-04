@@ -228,6 +228,55 @@ fn story_arc_consistency_and_database_recovery_preserve_links() {
 }
 
 #[test]
+fn prompt_preset_mirror_recovers_after_database_loss() {
+    let root = test_root("prompt-preset-recovery");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "Prompt 恢复".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "现代".to_string(),
+        target_words: 1000,
+    })
+    .expect("create project");
+    let saved = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "prompt-preset".to_string(),
+        id: None,
+        title: "人物 OOC 检查".to_string(),
+        content: serde_json::json!({
+            "description": "检查人物行为",
+            "prompt": "检查 {{character:林月}} 在 {{currentChapter}} 中的行为",
+            "systemPrompt": "只分析，不修改正文",
+            "action": "analyze",
+            "defaultContexts": [{"variable": "character:林月"}, {"variable": "currentChapter"}]
+        }),
+        tags: vec!["AI 模板".to_string()],
+    })
+    .expect("save prompt preset");
+    let preset = saved
+        .entities
+        .iter()
+        .find(|entity| entity.kind == "prompt-preset")
+        .expect("prompt preset")
+        .clone();
+    fs::remove_file(root.join("project/.novelforge/database.sqlite")).expect("remove database");
+    let reopened = super::commands::open_project(project_path).expect("rebuild project");
+    let recovered = reopened
+        .entities
+        .iter()
+        .find(|entity| entity.kind == "prompt-preset")
+        .expect("recover prompt preset");
+    assert_eq!(recovered.id, preset.id);
+    assert_eq!(
+        recovered.content.get("action").and_then(serde_json::Value::as_str),
+        Some("analyze")
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn real_command_workflow_persists_markdown_and_recoverable_trash() {
     let root = test_root("command-workflow");
     let project_path = root.join("雾港来信").to_string_lossy().to_string();

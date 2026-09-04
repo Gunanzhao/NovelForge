@@ -154,6 +154,7 @@ pub fn kind_directory(kind: &str) -> Result<&'static str, String> {
         "outline" => Ok("outlines"), "scene" => Ok("scenes"), "note" => Ok("notes"),
         "mention-ignore" => Ok("mentions"),
         "story-arc" => Ok("story-arcs"),
+        "prompt-preset" => Ok("prompts"),
         _ => Err(format!("不支持的资料类型：{}", kind)),
     }
 }

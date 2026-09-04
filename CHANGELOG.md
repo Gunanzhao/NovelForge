@@ -11,11 +11,15 @@
 - 剧情线健康检查新增 `broken-story-arc-chapter`、`story-arc-stale`、`story-arc-completed-with-open-milestone` 和 `story-arc-orphan-milestone`。
 - P3 人物出场统计：人物资料页提供首次/最近登场、章节与提及计数、共同人物、主要地点和章节跳转。
 - 新增按 40 章 × 12 人物窗口化的章节人物矩阵，以及可主动触发的全文重新扫描。
+- P4 项目级 Prompt 模板：支持 CRUD、复制、重命名、运行和白名单变量展开。
+- 模板执行前展示最终 Prompt、上下文项、字符数和估算 Token；解析失败或超过安全阈值时不发送。
+- rewrite 模板输出提供复制、取消、替换选区和插入选区后，不自动覆盖正文。
 
 ### Data safety
 
 - 永久忽略项保存为带 Markdown 镜像的项目实体；正文格式和已有项目 `formatVersion` 保持不变。
 - 剧情线保存到 `story-arcs/` Markdown 镜像，可参与数据库重建和回收站恢复。
+- Prompt 模板保存到 `prompts/` Markdown 镜像，API Key 仍不进入项目、Git 或日志。
 
 ## 1.0.0-rc.2
 

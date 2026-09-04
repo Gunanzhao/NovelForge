@@ -570,3 +570,13 @@ P1 扫描结果和出现索引均可重新计算；测试没有把缓存存在�
 | 大矩阵窗口 | 1000 章、100 人物仅返回当前分页窗口 | 通过 |
 | 前端回归 | `pnpm typecheck`、`pnpm lint`、`pnpm test` | 通过；24 文件 / 131 项 |
 | Rust 回归 | `cargo check --locked`、`cargo test --locked` | 通过；44 项常规测试，1 项 ignored |
+# V1.1 P4 Prompt Preset 验证（2026-09-05）
+
+| 层级 | 验证 | 结果 |
+| --- | --- | --- |
+| 变量单元测试 | 全部白名单变量、最近章节、实体上下文、未知/缺失变量阻断 | 通过 |
+| 组件交互 | 运行前预览、字符/Token 展示、本地执行、缺少选区不执行 rewrite | 通过 |
+| 浏览器集成 | 模板保存、删除和回收站恢复 | 通过 |
+| Rust 恢复 | `prompts/` 镜像在数据库删除后恢复 ID、动作和模板 | 通过 |
+| 前端回归 | `pnpm typecheck`、`pnpm lint`、`pnpm test` | 通过；26 文件 / 137 项 |
+| Rust 回归 | `cargo check --locked`、`cargo test --locked` | 通过；45 项常规测试，1 项 ignored |

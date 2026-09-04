@@ -646,3 +646,11 @@
 - 全文扫描按 20 个正文文档分批读取，章节小节归并到所属章节；缓存随节点或资料更新时间变化而失效，也可强制重建。
 - 命令面板新增“打开人物出场统计”，人物右键菜单新增“查看出场统计”。
 - 阶段门禁：24 个前端测试文件 / 131 项测试通过；Rust 44 项常规测试通过、1 项大型基准按设计忽略；typecheck、lint、cargo check 均通过。
+# V1.1 P4 AI Prompt 模板（2026-09-05）
+
+- AI 页面新增“我的模板”，支持创建、编辑、重命名、复制、删除、预览和运行。
+- 变量解析覆盖 selection、currentParagraph、currentChapter、recentChapters:1/3/5/10、character/location/world/storyArc。
+- 未知或缺失上下文在请求前阻断；最终 Prompt 预览显示显式上下文、字符数和估算 Token。
+- rewrite 结果只允许用户复制、取消、替换选区或插入选区后；模板和永久忽略项不会出现在普通 AI 上下文列表。
+- Prompt 模板通过 Markdown 镜像参与数据库重建；浏览器 fallback 支持项目 CRUD 与回收站恢复。
+- 阶段门禁：26 个前端测试文件 / 137 项测试通过；Rust 45 项常规测试通过、1 项大型基准按设计忽略；typecheck、lint、cargo check 均通过。

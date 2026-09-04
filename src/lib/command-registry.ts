@@ -22,6 +22,8 @@ export type CommandId =
   | 'open-story-arcs'
   | 'new-story-arc'
   | 'open-character-statistics'
+  | 'open-prompt-presets'
+  | 'run-prompt-preset'
   | 'toggle-bold'
   | 'toggle-italic'
 
@@ -55,6 +57,8 @@ export const COMMANDS: CommandDescriptor[] = [
   { id: 'open-story-arcs', label: '打开剧情线', description: '查看和编辑项目剧情线', keywords: ['剧情线', 'story', 'arc'] },
   { id: 'new-story-arc', label: '新建剧情线', description: '创建一条新的剧情线', keywords: ['新建', '剧情线', 'story', 'arc'] },
   { id: 'open-character-statistics', label: '打开人物出场统计', description: '查看人物出场、共同出现和章节矩阵', keywords: ['人物', '出场', '统计', '矩阵'] },
+  { id: 'open-prompt-presets', label: '打开 Prompt 模板', description: '管理项目级 AI Prompt 模板', keywords: ['AI', 'Prompt', '模板'] },
+  { id: 'run-prompt-preset', label: '运行 Prompt 模板', description: '预览并运行第一个项目模板', keywords: ['AI', 'Prompt', '运行', '模板'] },
   { id: 'toggle-bold', label: '切换粗体', description: '对当前编辑器选区应用或取消粗体', keywords: ['粗体', 'bold', '编辑'], defaultShortcut: 'Ctrl+B' },
   { id: 'toggle-italic', label: '切换斜体', description: '对当前编辑器选区应用或取消斜体', keywords: ['斜体', 'italic', '编辑'], defaultShortcut: 'Ctrl+I' },
 ]
@@ -126,6 +130,7 @@ export function commandView(commandId: CommandId): ViewId | undefined {
     'open-search': 'search', 'open-full-search': 'search', 'open-attachment': 'attachment', 'open-consistency': 'consistency', 'open-statistics': 'statistics', 'open-ai': 'ai',
     'open-story-arcs': 'story-arc',
     'open-character-statistics': 'character-statistics',
+    'open-prompt-presets': 'ai', 'run-prompt-preset': 'ai',
   }
   return views[commandId]
 }

@@ -40,6 +40,9 @@ export function CommandPalette({ onNewProject, onCloseProject, onQuickOpen }: Co
       if (id === 'open-search' || id === 'open-full-search') {
         window.dispatchEvent(new CustomEvent('novelforge:search-scope', { detail: id === 'open-search' ? 'current' : 'project' }))
       }
+      if (id === 'open-prompt-presets' || id === 'run-prompt-preset') {
+        window.setTimeout(() => window.dispatchEvent(new Event(id === 'open-prompt-presets' ? 'novelforge:open-prompt-presets' : 'novelforge:run-prompt-preset')), 0)
+      }
     } else if (id === 'new-project') {
       onNewProject()
     } else if (id === 'close-project') {

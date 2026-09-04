@@ -31,12 +31,12 @@
   - [x] 首次/最近登场、章节数和提及次数
   - [x] 共同出现人物、主要地点、章节跳转
   - [x] 窗口化章节人物矩阵与全文重新扫描
-- [~] P4 AI Prompt Preset
-  - [ ] 项目级模板 CRUD、复制和重命名
-  - [ ] 变量解析、错误阻断和剧情线上下文
-  - [ ] 最终 Prompt、上下文、字符数和 Token 预览
-  - [ ] rewrite 结果仅允许用户显式应用
-- [ ] P5 灵感 Inbox
+- [x] P4 AI Prompt Preset
+  - [x] 项目级模板 CRUD、复制和重命名
+  - [x] 变量解析、错误阻断和剧情线上下文
+  - [x] 最终 Prompt、上下文、字符数和 Token 预览
+  - [x] rewrite 结果仅允许用户显式应用
+- [~] P5 灵感 Inbox
   - [ ] `Ctrl+Shift+I` 快速记录
   - [ ] 未整理/已整理、搜索、标签、排序、删除和恢复
   - [ ] 转换为资料、场景、伏笔、剧情线 milestone 和笔记
@@ -50,7 +50,7 @@
 
 - [ ] 旧项目无需手动转换即可打开
 - [ ] 正文继续保存为普通 Markdown
-- [~] Story Arc 已有可恢复镜像；Inbox、Prompt Preset 和 Checklist 待实现
+- [~] Story Arc、Prompt Preset 已有可恢复镜像；Inbox 和 Checklist 待实现
 - [x] Mention 与人物统计可由正文和资料重新扫描生成
 - [x] P1 浏览器 fallback 可运行
 
