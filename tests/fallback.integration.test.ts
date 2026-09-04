@@ -74,6 +74,55 @@ describe('browser fallback project workflow', () => {
     expect(await fallbackInvoke<TrashItem[]>('list_trash', { path: 'trash-test-project' })).toHaveLength(0)
   })
 
+  it('creates, edits, links, deletes and restores multiple story arcs', async () => {
+    const path = 'story-arc-fallback-project'
+    const created = await fallbackInvoke<ProjectData>('create_project', { input: { ...input, path } })
+    const chapter = created.nodes.find((node) => node.kind === 'chapter')
+    expect(chapter).toBeDefined()
+    if (!chapter) return
+    let data = await fallbackInvoke<ProjectData>('upsert_entity', {
+      input: {
+        projectPath: path,
+        kind: 'story-arc',
+        id: null,
+        title: '主线',
+        content: {
+          status: 'active',
+          color: '#112233',
+          priority: 10,
+          chapterIds: [chapter.id],
+          milestones: [{ id: 'm1', title: '发现线索', order: 0, status: 'planned', chapterId: chapter.id }],
+        },
+        tags: ['剧情线'],
+      },
+    })
+    data = await fallbackInvoke<ProjectData>('upsert_entity', {
+      input: { projectPath: path, kind: 'story-arc', id: null, title: '感情线', content: { status: 'planned', chapterIds: [] }, tags: ['剧情线'] },
+    })
+    expect(data.entities.filter((entity) => entity.kind === 'story-arc')).toHaveLength(2)
+    const mainArc = data.entities.find((entity) => entity.kind === 'story-arc' && entity.title === '主线')
+    expect(mainArc).toBeDefined()
+    if (!mainArc) return
+    data = await fallbackInvoke<ProjectData>('upsert_entity', {
+      input: {
+        projectPath: path,
+        kind: 'story-arc',
+        id: mainArc.id,
+        title: '寻找星核',
+        content: { ...mainArc.content, status: 'completed', milestones: [{ id: 'm1', title: '发现线索', order: 0, status: 'completed', chapterId: chapter.id }] },
+        tags: mainArc.tags,
+      },
+    })
+    expect(data.entities.find((entity) => entity.id === mainArc.id)?.title).toBe('寻找星核')
+    await fallbackInvoke<ProjectData>('delete_entity', { input: { projectPath: path, nodeId: mainArc.id } })
+    const trash = await fallbackInvoke<TrashItem[]>('list_trash', { path })
+    const arcTrash = trash.find((item) => item.refId === mainArc.id)
+    expect(arcTrash).toBeDefined()
+    if (!arcTrash) return
+    const restored = await fallbackInvoke<ProjectData>('restore_trash', { input: { projectPath: path, nodeId: arcTrash.id } })
+    expect(restored.entities.find((entity) => entity.id === mainArc.id)?.title).toBe('寻找星核')
+  })
+
   it('keeps nested markdown paths and restores recursive node and entity snapshots', async () => {
     const path = 'nested-trash-test-project'
     const created = await fallbackInvoke<ProjectData>('create_project', { input: { ...input, path } })

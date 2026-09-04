@@ -1,5 +1,5 @@
 export type NodeKind = 'volume' | 'chapter' | 'section'
-export type EntityKind = 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note' | 'relationship' | 'attachment' | 'mention-ignore'
+export type EntityKind = 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note' | 'relationship' | 'attachment' | 'mention-ignore' | 'story-arc'
 export type ViewId = 'dashboard' | 'manuscript' | EntityKind | 'consistency' | 'statistics' | 'ai' | 'search' | 'trash' | 'settings'
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type ThemeMode = 'light' | 'dark' | 'system'
@@ -130,6 +130,7 @@ export const ENTITY_LABELS: Record<EntityKind, string> = {
   relationship: '人物关系',
   attachment: '附件',
   'mention-ignore': '识别忽略项',
+  'story-arc': '剧情线',
 }
 
 export const NODE_STATUS_LABELS: Record<string, string> = {
@@ -193,6 +194,10 @@ export const ENTITY_FIELDS: Record<EntityKind, Array<{ key: string; label: strin
   ],
   'mention-ignore': [
     { key: 'text', label: '忽略词' }, { key: 'kind', label: '候选类型' },
+  ],
+  'story-arc': [
+    { key: 'description', label: '说明', multiline: true }, { key: 'status', label: '状态' },
+    { key: 'color', label: '颜色' }, { key: 'priority', label: '优先级' },
   ],
 }
 

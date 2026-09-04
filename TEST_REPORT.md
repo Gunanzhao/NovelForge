@@ -552,3 +552,12 @@
 | Rust 回归 | `cargo check --locked`、`cargo test --locked` | 通过；43 项常规测试，1 项 ignored |
 
 P1 扫描结果和出现索引均可重新计算；测试没有把缓存存在当成恢复证据。桌面交互将在 V1.1 最终 E2E 脚本中与 P2–P6 一并执行。
+# V1.1 P2 剧情线验证（2026-09-05）
+
+| 层级 | 验证 | 结果 |
+| --- | --- | --- |
+| Story Arc 单元测试 | 结构解析、状态、去重、milestone 排序、健康/异常引用 | 6 项通过 |
+| 浏览器集成 | 创建、编辑、多个剧情线、章节关联、删除、回收站恢复 | 通过 |
+| Rust 集成 | 四类 issue code、Markdown 镜像和数据库重建 | 通过 |
+| 前端回归 | `pnpm typecheck`、`pnpm lint`、`pnpm test` | 通过；23 文件 / 128 项 |
+| Rust 回归 | `cargo check --locked`、`cargo test --locked` | 通过；44 项常规测试，1 项 ignored |

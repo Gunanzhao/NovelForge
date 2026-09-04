@@ -54,6 +54,9 @@ export function CommandPalette({ onNewProject, onCloseProject, onQuickOpen }: Co
       window.dispatchEvent(new CustomEvent('novelforge:editor-command', {
         detail: id === 'toggle-bold' ? 'bold' : 'italic',
       }))
+    } else if (id === 'new-story-arc') {
+      setView('story-arc')
+      window.setTimeout(() => window.dispatchEvent(new Event('novelforge:new-story-arc')), 0)
     }
     setOpen(false)
     setRecording(null)

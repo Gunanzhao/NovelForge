@@ -19,6 +19,8 @@ export type CommandId =
   | 'open-consistency'
   | 'open-statistics'
   | 'open-ai'
+  | 'open-story-arcs'
+  | 'new-story-arc'
   | 'toggle-bold'
   | 'toggle-italic'
 
@@ -49,6 +51,8 @@ export const COMMANDS: CommandDescriptor[] = [
   { id: 'open-consistency', label: '打开一致性检查', description: '扫描断开的 Wiki 和章节引用', keywords: ['一致性', '检查', 'consistency'], defaultShortcut: 'Ctrl+8' },
   { id: 'open-statistics', label: '打开详细统计', description: '查看写作趋势和章节排行', keywords: ['统计', '趋势', 'statistics'], defaultShortcut: 'Ctrl+9' },
   { id: 'open-ai', label: '打开 AI 辅助', description: '显式选择上下文并运行写作辅助', keywords: ['AI', '续写', '润色', '摘要', 'assistant'], defaultShortcut: 'Ctrl+0' },
+  { id: 'open-story-arcs', label: '打开剧情线', description: '查看和编辑项目剧情线', keywords: ['剧情线', 'story', 'arc'] },
+  { id: 'new-story-arc', label: '新建剧情线', description: '创建一条新的剧情线', keywords: ['新建', '剧情线', 'story', 'arc'] },
   { id: 'toggle-bold', label: '切换粗体', description: '对当前编辑器选区应用或取消粗体', keywords: ['粗体', 'bold', '编辑'], defaultShortcut: 'Ctrl+B' },
   { id: 'toggle-italic', label: '切换斜体', description: '对当前编辑器选区应用或取消斜体', keywords: ['斜体', 'italic', '编辑'], defaultShortcut: 'Ctrl+I' },
 ]
@@ -118,6 +122,7 @@ export function commandView(commandId: CommandId): ViewId | undefined {
     'open-dashboard': 'dashboard', 'open-manuscript': 'manuscript', 'open-outline': 'outline',
     'open-timeline': 'timeline', 'open-foreshadowing': 'foreshadowing', 'open-relationship': 'relationship',
     'open-search': 'search', 'open-full-search': 'search', 'open-attachment': 'attachment', 'open-consistency': 'consistency', 'open-statistics': 'statistics', 'open-ai': 'ai',
+    'open-story-arcs': 'story-arc',
   }
   return views[commandId]
 }

@@ -369,6 +369,89 @@ pub fn check_consistency(path: String) -> Result<crate::models::ConsistencyRepor
             }
         }
     }
+    let chapter_ids: std::collections::HashSet<&str> = nodes
+        .iter()
+        .filter(|node| node.kind == "chapter")
+        .map(|node| node.id.as_str())
+        .collect();
+    let ordered_chapters: Vec<&crate::models::NodeRecord> = {
+        let mut chapters = nodes.iter().filter(|node| node.kind == "chapter").collect::<Vec<_>>();
+        chapters.sort_by_key(|node| node.order_index);
+        chapters
+    };
+    let chapter_order: std::collections::HashMap<&str, usize> = ordered_chapters
+        .iter()
+        .enumerate()
+        .map(|(index, node)| (node.id.as_str(), index))
+        .collect();
+    for arc in entities.iter().filter(|entity| entity.kind == "story-arc") {
+        let linked = arc.content.get("chapterIds").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+        let broken = linked.iter().filter_map(serde_json::Value::as_str).filter(|id| !chapter_ids.contains(id)).count();
+        if broken > 0 {
+            issues.push(consistency_issue(
+                "warning",
+                "broken-story-arc-chapter",
+                "剧情线章节关联失效",
+                format!("剧情线“{}”包含 {} 个已删除章节引用。", arc.title, broken),
+                &arc.id,
+                &arc.kind,
+                &arc.file_path,
+            ));
+        }
+        let milestones = arc.content.get("milestones").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+        let mut open_milestones = 0usize;
+        for milestone in &milestones {
+            if milestone.get("status").and_then(serde_json::Value::as_str) != Some("completed") {
+                open_milestones += 1;
+            }
+            if let Some(chapter_id) = milestone.get("chapterId").and_then(serde_json::Value::as_str).filter(|value| !value.is_empty()) {
+                if !chapter_ids.contains(chapter_id) {
+                    let title = milestone.get("title").and_then(serde_json::Value::as_str).unwrap_or("未命名节点");
+                    issues.push(consistency_issue(
+                        "warning",
+                        "story-arc-orphan-milestone",
+                        "剧情线节点引用失效",
+                        format!("节点“{}”引用的章节已不存在。", title),
+                        &arc.id,
+                        &arc.kind,
+                        &arc.file_path,
+                    ));
+                }
+            }
+        }
+        let status = arc.content.get("status").and_then(serde_json::Value::as_str).unwrap_or("planned");
+        if status == "completed" && open_milestones > 0 {
+            issues.push(consistency_issue(
+                "warning",
+                "story-arc-completed-with-open-milestone",
+                "已完成剧情线仍有未完成节点",
+                format!("剧情线“{}”仍有 {} 个计划节点未完成。", arc.title, open_milestones),
+                &arc.id,
+                &arc.kind,
+                &arc.file_path,
+            ));
+        }
+        let last_progress = linked
+            .iter()
+            .filter_map(serde_json::Value::as_str)
+            .filter_map(|id| chapter_order.get(id).copied())
+            .max();
+        if status == "active" && open_milestones > 0 && !ordered_chapters.is_empty() {
+            let latest = ordered_chapters.len() - 1;
+            let gap = last_progress.map(|index| latest.saturating_sub(index)).unwrap_or(ordered_chapters.len());
+            if gap >= 5 {
+                issues.push(consistency_issue(
+                    "warning",
+                    "story-arc-stale",
+                    "剧情线可能长期未推进",
+                    format!("剧情线“{}”已连续 {} 章没有关联推进。", arc.title, gap),
+                    &arc.id,
+                    &arc.kind,
+                    &arc.file_path,
+                ));
+            }
+        }
+    }
     let character_ids: std::collections::HashSet<String> = entities.iter().filter(|entity| entity.kind == "character").map(|entity| entity.id.clone()).collect();
     for entity in entities.iter().filter(|entity| entity.kind == "relationship") {
         let from_id = json_text(&entity.content, "fromId");

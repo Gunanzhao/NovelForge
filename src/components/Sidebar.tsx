@@ -24,6 +24,7 @@ const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: 'world', label: '世界观 Wiki', icon: Globe2 },
   { id: 'timeline', label: '时间线', icon: Clock3 },
   { id: 'foreshadowing', label: '伏笔', icon: GitBranch },
+  { id: 'story-arc', label: '剧情线', icon: GitBranch },
   { id: 'relationship', label: '人物关系图', icon: Network },
   { id: 'attachment', label: '资料附件', icon: Paperclip },
   { id: 'consistency', label: '一致性检查', icon: ShieldCheck },

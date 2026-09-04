@@ -1,6 +1,7 @@
 import { wikiTargets } from './markdown'
 import { chapterReferenceTokens, findChapterByReference, normalizeForeshadowingStatus } from './planning-data'
 import type { ConsistencyIssue, ConsistencyReport, EntityRecord, NodeRecord, ProjectData } from './types'
+import { storyArcHealthIssues } from './story-arc-data'
 
 function entityValue(entity: EntityRecord, key: string) {
   const value = entity.content[key]
@@ -194,6 +195,7 @@ function chapterReferenceExists(nodes: NodeRecord[], value: string) {
 export function analyzeConsistency(data: ProjectData, documents: Record<string, string>): ConsistencyReport {
   const issues: ConsistencyIssue[] = []
   const activeEntities = data.entities
+  issues.push(...storyArcHealthIssues(data))
   const knownTitles = new Set(activeEntities.map((entity) => entity.title.trim()).filter(Boolean))
   const duplicateTitles = new Map<string, EntityRecord>()
 

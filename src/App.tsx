@@ -26,6 +26,7 @@ import { SearchView } from './components/SearchView'
 import { SettingsView } from './components/SettingsView'
 import { RelationshipsView } from './components/RelationshipsView'
 import { StatisticsView } from './components/StatisticsView'
+import { StoryArcView } from './components/StoryArcView'
 import { Sidebar } from './components/Sidebar'
 import { TrashView } from './components/TrashView'
 import { QuickOpen } from './components/QuickOpen'
@@ -160,6 +161,7 @@ export default function App() {
     if (activeView === 'relationship') return <RelationshipsView />
     if (activeView === 'consistency') return <ConsistencyView />
     if (activeView === 'statistics') return <StatisticsView />
+    if (activeView === 'story-arc') return <StoryArcView />
     if (activeView === 'attachment') return <AttachmentsView />
     if (activeView === 'ai') return <AiAssistantView />
     if (activeView === 'search') return <SearchView />

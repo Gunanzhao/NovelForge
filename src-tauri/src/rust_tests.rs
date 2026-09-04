@@ -142,6 +142,92 @@ fn mention_ignore_mirror_recovers_after_database_loss() {
 }
 
 #[test]
+fn story_arc_consistency_and_database_recovery_preserve_links() {
+    let root = test_root("story-arc-recovery");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let mut data = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "剧情线恢复".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "科幻".to_string(),
+        target_words: 1000,
+    })
+    .expect("create project");
+    let volume_id = data
+        .nodes
+        .iter()
+        .find(|node| node.kind == "volume")
+        .expect("volume")
+        .id
+        .clone();
+    let first_chapter_id = data
+        .nodes
+        .iter()
+        .find(|node| node.kind == "chapter")
+        .expect("chapter")
+        .id
+        .clone();
+    for index in 2..=7 {
+        data = super::commands::create_node(super::models::NodeInput {
+            project_path: project_path.clone(),
+            kind: "chapter".to_string(),
+            title: format!("第{}章", index),
+            parent_id: Some(volume_id.clone()),
+        })
+        .expect("create chapter");
+    }
+    assert_eq!(data.nodes.iter().filter(|node| node.kind == "chapter").count(), 7);
+    let saved = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "story-arc".to_string(),
+        id: None,
+        title: "寻找星核".to_string(),
+        content: serde_json::json!({
+            "description": "主线",
+            "status": "active",
+            "color": "#8b5cf6",
+            "priority": 10,
+            "chapterIds": [first_chapter_id, "deleted-chapter"],
+            "milestones": [
+                {"id": "m1", "title": "发现线索", "order": 0, "status": "planned"},
+                {"id": "m2", "title": "失效节点", "order": 1, "status": "completed", "chapterId": "missing-chapter"}
+            ]
+        }),
+        tags: vec!["剧情线".to_string()],
+    })
+    .expect("save story arc");
+    let story_arc = saved
+        .entities
+        .iter()
+        .find(|entity| entity.kind == "story-arc")
+        .expect("story arc")
+        .clone();
+    let report = super::commands::check_consistency(project_path.clone()).expect("consistency");
+    for code in [
+        "broken-story-arc-chapter",
+        "story-arc-orphan-milestone",
+        "story-arc-stale",
+    ] {
+        assert!(report.issues.iter().any(|issue| issue.code == code), "missing {code}");
+    }
+
+    fs::remove_file(root.join("project/.novelforge/database.sqlite")).expect("remove database");
+    let reopened = super::commands::open_project(project_path).expect("rebuild project");
+    let recovered = reopened
+        .entities
+        .iter()
+        .find(|entity| entity.kind == "story-arc")
+        .expect("recover story arc");
+    assert_eq!(recovered.id, story_arc.id);
+    assert_eq!(
+        recovered.content.get("status").and_then(serde_json::Value::as_str),
+        Some("active")
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn real_command_workflow_persists_markdown_and_recoverable_trash() {
     let root = test_root("command-workflow");
     let project_path = root.join("雾港来信").to_string_lossy().to_string();

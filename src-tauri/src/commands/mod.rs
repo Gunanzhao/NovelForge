@@ -133,6 +133,7 @@ const RECOVERY_DIRECTORIES: &[&str] = &[
     "relationships",
     "notes",
     "mentions",
+    "story-arcs",
     ".novelforge/history",
 ];
 
@@ -455,6 +456,7 @@ fn rebuild_entities_from_markdown(root: &Path, connection: &Connection) -> Resul
         ("timeline", "timeline"), ("outline", "outlines"), ("scene", "scenes"),
         ("foreshadowing", "foreshadowing"), ("relationship", "relationships"), ("note", "notes"),
         ("mention-ignore", "mentions"),
+        ("story-arc", "story-arcs"),
     ] {
         let directory_path = storage::safe_relative(root, directory)?;
         if !directory_path.is_dir() {

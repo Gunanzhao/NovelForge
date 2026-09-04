@@ -7,10 +7,13 @@
 - P1 自动资料识别：本地扫描当前章节中的人物、地点和世界观资料，支持标题/别名命中、规则候选、单次/永久忽略、创建资料和显式插入 Wiki。
 - Mention Scanner 排除 fenced code、inline code、URL、Markdown 链接目标、图片路径和已有 Wiki Link，并对重叠名称优先保留已知资料和更长名称。
 - 可重建的章节/实体出现索引，为人物出场统计提供统一数据来源。
+- P2 剧情线：支持五种状态、颜色、优先级、多章节关联、有序 milestone、拖拽排序、章节跳转和 Inspector 快速关联。
+- 剧情线健康检查新增 `broken-story-arc-chapter`、`story-arc-stale`、`story-arc-completed-with-open-milestone` 和 `story-arc-orphan-milestone`。
 
 ### Data safety
 
 - 永久忽略项保存为带 Markdown 镜像的项目实体；正文格式和已有项目 `formatVersion` 保持不变。
+- 剧情线保存到 `story-arcs/` Markdown 镜像，可参与数据库重建和回收站恢复。
 
 ## 1.0.0-rc.2
 

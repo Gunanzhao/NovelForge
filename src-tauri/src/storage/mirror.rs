@@ -153,6 +153,7 @@ pub fn kind_directory(kind: &str) -> Result<&'static str, String> {
         "timeline" => Ok("timeline"), "foreshadowing" => Ok("foreshadowing"), "relationship" => Ok("relationships"), "attachment" => Ok("attachments"),
         "outline" => Ok("outlines"), "scene" => Ok("scenes"), "note" => Ok("notes"),
         "mention-ignore" => Ok("mentions"),
+        "story-arc" => Ok("story-arcs"),
         _ => Err(format!("不支持的资料类型：{}", kind)),
     }
 }

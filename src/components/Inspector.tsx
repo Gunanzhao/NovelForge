@@ -11,6 +11,7 @@ import { writeClipboardText } from '../lib/clipboard'
 import { Button } from './ui'
 import { NameGenerator } from './NameGenerator'
 import { MentionInspector } from './MentionInspector'
+import { StoryArcInspector } from './StoryArcInspector'
 import { useContextMenu } from './ContextMenu'
 
 export function Inspector() {
@@ -112,6 +113,7 @@ export function Inspector() {
       <div className="inspector-section"><div className="panel-title"><h3>写作提示</h3><span>{hints.length ? hints.length + ' 项待确认' : '干净'}</span></div>{hints.length ? <div className="hint-list">{hints.slice(0, 4).map((hint, index) => <div className="hint-item" key={index}>第 {hint.line} 行：{hint.message}<small>{hint.sample || '空行'}</small></div>)}</div> : <div className="field-hint"><Lightbulb size={12} /> 暂未发现明显的标点或空白问题。</div>}<div className="inspector-actions" style={{ marginTop: 10 }}><Button variant="outline" onClick={() => punctuation('full')}>标点转全角</Button><Button variant="outline" onClick={() => punctuation('half')}>标点转半角</Button><Button variant="outline" onClick={() => width('full')}>字符转全角</Button><Button variant="outline" onClick={() => width('half')}>字符转半角</Button><Button variant="outline" onClick={() => transformContent(cleanWritingWhitespace, '清理行尾空格并合并连续空行？')}>清理空格/空行</Button><Button variant="outline" onClick={() => transformContent(indentParagraphs, '为普通段落添加全角空格首行缩进？')}>首行缩进</Button></div></div>
       <div className="inspector-section"><NameGenerator /></div>
       <div className="inspector-section"><MentionInspector /></div>
+      <div className="inspector-section"><StoryArcInspector /></div>
       <div className="inspector-section"><button className="inspector-collapse" onClick={() => setHistoryOpen(!historyOpen)}><span><History size={14} />版本历史</span>{historyOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>{historyOpen ? <div className="history-list" style={{ marginTop: 11 }}>{history.length ? history.map((item) => <div className="history-item" key={item.id} onContextMenu={(event) => openHistoryMenu(event, item)}><div><strong>{item.reason}</strong><small>{formatDate(item.createdAt)} · {formatNumber(item.wordCount)} 字</small></div><span><Button variant="ghost" onClick={() => void readRevision(item.id)}>查看</Button><Button variant="ghost" onClick={() => void readRevision(item.id, 'diff')}><GitCompare size={12} />Diff</Button><Button variant="ghost" onClick={() => void copyRevision(item.id)}><Clipboard size={12} />复制</Button><Button variant="ghost" onClick={() => void restoreRevision(item.id)}><RotateCcw size={12} />恢复</Button></span></div>) : <span className="field-hint">保存一次后会在这里留下快照。</span>}{historyPreview ? historyPreview.mode === 'diff' ? <pre className="history-preview history-diff">{diffLines(historyPreview.content, document.content).map((line, index) => <span className={'diff-line ' + line.kind} key={index}>{line.kind === 'same' ? '  ' : line.kind === 'added' ? '+ ' : '- '}{line.text}{'\\n'}</span>)}</pre> : <pre className="history-preview">{historyPreview.content}</pre> : null}</div> : null}</div>
     </div>
   </aside>
