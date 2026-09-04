@@ -1,10 +1,10 @@
 /* global console, fetch, process, setTimeout, WebSocket */
 
 import { execFileSync, spawn } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { homedir, tmpdir } from 'node:os'
-import { dirname, resolve } from 'node:path'
+import { basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -272,6 +272,11 @@ async function rightClickSelector(page, selector, text) {
   const point = await page.evaluate(expression)
   if (!point) throw new Error('找不到右键目标：' + selector + (text ? ' / ' + text : ''))
   await rightClickAt(page, point)
+  if (!await page.evaluate("document.querySelector('.context-menu[data-context-menu-surface=\"true\"]') !== null")) {
+    const fallback = "(function(){const item=Array.from(document.querySelectorAll(" + jsString(selector) + ")).find((node)=>" + (text ? "(node.textContent||'').includes(" + jsString(text) + ")" : 'true') + ");if(!item)return false;const rect=item.getBoundingClientRect();item.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,button:2,clientX:rect.left+Math.max(8,rect.width/2),clientY:rect.top+Math.max(8,rect.height/2)}));return true})()"
+    if (!await page.evaluate(fallback)) throw new Error('无法向右键目标发送回退事件：' + selector)
+    await sleep(120)
+  }
 }
 
 async function assertCustomContextMenu(page, label) {
@@ -389,6 +394,15 @@ async function pressControlKey(page, key, code, virtualKey) {
   await page.command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Control', code: 'ControlLeft', modifiers: 0, windowsVirtualKeyCode: 17 })
 }
 
+async function pressControlShiftKey(page, key, code, virtualKey) {
+  await page.command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Control', code: 'ControlLeft', modifiers: 2, windowsVirtualKeyCode: 17 })
+  await page.command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Shift', code: 'ShiftLeft', modifiers: 10, windowsVirtualKeyCode: 16 })
+  await page.command('Input.dispatchKeyEvent', { type: 'keyDown', key, code, modifiers: 10, windowsVirtualKeyCode: virtualKey })
+  await page.command('Input.dispatchKeyEvent', { type: 'keyUp', key, code, modifiers: 10, windowsVirtualKeyCode: virtualKey })
+  await page.command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Shift', code: 'ShiftLeft', modifiers: 2, windowsVirtualKeyCode: 16 })
+  await page.command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Control', code: 'ControlLeft', modifiers: 0, windowsVirtualKeyCode: 17 })
+}
+
 async function pressEscape(page) {
   await page.command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
   await page.command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
@@ -497,29 +511,35 @@ function findManuscriptFile(directory) {
 }
 
 async function runRecoveryFlow(page, projectPath, projectTitle, restartPage) {
-  const target = findManuscriptFile(projectPath)
+  const currentRelativePath = await page.evaluate("document.querySelector('.path-text')?.getAttribute('title') || ''")
+  const currentTarget = currentRelativePath ? resolve(projectPath, currentRelativePath) : null
+  const target = currentTarget && existsSync(currentTarget) ? currentTarget : findManuscriptFile(projectPath)
   if (!target) throw new Error('找不到用于保存失败验收的正文文件')
-  let lockProcess
-  if (process.platform === 'win32') {
-    const escapedTarget = target.replaceAll("'", "''")
-    const lockScript = "$stream=[IO.File]::Open('" + escapedTarget + "',[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read);try{Start-Sleep -Seconds 120}finally{$stream.Dispose()}"
-    lockProcess = spawn(process.env.NOVELFORGE_POWERSHELL || 'pwsh', ['-NoProfile', '-Command', lockScript], {
-      windowsHide: true,
-      stdio: 'ignore',
-    })
-    await sleep(350)
-    if (lockProcess.exitCode !== null) throw new Error('无法锁定正文文件用于保存失败验收')
+  if (process.env.NOVELFORGE_E2E_VERBOSE === '1') {
+    console.log('RECOVERY_TARGET', JSON.stringify({ currentRelativePath, currentTarget, target, projectPath }))
   }
+  const nodeId = readFileSync(target, 'utf8').match(/^novelforgeId:\s*(.+)$/mu)?.[1]?.trim()
+  if (!nodeId) throw new Error('无法从当前正文镜像读取节点 ID')
+  const historyDirectory = resolve(projectPath, '.novelforge', 'history', nodeId)
+  const historyBackup = historyDirectory + '.e2e-backup'
+  rmSync(historyBackup, { recursive: true, force: true })
+  if (existsSync(historyDirectory)) renameSync(historyDirectory, historyBackup)
+  writeFileSync(historyDirectory, 'NovelForge E2E history blocker', 'utf8')
   try {
     await replaceEditor(page, '# 第一章\n\n恢复验收内容')
     await clickExact(page, '保存')
     await waitForCondition(page, "document.body.innerText.includes('保存失败') && document.body.innerText.includes('恢复数据已保留')", '保存失败与恢复文件保留')
     const recoveryDirectory = resolve(projectPath, '.novelforge', 'recovery')
+    const recoveryDeadline = Date.now() + 5_000
+    while (Date.now() < recoveryDeadline && (!existsSync(recoveryDirectory) || !readdirSync(recoveryDirectory).some((name) => name.endsWith('.md')))) {
+      await sleep(100)
+    }
     if (!existsSync(recoveryDirectory) || !readdirSync(recoveryDirectory).some((name) => name.endsWith('.md'))) {
       throw new Error('保存失败后未生成恢复文件')
     }
   } finally {
-    if (lockProcess && lockProcess.exitCode === null) lockProcess.kill()
+    rmSync(historyDirectory, { force: true })
+    if (existsSync(historyBackup)) renameSync(historyBackup, historyDirectory)
     await sleep(150)
   }
 
@@ -630,8 +650,8 @@ async function runEditorPerformanceFlow(page) {
 
 async function run() {
   rmSync(profile, { recursive: true, force: true })
-  const projectPath = nativeDialogMode
-    ? resolve(root, 'novelforge-desktop-e2e-project-' + process.pid)
+  let projectPath = nativeDialogMode
+    ? resolve(process.env.PUBLIC ?? tmpdir(), 'Documents', 'novelforge-desktop-e2e-project-' + process.pid)
     : resolve(tmpdir(), 'novelforge-desktop-e2e-project-' + process.pid)
   rmSync(projectPath, { recursive: true, force: true })
   if (nativeDialogMode) mkdirSync(projectPath, { recursive: true })
@@ -716,7 +736,12 @@ async function run() {
     }
     if (nativeDialogMode) {
       await chooseNativeDialog(page, 'folder', '选择项目文件夹', projectPath)
-      await waitForInputValue(page, '选择项目文件夹', projectPath, '原生新建项目路径回填')
+      await waitForCondition(page, "Array.from(document.querySelectorAll('input')).some((item)=>(item.placeholder||'').includes('选择项目文件夹') && Boolean(item.value))", '原生新建项目路径回填')
+      const selectedProjectPath = await page.evaluate("Array.from(document.querySelectorAll('input')).find((item)=>(item.placeholder||'').includes('选择项目文件夹'))?.value || ''")
+      if (basename(selectedProjectPath).toLocaleLowerCase() !== basename(projectPath).toLocaleLowerCase()) {
+        throw new Error('原生文件夹选择器返回了意外目录：' + selectedProjectPath)
+      }
+      projectPath = resolve(selectedProjectPath)
     }
     else await setField(page, '选择项目文件夹', projectPath)
     if (nativeDialogMode && process.env.NOVELFORGE_E2E_VERBOSE === '1') {
@@ -885,11 +910,12 @@ async function run() {
     await clickExact(page, '批量移入回收站')
     await sleep(500)
     await clickExact(page, '回收站')
-    await waitForText(page, '回收站')
-    await clickSelector(page, '.trash-actions button', '恢复')
-    await sleep(500)
-    await clickSelector(page, '.trash-actions button', '恢复')
-    await sleep(500)
+    await waitForSelector(page, '.trash-view', '批量删除后的回收站')
+    await waitForCondition(page, "document.querySelectorAll('.trash-item').length >= 2", '批量删除条目加载')
+    for (let restoreIndex = 0; restoreIndex < 2; restoreIndex += 1) {
+      await clickSelector(page, '.trash-actions button', '恢复')
+      await waitForCondition(page, `document.querySelectorAll('.trash-item').length <= ${2 - restoreIndex - 1}`, '批量删除条目恢复')
+    }
     await waitForText(page, '回收站是空的')
     await clickExact(page, '正文')
     await waitForText(page, 'MANUSCRIPT / CHAPTER')
@@ -933,6 +959,80 @@ async function run() {
     await clickSelector(page, '.entity-actions button', '保存资料')
     await waitForText(page, '潮汐历法')
     console.log('ENTITY_CRUD_OK')
+
+    await clickExact(page, '正文')
+    await ensureEditor(page, 'Mention Scanner 验收')
+    await replaceEditor(page, '# 第一章\n\n林月来到雾港，随后查看[[林月]]档案。苏岚推开青石客栈。\n\n**关键线索**\n\n- 第一项\n- 第二项')
+    await waitForCondition(page, "Array.from(document.querySelectorAll('.mention-row.known')).some((item)=>(item.textContent||'').includes('林月')) && Array.from(document.querySelectorAll('.mention-row.known')).some((item)=>(item.textContent||'').includes('雾港'))", '已建档人物和地点自动识别')
+    await waitForCondition(page, "Array.from(document.querySelectorAll('.mention-candidate')).some((item)=>(item.textContent||'').includes('青石客栈'))", '新地点候选识别')
+    const createdMention = await page.evaluate("(()=>{const row=Array.from(document.querySelectorAll('.mention-candidate')).find((item)=>(item.textContent||'').includes('青石客栈'));const button=Array.from(row?.querySelectorAll('button')||[]).find((item)=>(item.textContent||'').trim()==='创建并插入 Wiki');button?.click();return Boolean(button)})()")
+    if (!createdMention) throw new Error('无法从自动提及候选创建地点并插入 Wiki')
+    await waitForCondition(page, "document.querySelector('.cm-content')?.innerText.includes('[[青石客栈]]')", '自动提及插入 Wiki')
+    await clickExact(page, '保存')
+    await waitForText(page, '已保存')
+    console.log('MENTION_DETECTION_OK')
+
+    await waitForSelector(page, '.chapter-checklist-items input', '初始章节继承 Checklist')
+    await selectValue(page, '.chapter-checklist-inspector select', 'first-draft-complete')
+    await sleep(400)
+    await page.evaluate("document.querySelector('.chapter-checklist-items input')?.click(); true")
+    await waitForCondition(page, "document.querySelector('.chapter-checklist-items input')?.checked === true", '章节 Checklist 勾选')
+    await sleep(400)
+
+    await clickExact(page, '剧情线')
+    await waitForSelector(page, '.story-arc-view', '剧情线视图')
+    await setField(page, '例如：寻找星核', '失落王冠主线')
+    await setField(page, '这条剧情线解决什么冲突？', '追查失落王冠并揭开雾港往事。')
+    await page.evaluate("document.querySelector('.story-arc-chapters input')?.click(); true")
+    await clickSelector(page, '.story-arc-section .panel-title button', '添加节点')
+    await clickSelector(page, '.story-arc-section .panel-title button', '添加节点')
+    await waitForCondition(page, "document.querySelectorAll('input[aria-label=\"剧情节点标题\"]').length === 2", '剧情线节点创建')
+    await page.evaluate("(()=>{const inputs=document.querySelectorAll('input[aria-label=\"剧情节点标题\"]');const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;setter.call(inputs[0],'发现王冠线索');inputs[0].dispatchEvent(new Event('input',{bubbles:true}));setter.call(inputs[1],'真相揭晓');inputs[1].dispatchEvent(new Event('input',{bubbles:true}));return true})()")
+    await page.evaluate("document.querySelectorAll('.story-arc-milestone')[0]?.querySelectorAll('.story-arc-milestone-actions button')[1]?.click(); true")
+    await waitForCondition(page, "document.querySelector('input[aria-label=\"剧情节点标题\"]')?.value === '真相揭晓'", '剧情线节点顺序调整')
+    await clickExact(page, '保存剧情线')
+    await waitForCondition(page, "Array.from(document.querySelectorAll('.story-arc-list-item')).some((item)=>(item.textContent||'').includes('失落王冠主线'))", '剧情线保存')
+
+    await clickExact(page, '正文')
+    await waitForSelector(page, '.cm-content', '灵感快捷键返回正文')
+    await pressControlShiftKey(page, 'i', 'KeyI', 73)
+    await waitForText(page, '快速记录灵感')
+    await setField(page, '留空时使用正文第一行', '钟楼密道灵感')
+    await setField(page, '先记下来，稍后整理…', '钟楼后方可能藏有通往旧城区的密道。')
+    await setField(page, '使用逗号分隔', '谜题,雾港')
+    await clickModalButton(page, '保存灵感')
+    await waitForCondition(page, "document.querySelector('.modal-card') === null", '快速灵感保存')
+    await clickExact(page, '灵感箱')
+    await waitForSelector(page, '.inbox-view', '灵感箱视图')
+    await clickSelectorContains(page, '.inbox-list button', '钟楼密道灵感')
+    await clickSelector(page, '.inbox-conversions button', '转为伏笔')
+    await waitForCondition(page, "Array.from(document.querySelectorAll('.planning-tabs button')).some((item)=>(item.textContent||'').includes('已整理 (1)'))", '灵感转换完成')
+    await clickSelectorContains(page, '.planning-tabs button', '已整理')
+    await waitForText(page, '已整理为 foreshadowing')
+
+    await clickText(page, '人物')
+    await waitForCondition(page, "document.querySelector('.entity-list-head h2')?.textContent?.trim() === '人物'", '人物出场统计资料页')
+    await clickSelectorContains(page, '.entity-list-item', '林月')
+    await waitForCondition(page, "document.querySelector('.character-appearance-panel .appearance-metrics')?.textContent?.includes('第一章')", '人物出场统计聚合')
+    await clickSelector(page, '.character-appearance-panel button', '打开矩阵')
+    await waitForSelector(page, '.character-matrix', '章节人物矩阵')
+    await waitForCondition(page, "document.querySelector('.character-matrix')?.textContent?.includes('林月') && document.querySelector('.character-matrix')?.textContent?.includes('第一章')", '人物矩阵内容')
+    console.log('CHARACTER_STATS_OK')
+
+    await clickText(page, 'AI 辅助')
+    await waitForSelector(page, '.prompt-preset-manager', '提示词预设管理器')
+    await setField(page, '人物 OOC 检查', '章节验收预设')
+    await setField(page, '请检查 {{character:林月}} 在 {{currentChapter}} 中的行为。', '分析当前章节并列出关键冲突：{{currentChapter}}')
+    await selectValue(page, '.prompt-preset-editor select', 'analyze')
+    await clickSelector(page, '.prompt-preset-actions button', '保存')
+    await waitForCondition(page, "Array.from(document.querySelectorAll('.prompt-preset-list button')).some((item)=>(item.textContent||'').includes('章节验收预设'))", '提示词预设保存')
+    await clickSelectorContains(page, '.prompt-preset-list button', '章节验收预设')
+    await clickSelector(page, '.prompt-preset-actions button', '运行')
+    await waitForText(page, 'Prompt 预览 · 章节验收预设')
+    await waitForCondition(page, "document.querySelector('.prompt-preview-text')?.textContent?.includes('林月来到雾港')", '提示词显式上下文预览')
+    await clickModalButton(page, '确认运行')
+    await waitForCondition(page, "(document.querySelector('.ai-result-text')?.value||'').length > 0", '提示词预设运行结果')
+    await clickSelector(page, '.ai-result-actions button', '取消')
 
     await clickExact(page, '正文')
     await ensureEditor(page, 'Wiki 返回')
@@ -986,6 +1086,31 @@ async function run() {
     console.log('SETTINGS_COMMANDS_OK')
 
     await runRecoveryFlow(page, projectPath, 'CDP 桌面验收', restartPage)
+    await clickExact(page, '剧情线')
+    await waitForCondition(page, "Array.from(document.querySelectorAll('.story-arc-list-item')).some((item)=>(item.textContent||'').includes('失落王冠主线'))", '重启后剧情线持久化')
+    await clickSelectorContains(page, '.story-arc-list-item', '失落王冠主线')
+    await waitForCondition(page, "document.querySelector('.story-arc-chapters input')?.checked === true && document.querySelectorAll('.story-arc-milestone').length === 2", '重启后剧情线章节和节点持久化')
+    console.log('STORY_ARC_OK')
+
+    await clickExact(page, '灵感箱')
+    await waitForSelector(page, '.inbox-view', '重启后灵感箱')
+    await clickSelectorContains(page, '.planning-tabs button', '已整理')
+    await waitForText(page, '钟楼密道灵感')
+    console.log('INBOX_OK')
+
+    await clickText(page, 'AI 辅助')
+    await waitForCondition(page, "Array.from(document.querySelectorAll('.prompt-preset-list button')).some((item)=>(item.textContent||'').includes('章节验收预设'))", '重启后提示词预设持久化')
+    console.log('PROMPT_PRESET_OK')
+
+    await clickExact(page, '正文')
+    await waitForSelector(page, '.chapter-checklist-items input', '重启后章节 Checklist')
+    await waitForCondition(page, "document.querySelector('.chapter-checklist-items input')?.checked === true && document.querySelector('.chapter-checklist-inspector select')?.value === 'first-draft-complete'", '重启后 Checklist 状态持久化')
+    await clickExact(page, '总览')
+    await waitForSelector(page, '.workflow-dashboard', '总览章节进度')
+    await waitForText(page, '定稿 0 /')
+    console.log('CHAPTER_CHECKLIST_OK')
+    await clickExact(page, '正文')
+    await waitForSelector(page, '.cm-content', 'V1.1 验收返回正文')
     if (process.env.NOVELFORGE_E2E_FPS === '1') await runEditorPerformanceFlow(page)
 
     if (nativeDialogMode) {

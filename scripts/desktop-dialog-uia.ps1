@@ -118,7 +118,13 @@ function Find-FileNameEdit([System.Windows.Automation.AutomationElement]$parent)
     )
     $combined = New-Object System.Windows.Automation.AndCondition($idCondition, $editType)
     $element = $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $combined)
-    if ($null -ne $element) { return $element }
+    if ($null -ne $element) {
+      try {
+        if ($element.Current.IsEnabled) { return $element }
+      } catch {
+        # The common dialog can replace the preferred edit while refreshing.
+      }
+    }
   }
   foreach ($name in @('文件名:', '文件名', 'File name:', 'File name')) {
     $nameCondition = New-Object System.Windows.Automation.PropertyCondition(
@@ -131,7 +137,13 @@ function Find-FileNameEdit([System.Windows.Automation.AutomationElement]$parent)
     )
     $combined = New-Object System.Windows.Automation.AndCondition($nameCondition, $editType)
     $element = $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $combined)
-    if ($null -ne $element) { return $element }
+    if ($null -ne $element) {
+      try {
+        if ($element.Current.IsEnabled) { return $element }
+      } catch {
+        # The common dialog can replace the named edit while refreshing.
+      }
+    }
   }
   # Windows common dialogs can expose the file name host without a stable
   # AutomationId while the folder view is refreshing. Prefer an enabled edit

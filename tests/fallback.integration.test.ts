@@ -168,6 +168,40 @@ describe('browser fallback project workflow', () => {
     expect(volumeResults.some((item) => item.id === chapter.id)).toBe(true)
   })
 
+  it('indexes V1.1 story arcs, inbox items and prompt presets by name', async () => {
+    const path = 'v1-1-search-project'
+    await fallbackInvoke<ProjectData>('create_project', { input: { ...input, path } })
+    const fixtures = [
+      {
+        kind: 'story-arc',
+        title: '失落王冠主线',
+        content: { status: 'active', description: '寻找王冠', chapterIds: [], milestones: [] },
+      },
+      {
+        kind: 'inbox',
+        title: '钟楼密道灵感',
+        content: { content: '钟楼后方可能藏有密道。', processed: false },
+      },
+      {
+        kind: 'prompt-preset',
+        title: '紧张场景润色预设',
+        content: { action: 'rewrite', prompt: '润色：{{selection}}', defaultContexts: [] },
+      },
+    ] as const
+    for (const fixture of fixtures) {
+      await fallbackInvoke<ProjectData>('upsert_entity', {
+        input: { projectPath: path, id: null, tags: ['V1.1 搜索'], ...fixture },
+      })
+    }
+
+    for (const fixture of fixtures) {
+      const results = await fallbackInvoke<SearchResult[]>('search_project', {
+        input: { projectPath: path, query: fixture.title, kind: fixture.kind },
+      })
+      expect(results.some((item) => item.kind === fixture.kind && item.title === fixture.title)).toBe(true)
+    }
+  })
+
   it('moves and copies a chapter in the browser fallback tree', async () => {
     const path = 'move-copy-fallback-project'
     const created = await fallbackInvoke<ProjectData>('create_project', { input: { ...input, path } })

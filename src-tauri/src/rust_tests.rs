@@ -1849,6 +1849,123 @@ fn large_project_acceptance_handles_1000_chapters_and_one_million_characters() {
 }
 
 #[test]
+#[ignore = "V1.1 auxiliary-data benchmark; run explicitly with cargo test v1_1_large_auxiliary_data_acceptance -- --ignored --nocapture"]
+fn v1_1_large_auxiliary_data_acceptance() {
+    let root = test_root("v1-1-large-auxiliary");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "V1.1 大规模资料验收".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "现代".to_string(),
+        target_words: 1_000_000,
+    })
+    .expect("create project");
+    let chapter_id = created
+        .nodes
+        .iter()
+        .find(|node| node.kind == "chapter")
+        .expect("initial chapter")
+        .id
+        .clone();
+    let project_root = root.join("project");
+    let started = std::time::Instant::now();
+    let mut connection = storage::open_db(&project_root).expect("open database");
+    let timestamp = storage::now();
+    let transaction = connection.transaction().expect("start V1.1 seed transaction");
+
+    let specs = [
+        ("story-arc", "story-arcs", "剧情线", 50usize),
+        ("inbox", "inbox", "灵感", 500usize),
+        ("prompt-preset", "prompts", "提示词预设", 100usize),
+        ("chapter-checklist", "checklists", "章节清单", 1000usize),
+    ];
+    for (kind, directory, title_prefix, count) in specs {
+        for index in 0..count {
+            let id = format!("v11-{}-{:04}", kind, index + 1);
+            let title = format!("{}{:04}", title_prefix, index + 1);
+            let file_path = format!("{}/{}-{}.md", directory, title, id);
+            let content = match kind {
+                "story-arc" => serde_json::json!({
+                    "status": "active",
+                    "description": "V1.1 大规模剧情线",
+                    "chapterIds": [chapter_id.clone()],
+                    "milestones": [{"id": format!("milestone-{}", index + 1), "title": "推进节点", "order": 0, "status": "planned", "chapterId": chapter_id.clone()}]
+                }),
+                "inbox" => serde_json::json!({"content": "V1.1 大规模灵感内容", "processed": false}),
+                "prompt-preset" => serde_json::json!({"action": "analyze", "prompt": "分析：{{currentChapter}}", "defaultContexts": []}),
+                _ => serde_json::json!({
+                    "chapterId": chapter_id.clone(),
+                    "workflowStatus": "draft",
+                    "items": [{"id": "body-complete", "label": "正文完成", "completed": index % 2 == 0}]
+                }),
+            };
+            let tags = serde_json::json!(["V1.1", "大规模"]);
+            transaction
+                .execute(
+                    "INSERT INTO entities (id, kind, title, content_json, tags_json, file_path, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                    rusqlite::params![id, kind, title, content.to_string(), tags.to_string(), file_path, timestamp, timestamp],
+                )
+                .expect("insert V1.1 entity");
+            storage::index_record(
+                &transaction,
+                &id,
+                kind,
+                &title,
+                &storage::markdown_entity(&title, &content, &["V1.1".to_string(), "大规模".to_string()]),
+                &file_path,
+            )
+            .expect("index V1.1 entity");
+            let mirror = storage::markdown_entity_with_metadata(
+                &id,
+                kind,
+                &timestamp,
+                &timestamp,
+                &title,
+                &content,
+                &["V1.1".to_string(), "大规模".to_string()],
+            );
+            storage::atomic_write(
+                &storage::safe_relative(&project_root, &file_path).expect("safe V1.1 mirror path"),
+                mirror.as_bytes(),
+            )
+            .expect("write V1.1 mirror");
+        }
+    }
+    transaction.commit().expect("commit V1.1 seed transaction");
+
+    let data = super::commands::open_project(project_path.clone()).expect("open V1.1 large project");
+    assert_eq!(data.entities.iter().filter(|entity| entity.kind == "story-arc").count(), 50);
+    assert_eq!(data.entities.iter().filter(|entity| entity.kind == "inbox").count(), 500);
+    assert_eq!(data.entities.iter().filter(|entity| entity.kind == "prompt-preset").count(), 100);
+    assert_eq!(data.entities.iter().filter(|entity| entity.kind == "chapter-checklist").count(), 1000);
+    for (query, kind) in [
+        ("剧情线0050", "story-arc"),
+        ("灵感0500", "inbox"),
+        ("提示词预设0100", "prompt-preset"),
+        ("章节清单1000", "chapter-checklist"),
+    ] {
+        let results = super::commands::search_project(super::models::SearchInput {
+            project_path: project_path.clone(),
+            query: query.to_string(),
+            kind: Some(kind.to_string()),
+            scope: None,
+            node_id: None,
+            volume_path: None,
+            tag: Some("V1.1".to_string()),
+            case_sensitive: None,
+        })
+        .expect("search V1.1 large data");
+        assert!(results.iter().any(|result| result.title == query));
+    }
+    let elapsed = started.elapsed();
+    println!("V1.1_AUXILIARY_BENCHMARK_MS={}", elapsed.as_millis());
+    assert!(elapsed < std::time::Duration::from_secs(60));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn restore_trash_keeps_quarantined_entity_when_destination_exists() {
     let root = test_root("entity-restore-collision");
     let project_path = root.join("project").to_string_lossy().to_string();
