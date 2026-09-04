@@ -600,3 +600,32 @@ P1 扫描结果和出现索引均可重新计算；测试没有把缓存存在�
 | Rust 恢复 | 模板/实例独立目录恢复，Node.status 保持原值 | 通过 |
 | 前端回归 | `pnpm typecheck`、`pnpm lint`、`pnpm test` | 通过；30 文件 / 153 项 |
 | Rust 回归 | `cargo check --locked`、`cargo test --locked` | 通过；47 项常规测试，1 项 ignored |
+
+# V1.1.0-rc.1 Final Validation（2026-09-05）
+
+| 门禁 | 结果 |
+| --- | --- |
+| `pnpm install --frozen-lockfile` | 通过；锁文件供应链策略通过 |
+| `pnpm typecheck` / `pnpm lint` | 通过；0 warning |
+| `pnpm test` | 通过；30 个测试文件、154 项测试 |
+| `pnpm build` | 通过；Vite 6.4.3 生产构建 |
+| `pnpm audit --audit-level high` | 通过；No known vulnerabilities |
+| `cargo check --locked` | 通过 |
+| `cargo test --locked` | 通过；47 passed、2 ignored |
+| `cargo audit --file Cargo.lock` | 通过；0 个阻断性漏洞，17 条 allowed warnings |
+| 1000 章 / 100 万字 | 通过；36.48 秒，真实 Markdown、SQLite、打开、统计和搜索 |
+| V1.1 辅助数据 | 通过；50 Story Arc、500 Inbox、100 Prompt Preset、1000 Checklist，18.71 秒 |
+| `pnpm tauri build` | 通过；release EXE 与 NSIS |
+
+桌面 release 验收：
+
+- 直连 CDP：全部旧阶段及 `MENTION_DETECTION_OK`、`STORY_ARC_OK`、`CHARACTER_STATS_OK`、`PROMPT_PRESET_OK`、`INBOX_OK`、`CHAPTER_CHECKLIST_OK`、`EXPORTS_OK` 通过。
+- 官方 Tauri WebDriver：使用 `tauri-driver 2.0.6` 和匹配 WebView2 `152.0.4191.62` 的 Microsoft Edge WebDriver，全部标记通过。
+- WebDriver + Native Dialog：真实选择新建/重开项目文件夹与附件文件，`RECOVERY_FAILURE_OK`、`NATIVE_DIALOGS_OK` 和全部其余标记通过。
+- 失败保存测试在当前章节恢复文件写入后确定性阻断历史快照，重启后完成预览与恢复；状态栏不会在恢复文件尚未生成时误报。
+
+发布产物：
+
+- `novelforge.exe`：17,422,848 bytes；SHA-256 `94DCE86B4F3420C29F75F4FC5FB762BDAE98209B4E524134415519E1908563C2`。
+- `NovelForge_1.1.0-rc.1_x64-setup.exe`：5,154,783 bytes；SHA-256 `E0E80D72E50E6484FEE1A9C9C0608291C4B83DAA3AEB7751A84064B871C11DB5`。
+- 最新 `main` HEAD 的 GitHub Actions Frontend/Rust 检查成功；[v1.1.0-rc.1 Pre-release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.1) 附带上述 NSIS 资产。

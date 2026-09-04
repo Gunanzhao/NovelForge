@@ -48,32 +48,32 @@
 
 ## 数据与兼容性
 
-- [ ] 旧项目无需手动转换即可打开
-- [ ] 正文继续保存为普通 Markdown
+- [x] 旧项目无需手动转换即可打开
+- [x] 正文继续保存为普通 Markdown
 - [x] Story Arc、Prompt Preset、Inbox 和 Checklist 均有可恢复镜像
 - [x] Mention 与人物统计可由正文和资料重新扫描生成
 - [x] P1 浏览器 fallback 可运行
 
 ## 最终质量门禁
 
-- [ ] `pnpm install --frozen-lockfile`
-- [ ] `pnpm typecheck`
-- [ ] `pnpm lint`
-- [ ] `pnpm test`
-- [ ] `pnpm build`
-- [ ] `cargo check --manifest-path src-tauri/Cargo.toml --locked`
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml --locked`
-- [ ] `cargo test --manifest-path src-tauri/Cargo.toml --locked -- --ignored --nocapture`
-- [ ] V1.1 大型数据基准：50 Story Arc、500 Inbox、100 Prompt Preset、1000 Checklist
-- [ ] `pnpm tauri build`
-- [ ] release `novelforge.exe` 与 NSIS installer
-- [ ] CDP E2E 新旧阶段全部通过
-- [ ] WebDriver E2E 新旧阶段全部通过
-- [ ] Native Dialog E2E 新旧阶段全部通过
-- [ ] 最新 HEAD 的 GitHub Actions Frontend/Rust 检查成功
+- [x] `pnpm install --frozen-lockfile`
+- [x] `pnpm typecheck`
+- [x] `pnpm lint`
+- [x] `pnpm test`：30 个测试文件、154 项测试
+- [x] `pnpm build`
+- [x] `cargo check --manifest-path src-tauri/Cargo.toml --locked`
+- [x] `cargo test --manifest-path src-tauri/Cargo.toml --locked`：47 项通过、2 项显式基准按设计忽略
+- [x] 1000 章 / 100 万字基准：36.48 秒
+- [x] V1.1 大型数据基准：50 Story Arc、500 Inbox、100 Prompt Preset、1000 Checklist，18.71 秒
+- [x] `pnpm tauri build`
+- [x] release `novelforge.exe` 与 NSIS installer
+- [x] CDP E2E 新旧阶段全部通过
+- [x] WebDriver E2E 新旧阶段全部通过
+- [x] Native Dialog E2E 新旧阶段全部通过
+- [x] 最新 HEAD 的 GitHub Actions Frontend/Rust 检查成功
 
 ## 发布
 
-- [ ] README、SPEC、TODO、PROGRESS、DECISIONS、CHANGELOG、TEST_REPORT 与实际状态一致
-- [ ] 所有阶段提交仅保存在本地，开发完成后统一推送
-- [ ] 创建并验证 `v1.1.0-rc.1` GitHub Release
+- [x] README、SPEC、TODO、PROGRESS、DECISIONS、CHANGELOG、TEST_REPORT 与实际状态一致
+- [x] 所有阶段提交仅保存在本地，开发完成后统一推送
+- [x] 创建并验证 `v1.1.0-rc.1` GitHub Release

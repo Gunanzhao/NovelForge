@@ -1,4 +1,17 @@
-# NovelForge 1.0.0 RC 发布清单
+# NovelForge 发布清单
+
+## 1.1.0-rc.1 当前发布清单
+
+- [x] `package.json`、`Cargo.toml`、`Cargo.lock` 和 `tauri.conf.json` 统一为 `1.1.0-rc.1`。
+- [x] P1–P6 功能、兼容格式、可恢复 Markdown 镜像和浏览器 fallback 均完成。
+- [x] `pnpm install --frozen-lockfile`、typecheck、lint、30 文件 / 154 项前端测试和 build 通过。
+- [x] `cargo check --locked`、47 项常规 Rust 测试通过；`cargo-audit 0.22.2` 无阻断性漏洞。
+- [x] 1000 章 / 100 万字基准 36.48 秒；V1.1 辅助数据基准 18.71 秒。
+- [x] `pnpm tauri build` 生成 `novelforge.exe` 和 `NovelForge_1.1.0-rc.1_x64-setup.exe`。
+- [x] release CDP、Tauri WebDriver、WebDriver + Native Dialog 全部新旧阶段标记通过。
+- [x] 最新 `main` HEAD 的 GitHub Actions Frontend/Rust 检查成功。
+- [x] GitHub [v1.1.0-rc.1 Pre-release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.1) 已创建并附加 NSIS 安装包。
+- [x] NSIS：5,154,783 bytes，SHA-256 `E0E80D72E50E6484FEE1A9C9C0608291C4B83DAA3AEB7751A84064B871C11DB5`。
 
 ## 1.0.0-rc.2 当前发布清单
 

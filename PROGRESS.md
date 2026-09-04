@@ -669,3 +669,14 @@
 - Dashboard 按卷显示各检查项完成数和定稿数；正文树提供三种流程过滤及右键快捷标记。
 - Checklist 不修改 Node.status；模板和章节实例使用独立 Markdown 镜像目录并通过数据库恢复测试。
 - 阶段门禁：30 个前端测试文件 / 153 项测试通过；Rust 47 项常规测试通过、1 项大型基准按设计忽略；typecheck、lint、cargo check 均通过。
+
+# V1.1.0-rc.1 最终验收与发布（2026-09-05）
+
+- P1–P6 已按阶段形成独立本地提交；跨功能搜索补充覆盖剧情线、灵感和 Prompt 模板。
+- 完整前端门禁通过：typecheck、lint、build、30 个测试文件 / 154 项测试；`pnpm audit --audit-level high` 无已知漏洞。
+- Rust 门禁通过：`cargo check --locked`、47 项常规测试；`cargo-audit 0.22.2` 无阻断性漏洞，17 条停止维护/平台相关允许警告保持可见。
+- 旧大型基准改为事务批量构造真实 Markdown/SQLite 夹具后执行完整打开、统计和搜索，1000 章 / 100 万字耗时 36.48 秒。
+- V1.1 辅助数据基准覆盖 50 Story Arc、500 Inbox、100 Prompt Preset 和 1000 Chapter Checklist，耗时 18.71 秒。
+- 最终 `1.1.0-rc.1` release EXE 与 NSIS 构建成功；直接 CDP、Tauri WebDriver、WebDriver + Native Dialog 三轮均通过全部旧标记和六个 V1.1 标记。
+- E2E 过程中修正保存失败提示误报，并将失败保存夹具改为在恢复文件生成后阻断历史快照；原生附件选择器只使用启用的文件名控件。
+- GitHub `main` 最新 HEAD 的 Frontend/Rust Actions 成功后创建 [v1.1.0-rc.1 Pre-release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.1)，附加 NSIS 安装包。

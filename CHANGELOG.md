@@ -1,6 +1,6 @@
 # 更新日志
 
-## 1.1.0-rc.1（开发中）
+## 1.1.0-rc.1（2026-09-05）
 
 ### Added
 
@@ -26,6 +26,18 @@
 - Prompt 模板保存到 `prompts/` Markdown 镜像，API Key 仍不进入项目、Git 或日志。
 - 灵感保存到 `inbox/` Markdown 镜像；转换失败保留原始内容，并对已创建目标执行补偿回滚。
 - Checklist 模板和章节实例分别镜像到 `checklist-templates/` 与 `checklists/`；现有 Node 状态和正文 Markdown 不变。
+
+### Fixed
+
+- 保存失败提示只在后端确认恢复文件已经保留时显示对应文案，避免读取原正文失败时误报。
+- 桌面 E2E 使用可恢复的历史目录阻断夹具验证失败保存，并等待真实 UI/文件状态；Native Dialog 只选择启用的文件名控件。
+
+### Validation
+
+- 前端 30 个测试文件 / 154 项测试、Rust 47 项常规测试全部通过；`pnpm audit` 无已知漏洞，RustSec 无阻断性漏洞。
+- 1000 章 / 100 万字基准 36.48 秒；V1.1 辅助数据基准 18.71 秒。
+- Windows release CDP、Tauri WebDriver 和 WebDriver + Native Dialog 均通过全部新旧阶段标记与六种导出。
+- 发布 Windows NSIS 安装包 `NovelForge_1.1.0-rc.1_x64-setup.exe`，SHA-256 `E0E80D72E50E6484FEE1A9C9C0608291C4B83DAA3AEB7751A84064B871C11DB5`。
 
 ## 1.0.0-rc.2
 

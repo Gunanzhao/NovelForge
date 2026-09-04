@@ -56,6 +56,16 @@
 - [x] P5 灵感 Inbox：快捷捕获、分类视图、搜索/标签/排序、回收站以及人物/地点/世界观/场景/伏笔/剧情节点/笔记转换
 - [x] P6 章节完成 Checklist：项目模板、新章节继承、独立 workflowStatus、Inspector、Dashboard 汇总、树过滤和右键快捷动作
 
+## V1.1.0-rc.1 Final Validation（2026-09-05）
+
+- [x] 旧项目直接打开、正文普通 Markdown、P1 可重建扫描与四类新增实体镜像恢复。
+- [x] `pnpm install --frozen-lockfile`、typecheck、lint、30 文件 / 154 项测试、build 和 `pnpm audit --audit-level high` 通过。
+- [x] `cargo check --locked`、47 项常规测试和 `cargo-audit 0.22.2` 通过；RustSec 允许的平台/停止维护警告保持可见。
+- [x] 1000 章 / 100 万字基准 36.48 秒；50 Story Arc、500 Inbox、100 Prompt Preset、1000 Checklist 基准 18.71 秒。
+- [x] `pnpm tauri build` 生成 V1.1 release EXE 和 NSIS；CDP、WebDriver、Native Dialog 全部新旧标记通过。
+- [x] 最新 `main` HEAD 的 GitHub Actions Frontend/Rust 检查成功。
+- [x] [v1.1.0-rc.1 Pre-release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.1) 和 Windows NSIS 安装包已发布。
+
 ## 最终验收
 
 > 本节记录上一候选的历史验收；2026-09-03 当前 RC 的状态以“V1.0.0-rc.1 当前收尾”为准。

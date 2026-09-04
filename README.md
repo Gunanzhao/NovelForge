@@ -2,7 +2,7 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2 + React + TypeScript + Vite + Rust + SQLite。
 
-当前候选版本：`1.0.0-rc.2`。本候选完成 Markdown 脚注预览、完整 ASCII 字符全角/半角转换、Native Dialog 自动化稳定性修正，以及全局右键菜单的 release 验收；已公开的 `v1.0.0-rc.1` 保持不变。
+当前候选版本：`1.1.0-rc.1`。本候选新增自动资料识别、剧情线、人物出场统计、项目级 AI Prompt 模板、灵感箱和章节完成 Checklist；项目格式继续保持兼容，正文仍是普通 Markdown。
 
 ## 已实现
 
@@ -26,6 +26,12 @@ NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台�
 - 资料库支持人物/地点扩展字段、自定义字段、标签排序、地点树层级和正文 Wiki 反向引用。
 - 写作规划支持作品/卷/章节三级大纲、时间线标签、伏笔“部分回收”状态和正文树虚拟化。
 - 数据安全支持失败保存回滚、损坏 SQLite 可逆隔离并从 Markdown 镜像重建、分级脱敏日志。
+- 自动资料识别：在当前章节本地识别人名、地点、世界观标题和别名，提出受控候选，并支持创建资料、插入 Wiki 与永久忽略。
+- 剧情线：集中管理状态、优先级、章节关联和有序剧情节点，并提供章节辅助栏关联与一致性健康提示。
+- 人物出场统计：按需扫描全文，显示首次/最近登场、共同人物、主要地点和窗口化章节人物矩阵。
+- AI Prompt 模板：在项目内保存可复用模板，使用白名单变量显式展开上下文，预览最终 Prompt 后再运行。
+- 灵感箱：使用 `Ctrl+Shift+I` 快速记录，按状态、标签和时间整理，并转换为资料、场景、伏笔、笔记或剧情线节点。
+- 章节完成 Checklist：项目模板由新章节继承，每章独立保存工作流和检查项，Dashboard 按卷汇总进度。
 
 ## 开发
 
@@ -56,9 +62,20 @@ pnpm tauri build
 
 ## 当前范围
 
-当前版本已覆盖 MVP、写作规划、关系图、一致性、附件、结构管理、多格式导出、AI 辅助、数据恢复与大型正文树性能能力；1000 章 / 100 万字真实文件与 SQLite 性能验收已通过，Windows x64 release EXE 与 NSIS 安装包已构建并完成进程级冒烟。Markdown/TXT/HTML/DOCX/EPUB/PDF 六种格式均已完成本机视觉核对；没有 API Key 时核心写作流程和本地 AI 草稿模式完全可用。
+当前版本已覆盖 MVP、写作规划、关系图、一致性、附件、结构管理、多格式导出、AI 辅助、数据恢复，以及 V1.1 的六组长篇写作工作流。1000 章 / 100 万字基准和 V1.1 辅助数据基准均已通过，Windows x64 release EXE 与 NSIS 安装包已经构建。Markdown/TXT/HTML/DOCX/EPUB/PDF 六种格式保持桌面回归覆盖；没有 API Key 时核心写作流程和本地 AI 草稿模式完全可用。
 
-rc.2 的直连 release CDP、官方 Tauri WebDriver、原生文件选择器、恢复重启、右键菜单、剪贴板和导出验收均通过；发布提交 `961ad26`，`main` 发布记录提交 `7bdf34f`，GitHub Actions run #12 的 Frontend/Rust 两个 job 均成功。旧 `v1.0.0-rc.1` tag 保持不变。
+`1.1.0-rc.1` 的直连 release CDP、官方 Tauri WebDriver、原生文件选择器、恢复重启、六项新增工作流、右键菜单、AI Provider、回收站和导出验收均通过。GitHub Pre-release：[v1.1.0-rc.1](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.1)；Windows 安装包为 `NovelForge_1.1.0-rc.1_x64-setup.exe`。
+
+## V1.1.0-rc.1（2026-09-05）
+
+- 自动资料识别不会逐字扫描整本小说；正文编辑时只防抖扫描当前章节，人物统计按需分批读取全文。
+- 剧情线、Prompt 模板、灵感和 Checklist 复用项目实体并保存可读 Markdown 镜像，旧项目无需迁移。
+- Prompt 模板只解析模板中明确引用的白名单上下文；运行前显示最终 Prompt、上下文项、字符数和估算 Token。
+- 章节 Checklist 与原有正文节点状态相互独立；修改项目模板不会覆盖已有章节。
+- 本地门禁通过：30 个前端测试文件 / 154 项测试、47 项 Rust 常规测试、`pnpm audit` 无已知漏洞、RustSec 无阻断性漏洞。
+- 1000 章 / 100 万字基准为 36.48 秒；50 条剧情线、500 条灵感、100 个 Prompt 模板、1000 份 Checklist 的 V1.1 基准为 18.71 秒。
+- release EXE：17,422,848 bytes，SHA-256 `94DCE86B4F3420C29F75F4FC5FB762BDAE98209B4E524134415519E1908563C2`。
+- NSIS 安装包：5,154,783 bytes，SHA-256 `E0E80D72E50E6484FEE1A9C9C0608291C4B83DAA3AEB7751A84064B871C11DB5`。
 
 ## V1.0.0-rc.2 最终修正（2026-09-03）
 
