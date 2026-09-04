@@ -1770,7 +1770,6 @@ fn single_chapter_100k_chinese_acceptance_covers_edit_search_and_reopen() {
 fn large_project_acceptance_handles_1000_chapters_and_one_million_characters() {
     let root = test_root("large-project");
     let project_path = root.join("project").to_string_lossy().to_string();
-    let started = std::time::Instant::now();
     let created = super::commands::create_project(super::models::ProjectInput {
         path: project_path.clone(), title: "大规模验收".to_string(), author: "测试".to_string(),
         description: String::new(), genre: "现代".to_string(), target_words: 1_000_000,
@@ -1780,54 +1779,73 @@ fn large_project_acceptance_handles_1000_chapters_and_one_million_characters() {
     super::commands::save_document(super::models::SaveDocumentInput {
         project_path: project_path.clone(), node_id: first_chapter, content: "字".repeat(1000), reason: "大规模验收".to_string(),
     }).expect("save first chapter");
+    let project_root = root.join("project");
+    let started = std::time::Instant::now();
+    let mut connection = storage::open_db(&project_root).expect("open large-project database");
+    let timestamp = storage::now();
+    let transaction = connection.transaction().expect("start large-project seed transaction");
     let mut volume_ids = vec![first_volume_id];
     for volume_number in 2..=10 {
-        let data = super::commands::create_node(super::models::NodeInput {
-            project_path: project_path.clone(), kind: "volume".to_string(), title: format!("第{}卷", volume_number), parent_id: None,
-        }).expect("create volume");
-        volume_ids.push(data.nodes.iter().find(|node| node.title == format!("第{}卷", volume_number)).expect("created volume").id.clone());
+        let id = format!("large-volume-{:03}", volume_number);
+        let title = format!("第{}卷", volume_number);
+        let file_path = format!("manuscript/volume_{:03}", volume_number);
+        transaction.execute(
+            "INSERT INTO nodes (id, kind, parent_id, title, order_index, status, file_path, created_at, updated_at) VALUES (?1, 'volume', NULL, ?2, ?3, 'not-started', ?4, ?5, ?6)",
+            rusqlite::params![id, title, volume_number - 1, file_path, timestamp, timestamp],
+        ).expect("insert large volume");
+        let readme = storage::safe_relative(&project_root, &format!("{}/README.md", file_path)).expect("safe volume mirror");
+        storage::atomic_write(&readme, storage::markdown_volume(&id, &title, "not-started", &timestamp, &timestamp).as_bytes())
+            .expect("write large volume mirror");
+        volume_ids.push(id);
     }
     for chapter_number in 2..=1000 {
         let volume_index = (chapter_number - 1) / 100;
         let volume_id = volume_ids.get(volume_index).expect("volume for chapter");
-        let data = super::commands::create_node(super::models::NodeInput {
-            project_path: project_path.clone(), kind: "chapter".to_string(), title: format!("第{}章", chapter_number), parent_id: Some(volume_id.clone()),
-        }).expect("create chapter");
-        let chapter = data.nodes.iter().find(|node| node.title == format!("第{}章", chapter_number)).expect("created chapter");
-        super::commands::save_document(super::models::SaveDocumentInput {
-            project_path: project_path.clone(), node_id: chapter.id.clone(), content: "字".repeat(1000), reason: "大规模验收".to_string(),
-        }).expect("save chapter");
+        let id = format!("large-chapter-{:04}", chapter_number);
+        let title = format!("第{}章", chapter_number);
+        let chapter_in_volume = ((chapter_number - 1) % 100) + 1;
+        let file_path = format!("manuscript/volume_{:03}/chapter_{:03}.md", volume_index + 1, chapter_in_volume);
+        let content = format!("# {}\n\n{}", title, "字".repeat(1000));
+        transaction.execute(
+            "INSERT INTO nodes (id, kind, parent_id, title, order_index, status, file_path, created_at, updated_at) VALUES (?1, 'chapter', ?2, ?3, ?4, 'draft', ?5, ?6, ?7)",
+            rusqlite::params![id, volume_id, title, chapter_in_volume - 1, file_path, timestamp, timestamp],
+        ).expect("insert large chapter");
+        storage::index_record(&transaction, &id, "chapter", &title, &content, &file_path).expect("index large chapter");
+        let mirror = storage::markdown_node(&id, "chapter", Some(volume_id), "draft", &timestamp, &timestamp, &content);
+        storage::atomic_write(&storage::safe_relative(&project_root, &file_path).expect("safe chapter mirror"), mirror.as_bytes())
+            .expect("write large chapter mirror");
     }
-    for index in 0..100 {
-        let _ = super::commands::upsert_entity(super::models::EntityInput {
-            project_path: project_path.clone(), kind: "character".to_string(), id: None,
-            title: format!("人物{:03}", index + 1), content: serde_json::json!({"identity": "验收角色", "status": "活动"}), tags: vec!["大规模".to_string()],
-        }).expect("create character");
+    for (kind, directory, title_prefix, count) in [
+        ("character", "characters", "人物", 100usize),
+        ("location", "locations", "地点", 100usize),
+        ("world", "world", "世界观", 200usize),
+        ("timeline", "timeline", "时间线事件", 500usize),
+        ("foreshadowing", "foreshadowing", "伏笔", 100usize),
+    ] {
+        for index in 0..count {
+            let id = format!("large-{}-{:04}", kind, index + 1);
+            let title = format!("{}{:03}", title_prefix, index + 1);
+            let file_path = format!("{}/{}-{:04}.md", directory, kind, index + 1);
+            let content = match kind {
+                "character" => serde_json::json!({"identity": "验收角色", "status": "活动"}),
+                "location" => serde_json::json!({"type": "城市", "description": "大规模验收地点"}),
+                "world" => serde_json::json!({"category": "设定", "summary": "大规模验收世界观"}),
+                "timeline" => serde_json::json!({"date": format!("第{}日", index + 1), "chapters": format!("第{}章", (index % 1000) + 1), "description": "大规模验收事件"}),
+                _ => serde_json::json!({"status": "planned", "plannedPayoff": format!("第{}章", index + 10), "description": "大规模验收伏笔"}),
+            };
+            let tags = vec!["大规模".to_string()];
+            transaction.execute(
+                "INSERT INTO entities (id, kind, title, content_json, tags_json, file_path, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                rusqlite::params![id, kind, title, content.to_string(), serde_json::to_string(&tags).expect("tags"), file_path, timestamp, timestamp],
+            ).expect("insert large entity");
+            storage::index_record(&transaction, &id, kind, &title, &storage::markdown_entity(&title, &content, &tags), &file_path)
+                .expect("index large entity");
+            let mirror = storage::markdown_entity_with_metadata(&id, kind, &timestamp, &timestamp, &title, &content, &tags);
+            storage::atomic_write(&storage::safe_relative(&project_root, &file_path).expect("safe entity mirror"), mirror.as_bytes())
+                .expect("write large entity mirror");
+        }
     }
-    for index in 0..100 {
-        let _ = super::commands::upsert_entity(super::models::EntityInput {
-            project_path: project_path.clone(), kind: "location".to_string(), id: None,
-            title: format!("地点{:03}", index + 1), content: serde_json::json!({"type": "城市", "description": "大规模验收地点"}), tags: vec!["大规模".to_string()],
-        }).expect("create location");
-    }
-    for index in 0..200 {
-        let _ = super::commands::upsert_entity(super::models::EntityInput {
-            project_path: project_path.clone(), kind: "world".to_string(), id: None,
-            title: format!("世界观{:03}", index + 1), content: serde_json::json!({"category": "设定", "summary": "大规模验收世界观"}), tags: vec!["大规模".to_string()],
-        }).expect("create world entry");
-    }
-    for index in 0..500 {
-        let _ = super::commands::upsert_entity(super::models::EntityInput {
-            project_path: project_path.clone(), kind: "timeline".to_string(), id: None,
-            title: format!("时间线事件{:03}", index + 1), content: serde_json::json!({"date": format!("第{}日", index + 1), "chapters": format!("第{}章", (index % 1000) + 1), "description": "大规模验收事件"}), tags: vec!["大规模".to_string()],
-        }).expect("create timeline event");
-    }
-    for index in 0..100 {
-        let _ = super::commands::upsert_entity(super::models::EntityInput {
-            project_path: project_path.clone(), kind: "foreshadowing".to_string(), id: None,
-            title: format!("伏笔{:03}", index + 1), content: serde_json::json!({"status": "planned", "plannedPayoff": format!("第{}章", index + 10), "description": "大规模验收伏笔"}), tags: vec!["大规模".to_string()],
-        }).expect("create foreshadowing");
-    }
+    transaction.commit().expect("commit large-project seed transaction");
     let data = super::commands::open_project(project_path.clone()).expect("open large project");
     let stats = super::commands::get_statistics(super::models::StatisticsInput { project_path: project_path.clone(), current_node_id: None }).expect("large statistics");
     assert_eq!(data.nodes.iter().filter(|node| node.kind == "volume").count(), 10);
@@ -1843,9 +1861,11 @@ fn large_project_acceptance_handles_1000_chapters_and_one_million_characters() {
         scope: None, node_id: None, volume_path: None, tag: Some("大规模".to_string()), case_sensitive: None,
     }).expect("search large project");
     assert!(search.iter().any(|result| result.title == "世界观099"));
-    assert!(started.elapsed() < std::time::Duration::from_secs(120));
-    let _ = fs::remove_dir_all(root);
     assert_eq!(data.nodes.iter().filter(|node| node.kind == "chapter").count(), 1000);
+    let elapsed = started.elapsed();
+    println!("LARGE_PROJECT_BENCHMARK_MS={}", elapsed.as_millis());
+    let _ = fs::remove_dir_all(root);
+    assert!(elapsed < std::time::Duration::from_secs(120));
 }
 
 #[test]
