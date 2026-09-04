@@ -33,7 +33,13 @@ export interface FavoriteName {
   createdAt: string
 }
 
+export interface GenerateNamesOptions {
+  previousNames?: readonly string[]
+  random?: () => number
+}
+
 const FAVORITES_STORAGE_KEY = 'novelforge:name-favorites:v1'
+const CANDIDATE_POOL_SIZE = 120
 
 function safeCount(count: number) {
   return Math.min(30, Math.max(1, Math.round(Number.isFinite(count) ? count : 6)))
@@ -50,7 +56,7 @@ function categoryName(category: NameCategory, index: number, style: NameStyle) {
   if (category === 'character') {
     if (['日式', '欧美', '西方奇幻'].includes(style)) {
       const pool = style === '日式' ? JAPANESE : style === '欧美' ? WESTERN : FANTASY
-      return pool[index % pool.length] + (index >= pool.length ? String(index + 1) : '')
+      return pool[index % pool.length]
     }
     return chineseCharacter(index, style)
   }
@@ -79,14 +85,52 @@ function categoryName(category: NameCategory, index: number, style: NameStyle) {
   return (style === '科幻' ? SCIENCE[index % SCIENCE.length] : GIVEN[index % GIVEN.length]) + '之' + (category === 'item' ? '物' : '器')
 }
 
-export function generateNames(category: NameCategory | EntityKind, count = 6, style: NameStyle = '中文现代') {
-  const normalizedCategory = (category === 'world' ? 'organization' : category === 'foreshadowing' ? 'item' : category) as NameCategory
-  const names: string[] = []
-  for (let index = 0; index < safeCount(count); index += 1) {
-    const candidate = categoryName(normalizedCategory, index, style)
-    names.push(names.includes(candidate) ? candidate + (index + 1) : candidate)
+function shuffle<T>(values: readonly T[], random: () => number) {
+  const shuffled = [...values]
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const value = random()
+    const normalized = Number.isFinite(value) ? Math.min(Math.max(value, 0), 1 - Number.EPSILON) : 0
+    const target = Math.floor(normalized * (index + 1))
+    ;[shuffled[index], shuffled[target]] = [shuffled[target], shuffled[index]]
   }
-  return [...new Set(names)]
+  return shuffled
+}
+
+function candidatePool(category: NameCategory, style: NameStyle, random: () => number) {
+  const baseNames = [...new Set(Array.from(
+    { length: CANDIDATE_POOL_SIZE },
+    (_, index) => categoryName(category, index, style),
+  ))]
+  const candidates = shuffle(baseNames, random)
+  let suffix = 2
+  while (candidates.length < CANDIDATE_POOL_SIZE) {
+    for (const base of shuffle(baseNames, random)) {
+      candidates.push(base + suffix)
+      if (candidates.length === CANDIDATE_POOL_SIZE) break
+    }
+    suffix += 1
+  }
+  return candidates
+}
+
+function sameNames(left: readonly string[], right: readonly string[]) {
+  return left.length === right.length && left.every((name, index) => name === right[index])
+}
+
+export function generateNames(
+  category: NameCategory | EntityKind,
+  count = 6,
+  style: NameStyle = '中文现代',
+  options: GenerateNamesOptions = {},
+) {
+  const normalizedCategory = (category === 'world' ? 'organization' : category === 'foreshadowing' ? 'item' : category) as NameCategory
+  const requestedCount = safeCount(count)
+  const candidates = candidatePool(normalizedCategory, style, options.random ?? Math.random)
+  const names = candidates.slice(0, requestedCount)
+  if (options.previousNames && sameNames(names, options.previousNames) && candidates.length > 1) {
+    return names.length > 1 ? [...names.slice(1), names[0]] : [candidates[1]]
+  }
+  return names
 }
 
 export function categoryEntityKind(category: NameCategory): EntityKind {

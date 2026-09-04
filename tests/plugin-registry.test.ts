@@ -10,7 +10,12 @@ describe('plugin registry', () => {
       'builtin.consistency',
     ])
     const names = await registry.generators()[0].generate({ category: 'character', style: '中文现代', count: 3 })
-    expect(names).toEqual(['林清明', '沈昭景', '顾景舟'])
+    if (!Array.isArray(names) || !names.every((name): name is string => typeof name === 'string')) {
+      throw new Error('名字生成器应返回字符串数组')
+    }
+    expect(names).toHaveLength(3)
+    expect(new Set(names).size).toBe(names.length)
+    expect(names.every((name) => !/[A-Za-z]/u.test(name))).toBe(true)
     expect(registry.commands().map((command) => command.id)).toContain('builtin.consistency.check')
     expect(registry.contextMenus('workspace', { location: 'workspace' }).map((item) => item.id)).toContain('builtin.consistency.context')
   })

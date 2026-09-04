@@ -21,7 +21,7 @@ export function NameGenerator() {
   const [busy, setBusy] = useState(false)
 
   function generate() {
-    setNames(generateNames(category, Number(count) || 6, style))
+    setNames((previousNames) => generateNames(category, Number(count) || 6, style, { previousNames }))
   }
 
   function favorite(name: string) {

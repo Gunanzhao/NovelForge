@@ -104,9 +104,34 @@ describe('writing utilities', () => {
   })
 
   it('generates unique local names', () => {
-    const names = generateNames('character', 8)
+    const names = generateNames('character', 8, '中文现代', { random: () => 0.25 })
     expect(names).toHaveLength(8)
     expect(new Set(names).size).toBe(names.length)
+  })
+
+  it('generates a visibly different batch from the previous names', () => {
+    const first = generateNames('character', 6, '中文现代', { random: () => 0 })
+    const second = generateNames('character', 6, '中文现代', { random: () => 0, previousNames: first })
+    expect(second).not.toEqual(first)
+    expect(new Set(second).size).toBe(second.length)
+  })
+
+  it('prefers natural names before numbered expansions', () => {
+    const countries = generateNames('country', 6, '中文古风', { random: () => 0.5 })
+    const westernCharacters = generateNames('character', 8, '欧美', { random: () => 0.5 })
+    expect([...countries, ...westernCharacters].every((name) => !/\d/u.test(name))).toBe(true)
+  })
+
+  it.each([
+    [1, 'character', '中文现代'],
+    [30, 'character', '欧美'],
+    [30, 'planet', '科幻'],
+    [30, 'country', '中文古风'],
+    [30, 'city', '中文现代'],
+  ] as const)('generates %i unique %s names in the %s style', (count, category, style) => {
+    const names = generateNames(category, count, style, { random: () => 0.5 })
+    expect(names).toHaveLength(count)
+    expect(new Set(names).size).toBe(count)
   })
 
   it('supports generator categories, styles and favorite persistence', () => {
