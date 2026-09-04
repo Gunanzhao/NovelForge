@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEven
 import type { LucideIcon } from 'lucide-react'
 import {
   ArrowDown, ArrowRightLeft, ArrowUp, BarChart3, BookOpen, ChevronDown, ChevronRight, CircleUserRound, Clock3, Copy, FileDown, FilePlus2, FolderTree,
-  GalleryVerticalEnd, GitBranch, Globe2, LayoutDashboard, MoreHorizontal, Network, Paperclip, Plus, Search,
+  GalleryVerticalEnd, GitBranch, Globe2, Inbox, LayoutDashboard, MoreHorizontal, Network, Paperclip, Plus, Search,
   ShieldCheck, Sparkles, Trash2, WandSparkles, X,
 } from 'lucide-react'
 import { useAppStore } from '../stores/app-store'
@@ -25,6 +25,7 @@ const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: 'timeline', label: '时间线', icon: Clock3 },
   { id: 'foreshadowing', label: '伏笔', icon: GitBranch },
   { id: 'story-arc', label: '剧情线', icon: GitBranch },
+  { id: 'inbox', label: '灵感箱', icon: Inbox },
   { id: 'relationship', label: '人物关系图', icon: Network },
   { id: 'attachment', label: '资料附件', icon: Paperclip },
   { id: 'consistency', label: '一致性检查', icon: ShieldCheck },

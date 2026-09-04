@@ -155,6 +155,7 @@ pub fn kind_directory(kind: &str) -> Result<&'static str, String> {
         "mention-ignore" => Ok("mentions"),
         "story-arc" => Ok("story-arcs"),
         "prompt-preset" => Ok("prompts"),
+        "inbox" => Ok("inbox"),
         _ => Err(format!("不支持的资料类型：{}", kind)),
     }
 }

@@ -277,6 +277,57 @@ fn prompt_preset_mirror_recovers_after_database_loss() {
 }
 
 #[test]
+fn inbox_mirror_preserves_original_content_during_database_recovery() {
+    let root = test_root("inbox-recovery");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "灵感恢复".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "悬疑".to_string(),
+        target_words: 1000,
+    })
+    .expect("create project");
+    let saved = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "inbox".to_string(),
+        id: None,
+        title: "钟声线索".to_string(),
+        content: serde_json::json!({
+            "content": "午夜钟声只响了十一下。",
+            "processed": true,
+            "processedInto": {"kind": "foreshadowing", "id": "f1"}
+        }),
+        tags: vec!["悬疑".to_string()],
+    })
+    .expect("save inbox");
+    let inbox = saved
+        .entities
+        .iter()
+        .find(|entity| entity.kind == "inbox")
+        .expect("inbox")
+        .clone();
+    fs::remove_file(root.join("project/.novelforge/database.sqlite")).expect("remove database");
+    let reopened = super::commands::open_project(project_path).expect("rebuild project");
+    let recovered = reopened
+        .entities
+        .iter()
+        .find(|entity| entity.kind == "inbox")
+        .expect("recover inbox");
+    assert_eq!(recovered.id, inbox.id);
+    assert_eq!(
+        recovered.content.get("content").and_then(serde_json::Value::as_str),
+        Some("午夜钟声只响了十一下。")
+    );
+    assert_eq!(
+        recovered.content.get("processed").and_then(serde_json::Value::as_bool),
+        Some(true)
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn real_command_workflow_persists_markdown_and_recoverable_trash() {
     let root = test_root("command-workflow");
     let project_path = root.join("雾港来信").to_string_lossy().to_string();

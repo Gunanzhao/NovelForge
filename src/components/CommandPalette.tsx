@@ -60,6 +60,8 @@ export function CommandPalette({ onNewProject, onCloseProject, onQuickOpen }: Co
     } else if (id === 'new-story-arc') {
       setView('story-arc')
       window.setTimeout(() => window.dispatchEvent(new Event('novelforge:new-story-arc')), 0)
+    } else if (id === 'quick-inbox') {
+      window.dispatchEvent(new Event('novelforge:quick-inbox'))
     }
     setOpen(false)
     setRecording(null)

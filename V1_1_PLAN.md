@@ -36,12 +36,12 @@
   - [x] 变量解析、错误阻断和剧情线上下文
   - [x] 最终 Prompt、上下文、字符数和 Token 预览
   - [x] rewrite 结果仅允许用户显式应用
-- [~] P5 灵感 Inbox
-  - [ ] `Ctrl+Shift+I` 快速记录
-  - [ ] 未整理/已整理、搜索、标签、排序、删除和恢复
-  - [ ] 转换为资料、场景、伏笔、剧情线 milestone 和笔记
-  - [ ] 转换失败时保留原始 Inbox 数据
-- [ ] P6 章节完成 Checklist
+- [x] P5 灵感 Inbox
+  - [x] `Ctrl+Shift+I` 快速记录
+  - [x] 未整理/已整理、搜索、标签、排序、删除和恢复入口
+  - [x] 转换为资料、场景、伏笔、剧情线 milestone 和笔记
+  - [x] 转换失败时保留原始 Inbox 数据
+- [~] P6 章节完成 Checklist
   - [ ] 项目级模板与新章节继承
   - [ ] 章节工作流、Inspector 进度和正文树过滤
   - [ ] Dashboard 汇总与持久化
@@ -50,7 +50,7 @@
 
 - [ ] 旧项目无需手动转换即可打开
 - [ ] 正文继续保存为普通 Markdown
-- [~] Story Arc、Prompt Preset 已有可恢复镜像；Inbox 和 Checklist 待实现
+- [~] Story Arc、Prompt Preset、Inbox 已有可恢复镜像；Checklist 待实现
 - [x] Mention 与人物统计可由正文和资料重新扫描生成
 - [x] P1 浏览器 fallback 可运行
 

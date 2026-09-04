@@ -580,3 +580,13 @@ P1 扫描结果和出现索引均可重新计算；测试没有把缓存存在�
 | Rust 恢复 | `prompts/` 镜像在数据库删除后恢复 ID、动作和模板 | 通过 |
 | 前端回归 | `pnpm typecheck`、`pnpm lint`、`pnpm test` | 通过；26 文件 / 137 项 |
 | Rust 回归 | `cargo check --locked`、`cargo test --locked` | 通过；45 项常规测试，1 项 ignored |
+# V1.1 P5 灵感 Inbox 验证（2026-09-05）
+
+| 层级 | 验证 | 结果 |
+| --- | --- | --- |
+| 数据单元测试 | 条目解析、处理目标、六类资料转换、剧情线 milestone 保留与追加 | 通过 |
+| 组件交互 | 快速记录保存；目标创建失败时原灵感保持未处理 | 通过 |
+| 快捷键 | 命令注册默认值 `Ctrl+Shift+I` | 通过 |
+| Rust 恢复 | `inbox/` 镜像恢复原文、processed 和 processedInto | 通过 |
+| 前端回归 | `pnpm typecheck`、`pnpm lint`、`pnpm test` | 通过；28 文件 / 147 项 |
+| Rust 回归 | `cargo check --locked`、`cargo test --locked` | 通过；46 项常规测试，1 项 ignored |

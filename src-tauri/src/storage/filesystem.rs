@@ -2,7 +2,7 @@ use super::*;
 
 const DIRECTORIES: &[&str] = &[
     "manuscript", "characters", "locations", "world", "timeline", "outlines",
-    "scenes", "foreshadowing", "relationships", "notes", "research", "attachments", "mentions", "story-arcs", "prompts", "trash",
+    "scenes", "foreshadowing", "relationships", "notes", "research", "attachments", "mentions", "story-arcs", "prompts", "inbox", "trash",
     ".novelforge/history", ".novelforge/recovery", ".novelforge/cache",
     ".novelforge/index", ".novelforge/exports", ".novelforge/logs",
 ];

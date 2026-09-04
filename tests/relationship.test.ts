@@ -33,6 +33,7 @@ describe('command registry', () => {
     expect(normalizeShortcut('control+shift+p')).toBe('Ctrl+Shift+P')
     expect(commandView('open-relationship')).toBe('relationship')
     const defaults = defaultShortcutMap()
+    expect(defaults['quick-inbox']).toBe('Ctrl+Shift+I')
     expect(defaults['toggle-bold']).toBe('Ctrl+B')
     expect(defaults['toggle-italic']).toBe('Ctrl+I')
     defaults['open-relationship'] = 'Ctrl+Alt+R'
