@@ -124,7 +124,7 @@ export function contextItems(
   const nodeItems = sortManuscriptNodes(nodes).map((node) => ({
     id: node.id, kind: 'node' as const, title: node.title, detail: node.id === currentNodeId ? '当前编辑章节' : node.kind === 'chapter' ? '正文 · 章节' : '正文 · 节',
   }))
-  const hiddenKinds = new Set(['attachment', 'mention-ignore', 'prompt-preset', 'inbox'])
+  const hiddenKinds = new Set(['attachment', 'mention-ignore', 'prompt-preset', 'inbox', 'checklist-template', 'chapter-checklist'])
   const entityItems = entities.filter((entity) => !hiddenKinds.has(entity.kind)).sort((left, right) => left.kind.localeCompare(right.kind) || left.title.localeCompare(right.title, 'zh-CN')).map((entity) => ({
     id: entity.id, kind: 'entity' as const, title: entity.title, detail: entity.kind,
   }))

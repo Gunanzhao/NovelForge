@@ -16,6 +16,8 @@
 - rewrite 模板输出提供复制、取消、替换选区和插入选区后，不自动覆盖正文。
 - P5 灵感 Inbox：`Ctrl+Shift+I` 快速记录，未整理/已整理视图，搜索、标签、时间排序、删除和恢复入口。
 - 灵感可转换为人物、地点、世界观、场景、伏笔、普通笔记或剧情线 milestone；成功后保留原文并记录目标。
+- P6 章节完成 Checklist：项目模板、新章节继承、六阶段 workflowStatus、默认七项检查、Inspector 进度和 Dashboard 卷级汇总。
+- 正文树新增未完成、未定稿、待人物一致性检查过滤，章节右键菜单支持标记正文完成和定稿。
 
 ### Data safety
 
@@ -23,6 +25,7 @@
 - 剧情线保存到 `story-arcs/` Markdown 镜像，可参与数据库重建和回收站恢复。
 - Prompt 模板保存到 `prompts/` Markdown 镜像，API Key 仍不进入项目、Git 或日志。
 - 灵感保存到 `inbox/` Markdown 镜像；转换失败保留原始内容，并对已创建目标执行补偿回滚。
+- Checklist 模板和章节实例分别镜像到 `checklist-templates/` 与 `checklists/`；现有 Node 状态和正文 Markdown 不变。
 
 ## 1.0.0-rc.2
 

@@ -662,3 +662,10 @@
 - 转换成功只标记 processed/processedInto，不删除原文；目标创建失败不改变原条目，标记失败执行补偿回滚。
 - Rust 验证灵感标题、正文、处理状态和目标引用可由 Markdown 镜像恢复。
 - 阶段门禁：28 个前端测试文件 / 147 项测试通过；Rust 46 项常规测试通过、1 项大型基准按设计忽略；typecheck、lint、cargo check 均通过。
+# V1.1 P6 章节完成 Checklist（2026-09-05）
+
+- 项目设置新增自定义 Checklist 模板；浏览器 fallback 和桌面 store 均让新章节复制当前模板，已有章节不被覆盖。
+- 章节 Inspector 支持六阶段 workflowStatus、检查项勾选、完成数和百分比；命令面板可完成下一个待办。
+- Dashboard 按卷显示各检查项完成数和定稿数；正文树提供三种流程过滤及右键快捷标记。
+- Checklist 不修改 Node.status；模板和章节实例使用独立 Markdown 镜像目录并通过数据库恢复测试。
+- 阶段门禁：30 个前端测试文件 / 153 项测试通过；Rust 47 项常规测试通过、1 项大型基准按设计忽略；typecheck、lint、cargo check 均通过。

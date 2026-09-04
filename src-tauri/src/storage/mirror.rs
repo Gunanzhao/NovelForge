@@ -156,6 +156,7 @@ pub fn kind_directory(kind: &str) -> Result<&'static str, String> {
         "story-arc" => Ok("story-arcs"),
         "prompt-preset" => Ok("prompts"),
         "inbox" => Ok("inbox"),
+        "checklist-template" => Ok("checklist-templates"), "chapter-checklist" => Ok("checklists"),
         _ => Err(format!("不支持的资料类型：{}", kind)),
     }
 }

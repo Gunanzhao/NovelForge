@@ -62,6 +62,8 @@ export function CommandPalette({ onNewProject, onCloseProject, onQuickOpen }: Co
       window.setTimeout(() => window.dispatchEvent(new Event('novelforge:new-story-arc')), 0)
     } else if (id === 'quick-inbox') {
       window.dispatchEvent(new Event('novelforge:quick-inbox'))
+    } else if (id === 'toggle-chapter-checklist') {
+      window.dispatchEvent(new Event('novelforge:toggle-chapter-checklist'))
     }
     setOpen(false)
     setRecording(null)

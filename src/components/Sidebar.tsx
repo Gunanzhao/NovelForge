@@ -14,6 +14,10 @@ import { useContextMenu } from './ContextMenu'
 
 import { cn } from '../lib/utils'
 import { Button, IconButton } from './ui'
+import {
+  chapterChecklistInput, chapterMatchesWorkflowFilter, checklistForChapter,
+} from '../lib/chapter-workflow'
+import type { ChapterWorkflowFilter } from '../lib/chapter-workflow'
 
 const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: 'dashboard', label: '总览', icon: LayoutDashboard },
@@ -103,6 +107,7 @@ export function Sidebar({
   const renameNode = useAppStore((state) => state.renameNode)
   const deleteNode = useAppStore((state) => state.deleteNode)
   const setNodeStatus = useAppStore((state) => state.setNodeStatus)
+  const saveEntity = useAppStore((state) => state.saveEntity)
   const reorderNode = useAppStore((state) => state.reorderNode)
   const moveNode = useAppStore((state) => state.moveNode)
   const projectPath = useAppStore((state) => state.projectPath)
@@ -114,9 +119,16 @@ export function Sidebar({
   const treeRef = useRef<HTMLDivElement>(null)
   const [treeScrollTop, setTreeScrollTop] = useState(0)
   const [treeViewportHeight, setTreeViewportHeight] = useState(480)
+  const [workflowFilter, setWorkflowFilter] = useState<ChapterWorkflowFilter>('all')
 
-  const volumes = useMemo(() => (data?.nodes ?? []).filter((node) => node.kind === 'volume').sort((a, b) => a.orderIndex - b.orderIndex), [data?.nodes])
-  const flatTree = useMemo(() => flattenTree(data?.nodes ?? [], volumes, openNodes), [data?.nodes, openNodes, volumes])
+  const filteredNodes = useMemo(() => {
+    if (!data || workflowFilter === 'all') return data?.nodes ?? []
+    const matchingChapters = new Set(data.nodes.filter((node) => node.kind === 'chapter' && chapterMatchesWorkflowFilter(node, data.entities, workflowFilter)).map((node) => node.id))
+    const matchingVolumes = new Set(data.nodes.filter((node) => node.kind === 'chapter' && matchingChapters.has(node.id)).map((node) => node.parentId))
+    return data.nodes.filter((node) => node.kind === 'volume' ? matchingVolumes.has(node.id) : node.kind === 'chapter' ? matchingChapters.has(node.id) : matchingChapters.has(node.parentId ?? ''))
+  }, [data, workflowFilter])
+  const volumes = useMemo(() => filteredNodes.filter((node) => node.kind === 'volume').sort((a, b) => a.orderIndex - b.orderIndex), [filteredNodes])
+  const flatTree = useMemo(() => flattenTree(filteredNodes, volumes, openNodes), [filteredNodes, openNodes, volumes])
   const treeRowHeight = 38
   const treeOverscan = 10
   const visibleStart = Math.max(0, Math.floor(treeScrollTop / treeRowHeight) - treeOverscan)
@@ -166,6 +178,18 @@ export function Sidebar({
   function siblingNodes(node: NodeRecord) {
     return currentData.nodes.filter((candidate) => candidate.kind === node.kind && candidate.parentId === node.parentId).sort((a, b) => a.orderIndex - b.orderIndex)
   }
+  async function updateChecklistShortcut(node: NodeRecord, mode: 'body' | 'final') {
+    if (node.kind !== 'chapter' || !projectPath) return
+    const checklist = checklistForChapter(currentData.entities, node.id) ?? {
+      chapterId: node.id,
+      workflowStatus: 'draft' as const,
+      items: chapterChecklistInput(projectPath, node, currentData.entities).content.items as Array<{ id: string; label: string; completed: boolean }>,
+    }
+    const next = mode === 'final'
+      ? { ...checklist, workflowStatus: 'final' as const }
+      : { ...checklist, items: checklist.items.map((item) => item.id === 'body-complete' || item.label === '正文完成' ? { ...item, completed: true } : item) }
+    await saveEntity(chapterChecklistInput(projectPath, node, currentData.entities, next))
+  }
   function openNodeMenu(event: ReactMouseEvent<HTMLDivElement>, node: NodeRecord) {
     const preservingSelection = selectedNodeIds.has(node.id) && selectedNodeIds.size > 1
     const ids = preservingSelection ? [...selectedNodeIds] : [node.id]
@@ -202,6 +226,10 @@ export function Sidebar({
       { type: 'item', id: 'node-up', label: '上移', icon: ArrowUp, disabled: siblingIndex <= 0, onSelect: () => void reorderNode(node.id, 'up') },
       { type: 'item', id: 'node-down', label: '下移', icon: ArrowDown, disabled: siblingIndex < 0 || siblingIndex >= siblings.length - 1, onSelect: () => void reorderNode(node.id, 'down') },
       ...(node.kind === 'chapter' ? [{ type: 'item' as const, id: 'node-status', label: '写作状态', children: Object.entries(NODE_STATUS_LABELS).map(([status, label]) => ({ type: 'item' as const, id: 'node-status-' + status, label, checked: node.status === status, onSelect: () => void setNodeStatus(node.id, status) })), onSelect: () => undefined }] : []),
+      ...(node.kind === 'chapter' ? [{ type: 'item' as const, id: 'node-checklist', label: 'Checklist', children: [
+        { type: 'item' as const, id: 'node-checklist-body', label: '标记正文完成', onSelect: () => void updateChecklistShortcut(node, 'body') },
+        { type: 'item' as const, id: 'node-checklist-final', label: '标记定稿', onSelect: () => void updateChecklistShortcut(node, 'final') },
+      ], onSelect: () => undefined }] : []),
       ...(node.kind !== 'section' ? [{ type: 'item' as const, id: 'node-export', label: node.kind === 'volume' ? '导出此卷' : '导出此章', icon: FileDown, onSelect: () => onExportNode(node) }] : []),
       { type: 'item', id: 'node-copy-title', label: node.kind === 'chapter' ? '复制章节标题' : '复制标题', icon: Copy, onSelect: async () => { if (!await writeClipboardText(node.title)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
       { type: 'item', id: 'node-copy-path', label: node.kind === 'chapter' ? '复制文件路径' : '复制目录路径', icon: Copy, onSelect: copyPath },
@@ -231,6 +259,7 @@ export function Sidebar({
         <button className={cn('nav-item', activeView === 'search' && 'active')} onClick={() => setView('search')}><Search size={15} strokeWidth={1.8} /><span>全文搜索</span><span className="count">⌘</span></button>
       </div>
       <div className="sidebar-section-label"><span>正文结构</span><span>{data.nodes.filter((node) => node.kind === 'chapter').length} 章</span></div>
+      <select className="select-input workflow-tree-filter" value={workflowFilter} onChange={(event) => { setWorkflowFilter(event.target.value as ChapterWorkflowFilter); setTreeScrollTop(0) }} aria-label="章节 Checklist 过滤"><option value="all">显示全部章节</option><option value="incomplete">仅显示未完成</option><option value="not-final">仅显示未定稿</option><option value="consistency">仅显示待人物一致性检查</option></select>
       <div className="tree" ref={treeRef} onScroll={(event) => setTreeScrollTop(event.currentTarget.scrollTop)}>
         {volumes.length === 0 ? <div className="tree-muted">还没有卷，点击右上角创建第一卷。</div> : <div className="tree-virtual-content" style={{ height: flatTree.length * treeRowHeight }}><div className="tree-virtual-rows" style={{ top: visibleStart * treeRowHeight }}>{visibleTree.map(({ node, level }) => <NodeRow key={node.id} node={node} level={level} open={openNodes.has(node.id)} selected={selectedNodeIds.has(node.id)} onToggle={() => toggle(node.id)} onSelect={() => node.kind === 'volume' ? toggle(node.id) : void selectNode(node.id)} onSelectToggle={() => toggleSelection(node.id)} onAdd={() => onAddNode(node.kind === 'volume' ? 'chapter' : 'section', node.id)} onRename={() => handleRename(node)} onMove={() => onMoveNode(node)} onCopy={() => onCopyNode(node)} onDelete={() => handleDelete(node)} onContextMenu={(event) => openNodeMenu(event, node)} onDragStart={() => setDraggedNodeId(node.id)} onDrop={() => handleDrop(node)} />)}</div></div>}
       </div>

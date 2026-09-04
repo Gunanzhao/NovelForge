@@ -12,6 +12,7 @@ import { Button } from './ui'
 import { NameGenerator } from './NameGenerator'
 import { MentionInspector } from './MentionInspector'
 import { StoryArcInspector } from './StoryArcInspector'
+import { ChapterChecklistInspector } from './ChapterWorkflow'
 import { useContextMenu } from './ContextMenu'
 
 export function Inspector() {
@@ -114,6 +115,7 @@ export function Inspector() {
       <div className="inspector-section"><NameGenerator /></div>
       <div className="inspector-section"><MentionInspector /></div>
       <div className="inspector-section"><StoryArcInspector /></div>
+      <div className="inspector-section"><ChapterChecklistInspector /></div>
       <div className="inspector-section"><button className="inspector-collapse" onClick={() => setHistoryOpen(!historyOpen)}><span><History size={14} />版本历史</span>{historyOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>{historyOpen ? <div className="history-list" style={{ marginTop: 11 }}>{history.length ? history.map((item) => <div className="history-item" key={item.id} onContextMenu={(event) => openHistoryMenu(event, item)}><div><strong>{item.reason}</strong><small>{formatDate(item.createdAt)} · {formatNumber(item.wordCount)} 字</small></div><span><Button variant="ghost" onClick={() => void readRevision(item.id)}>查看</Button><Button variant="ghost" onClick={() => void readRevision(item.id, 'diff')}><GitCompare size={12} />Diff</Button><Button variant="ghost" onClick={() => void copyRevision(item.id)}><Clipboard size={12} />复制</Button><Button variant="ghost" onClick={() => void restoreRevision(item.id)}><RotateCcw size={12} />恢复</Button></span></div>) : <span className="field-hint">保存一次后会在这里留下快照。</span>}{historyPreview ? historyPreview.mode === 'diff' ? <pre className="history-preview history-diff">{diffLines(historyPreview.content, document.content).map((line, index) => <span className={'diff-line ' + line.kind} key={index}>{line.kind === 'same' ? '  ' : line.kind === 'added' ? '+ ' : '- '}{line.text}{'\\n'}</span>)}</pre> : <pre className="history-preview">{historyPreview.content}</pre> : null}</div> : null}</div>
     </div>
   </aside>

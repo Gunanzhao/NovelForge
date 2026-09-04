@@ -693,6 +693,75 @@ code { padding: 1px 4px; border-radius: 3px; background: var(--surface-2); font-
   }
 }
 
+.checklist-template-settings {
+  display: grid;
+  gap: 10px;
+}
+
+.checklist-template-settings .text-area {
+  min-height: 180px;
+}
+
+.chapter-checklist-inspector {
+  display: grid;
+  gap: 9px;
+}
+
+.chapter-checklist-inspector .panel-title h3 {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.chapter-checklist-items {
+  display: grid;
+  gap: 4px;
+}
+
+.chapter-checklist-items label {
+  align-items: center;
+  border-radius: 6px;
+  display: flex;
+  gap: 7px;
+  padding: 5px;
+}
+
+.chapter-checklist-items label:hover {
+  background: var(--hover);
+}
+
+.workflow-dashboard {
+  display: grid;
+  gap: 12px;
+  margin: 0 24px 16px;
+}
+
+.workflow-volume {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+}
+
+.workflow-volume > div:first-child,
+.workflow-progress-row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.workflow-volume > div:first-child span,
+.workflow-progress-row {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.workflow-tree-filter {
+  font-size: 11px;
+  margin: 0 10px 7px;
+  width: calc(100% - 20px);
+}
+
 .inbox-capture-form {
   display: grid;
   gap: 10px;

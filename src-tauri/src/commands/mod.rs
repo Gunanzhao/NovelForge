@@ -136,6 +136,8 @@ const RECOVERY_DIRECTORIES: &[&str] = &[
     "story-arcs",
     "prompts",
     "inbox",
+    "checklists",
+    "checklist-templates",
     ".novelforge/history",
 ];
 
@@ -461,6 +463,7 @@ fn rebuild_entities_from_markdown(root: &Path, connection: &Connection) -> Resul
         ("story-arc", "story-arcs"),
         ("prompt-preset", "prompts"),
         ("inbox", "inbox"),
+        ("checklist-template", "checklist-templates"), ("chapter-checklist", "checklists"),
     ] {
         let directory_path = storage::safe_relative(root, directory)?;
         if !directory_path.is_dir() {

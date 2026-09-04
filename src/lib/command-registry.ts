@@ -26,6 +26,7 @@ export type CommandId =
   | 'run-prompt-preset'
   | 'open-inbox'
   | 'quick-inbox'
+  | 'toggle-chapter-checklist'
   | 'toggle-bold'
   | 'toggle-italic'
 
@@ -63,6 +64,7 @@ export const COMMANDS: CommandDescriptor[] = [
   { id: 'run-prompt-preset', label: '运行 Prompt 模板', description: '预览并运行第一个项目模板', keywords: ['AI', 'Prompt', '运行', '模板'] },
   { id: 'open-inbox', label: '打开灵感箱', description: '查看未整理和已整理灵感', keywords: ['灵感', 'inbox', '整理'] },
   { id: 'quick-inbox', label: '快速记录灵感', description: '不离开当前章节记录一条灵感', keywords: ['灵感', '记录', 'inbox'], defaultShortcut: 'Ctrl+Shift+I' },
+  { id: 'toggle-chapter-checklist', label: '切换章节 Checklist', description: '完成当前章节的下一个待办项', keywords: ['章节', 'Checklist', '完成', '流程'] },
   { id: 'toggle-bold', label: '切换粗体', description: '对当前编辑器选区应用或取消粗体', keywords: ['粗体', 'bold', '编辑'], defaultShortcut: 'Ctrl+B' },
   { id: 'toggle-italic', label: '切换斜体', description: '对当前编辑器选区应用或取消斜体', keywords: ['斜体', 'italic', '编辑'], defaultShortcut: 'Ctrl+I' },
 ]

@@ -328,6 +328,74 @@ fn inbox_mirror_preserves_original_content_during_database_recovery() {
 }
 
 #[test]
+fn chapter_checklist_mirrors_recover_without_changing_node_status() {
+    let root = test_root("checklist-recovery");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "流程恢复".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "现代".to_string(),
+        target_words: 1000,
+    })
+    .expect("create project");
+    let chapter = created
+        .nodes
+        .iter()
+        .find(|node| node.kind == "chapter")
+        .expect("chapter")
+        .clone();
+    super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "checklist-template".to_string(),
+        id: None,
+        title: "项目章节 Checklist 模板".to_string(),
+        content: serde_json::json!({"items": [{"id": "body", "label": "正文完成"}]}),
+        tags: vec!["章节流程模板".to_string()],
+    })
+    .expect("save template");
+    let saved = super::commands::upsert_entity(super::models::EntityInput {
+        project_path: project_path.clone(),
+        kind: "chapter-checklist".to_string(),
+        id: None,
+        title: "第一章 · Checklist".to_string(),
+        content: serde_json::json!({
+            "chapterId": chapter.id,
+            "workflowStatus": "proofread-1",
+            "items": [{"id": "body", "label": "正文完成", "completed": true}]
+        }),
+        tags: vec!["章节流程".to_string()],
+    })
+    .expect("save checklist");
+    let checklist_id = saved
+        .entities
+        .iter()
+        .find(|entity| entity.kind == "chapter-checklist")
+        .expect("checklist")
+        .id
+        .clone();
+    fs::remove_file(root.join("project/.novelforge/database.sqlite")).expect("remove database");
+    let reopened = super::commands::open_project(project_path).expect("rebuild project");
+    let recovered_chapter = reopened
+        .nodes
+        .iter()
+        .find(|node| node.id == chapter.id)
+        .expect("recover chapter");
+    assert_eq!(recovered_chapter.status, chapter.status);
+    let recovered = reopened
+        .entities
+        .iter()
+        .find(|entity| entity.id == checklist_id)
+        .expect("recover checklist");
+    assert_eq!(
+        recovered.content.get("workflowStatus").and_then(serde_json::Value::as_str),
+        Some("proofread-1")
+    );
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn real_command_workflow_persists_markdown_and_recoverable_trash() {
     let root = test_root("command-workflow");
     let project_path = root.join("雾港来信").to_string_lossy().to_string();

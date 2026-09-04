@@ -10,6 +10,7 @@ import {
 import type { WorkspacePreferences } from '../lib/workspace-preferences'
 import { sortChapterNodes } from '../lib/planning-data'
 import type { AiAction } from '../lib/ai-data'
+import { chapterChecklistInput, checklistForChapter } from '../lib/chapter-workflow'
 
 export interface RecentProject {
   path: string
@@ -44,6 +45,11 @@ function rememberProject(path: string, data: ProjectData) {
 
 function firstChapter(data: ProjectData) {
   return sortChapterNodes(data.nodes)[0]
+}
+
+async function addInitialChecklist(projectPath: string, data: ProjectData, chapter: NodeRecord) {
+  if (checklistForChapter(data.entities, chapter.id)) return data
+  return projectApi.upsertEntity(chapterChecklistInput(projectPath, chapter, data.entities))
 }
 
 const emptyStats: Stats = {
@@ -183,8 +189,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         const saved = await get().saveCurrentDocument('切换项目前保存')
         if (!saved) throw new Error('当前正文保存失败，已取消创建新项目')
       }
-      const data = await projectApi.create(input)
+      let data = await projectApi.create(input)
+      let checklistError: unknown = null
+      const initialChapter = firstChapter(data)
+      if (initialChapter) {
+        try { data = await addInitialChecklist(input.path, data, initialChapter) }
+        catch (error) { checklistError = error }
+      }
       set((state) => ({ projectPath: input.path, data, document: null, editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null }))
+      if (checklistError) get().setError(checklistError)
       const chapter = firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
       set({ recentProjects: rememberProject(input.path, data) })
@@ -314,8 +327,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     const projectPath = get().projectPath
     if (!projectPath) return
     try {
-      const data = await projectApi.createNode({ projectPath, kind, title, parentId })
+      const previousChapterIds = new Set(get().data?.nodes.filter((node) => node.kind === 'chapter').map((node) => node.id) ?? [])
+      let data = await projectApi.createNode({ projectPath, kind, title, parentId })
       await get().refreshData(data, true)
+      if (kind === 'chapter') {
+        const chapter = data.nodes.find((node) => node.kind === 'chapter' && !previousChapterIds.has(node.id))
+        if (chapter) {
+          try {
+            data = await addInitialChecklist(projectPath, data, chapter)
+            await get().refreshData(data, true)
+          } catch (error) {
+            get().setError(error)
+          }
+        }
+      }
     } catch (error) { get().setError(error); throw error }
   },
 

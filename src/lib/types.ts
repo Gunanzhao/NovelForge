@@ -1,5 +1,5 @@
 export type NodeKind = 'volume' | 'chapter' | 'section'
-export type EntityKind = 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note' | 'relationship' | 'attachment' | 'mention-ignore' | 'story-arc' | 'prompt-preset' | 'inbox'
+export type EntityKind = 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note' | 'relationship' | 'attachment' | 'mention-ignore' | 'story-arc' | 'prompt-preset' | 'inbox' | 'checklist-template' | 'chapter-checklist'
 export type ViewId = 'dashboard' | 'manuscript' | EntityKind | 'character-statistics' | 'consistency' | 'statistics' | 'ai' | 'search' | 'trash' | 'settings'
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type ThemeMode = 'light' | 'dark' | 'system'
@@ -133,6 +133,8 @@ export const ENTITY_LABELS: Record<EntityKind, string> = {
   'story-arc': '剧情线',
   'prompt-preset': 'Prompt 模板',
   inbox: '灵感',
+  'checklist-template': '章节 Checklist 模板',
+  'chapter-checklist': '章节 Checklist',
 }
 
 export const NODE_STATUS_LABELS: Record<string, string> = {
@@ -207,6 +209,13 @@ export const ENTITY_FIELDS: Record<EntityKind, Array<{ key: string; label: strin
   ],
   inbox: [
     { key: 'content', label: '正文', multiline: true }, { key: 'processed', label: '已整理' },
+  ],
+  'checklist-template': [
+    { key: 'items', label: '检查项', multiline: true },
+  ],
+  'chapter-checklist': [
+    { key: 'chapterId', label: '章节 ID' }, { key: 'workflowStatus', label: '工作流状态' },
+    { key: 'items', label: '检查项', multiline: true },
   ],
 }
 

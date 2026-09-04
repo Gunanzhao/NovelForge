@@ -4,6 +4,7 @@ import { projectApi } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/utils'
 import { useAppStore } from '../stores/app-store'
 import { Button, Modal, Panel } from './ui'
+import { ChecklistDashboard } from './ChapterWorkflow'
 
 export function Dashboard() {
   const data = useAppStore((state) => state.data)
@@ -75,7 +76,7 @@ export function Dashboard() {
         <Panel className="dashboard-panel"><div className="panel-title"><h3>本地优先</h3><HardDrive size={15} color="var(--green)" /></div><p className="metric-sub" style={{ lineHeight: 1.7 }}>正文以 Markdown 文件保存。SQLite 只负责索引与资料；自动保存、恢复文件和历史快照共同保护你的写作。</p><div className="inspector-actions"><span className="tag"><CheckCircle2 size={11} /> 无需账号</span><span className="tag"><FileClock size={11} /> 有版本历史</span></div></Panel>
       </div>
     </div>
-    <div className="dashboard-columns" style={{ paddingTop: 0 }}>
+    <ChecklistDashboard /><div className="dashboard-columns" style={{ paddingTop: 0 }}>
       <Panel className="dashboard-panel"><div className="panel-title"><h3>下一步</h3><Sparkles size={15} color="var(--accent)" /></div><div className="inspector-actions"><Button variant="outline" onClick={() => useAppStore.getState().setView('character')}>建立人物</Button><Button variant="outline" onClick={() => useAppStore.getState().setView('world')}>补充世界观</Button><Button variant="outline" onClick={() => useAppStore.getState().setView('search')}>搜索全文</Button></div></Panel>
       <Panel className="dashboard-panel"><div className="panel-title"><h3>安全提醒</h3><Trash2 size={15} color="var(--muted)" /></div><p className="metric-sub" style={{ lineHeight: 1.7 }}>删除内容不会立即永久消失，会先进入项目内的 <code>trash/</code> 目录。</p></Panel>
     </div>

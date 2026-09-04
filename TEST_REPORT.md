@@ -590,3 +590,13 @@ P1 扫描结果和出现索引均可重新计算；测试没有把缓存存在�
 | Rust 恢复 | `inbox/` 镜像恢复原文、processed 和 processedInto | 通过 |
 | 前端回归 | `pnpm typecheck`、`pnpm lint`、`pnpm test` | 通过；28 文件 / 147 项 |
 | Rust 回归 | `cargo check --locked`、`cargo test --locked` | 通过；46 项常规测试，1 项 ignored |
+# V1.1 P6 章节 Checklist 验证（2026-09-05）
+
+| 层级 | 验证 | 结果 |
+| --- | --- | --- |
+| 数据单元测试 | 默认/自定义模板、独立状态、完成比例、三类树过滤、卷级 Dashboard | 通过 |
+| Store 集成 | 新章节创建后复制项目模板 | 通过 |
+| 浏览器集成 | 初始章节默认模板、新章节自定义模板、旧章节不覆盖 | 通过 |
+| Rust 恢复 | 模板/实例独立目录恢复，Node.status 保持原值 | 通过 |
+| 前端回归 | `pnpm typecheck`、`pnpm lint`、`pnpm test` | 通过；30 文件 / 153 项 |
+| Rust 回归 | `cargo check --locked`、`cargo test --locked` | 通过；47 项常规测试，1 项 ignored |

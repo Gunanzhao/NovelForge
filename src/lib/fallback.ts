@@ -4,6 +4,7 @@ import type {
 } from './types'
 import { analyzeConsistency } from './consistency-data'
 import { countWords } from './utils'
+import { parseChecklistTemplate } from './chapter-workflow'
 
 interface StoredHistory extends HistoryItem {
   content: string
@@ -27,7 +28,7 @@ interface FallbackStore {
 const memory = new Map<string, FallbackStore>()
 const STORAGE_PREFIX = 'novelforge-fallback:'
 const NODE_STATUSES = new Set(['not-started', 'draft', 'first-draft', 'editing', 'done', 'locked'])
-const ENTITY_KINDS = new Set(['character', 'location', 'world', 'timeline', 'foreshadowing', 'outline', 'scene', 'note', 'relationship', 'attachment', 'mention-ignore', 'story-arc', 'prompt-preset', 'inbox'])
+const ENTITY_KINDS = new Set(['character', 'location', 'world', 'timeline', 'foreshadowing', 'outline', 'scene', 'note', 'relationship', 'attachment', 'mention-ignore', 'story-arc', 'prompt-preset', 'inbox', 'checklist-template', 'chapter-checklist'])
 
 function uid() {
   return globalThis.crypto?.randomUUID?.() ?? ('fallback-' + Date.now() + '-' + Math.random().toString(16).slice(2))
@@ -88,7 +89,7 @@ function makeProject(input: ProjectInput): FallbackStore {
         id: volumeId, kind: 'volume', parentId: null, title: '第一卷', orderIndex: 0,
         status: 'not-started', filePath: 'manuscript/volume_001', createdAt, updatedAt: createdAt,
       }, chapter],
-      entities: [],
+      entities: [fallbackChecklistEntity(chapter, [], createdAt)],
       recovery: [],
     },
     documents: { [chapterId]: content },
@@ -96,6 +97,25 @@ function makeProject(input: ProjectInput): FallbackStore {
     trash: [],
     trashSnapshots: {},
     activities: [],
+  }
+}
+
+function fallbackChecklistEntity(chapter: NodeRecord, entities: EntityRecord[], createdAt = new Date().toISOString()): EntityRecord {
+  const template = parseChecklistTemplate(entities.find((entity) => entity.kind === 'checklist-template'))
+  const id = uid()
+  return {
+    id,
+    kind: 'chapter-checklist',
+    title: `${chapter.title} · Checklist`,
+    content: {
+      chapterId: chapter.id,
+      workflowStatus: 'draft',
+      items: template.items.map((item) => ({ ...item, completed: false })),
+    },
+    tags: ['章节流程'],
+    filePath: `checklists/${id}.md`,
+    createdAt,
+    updatedAt: createdAt,
   }
 }
 
@@ -318,6 +338,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     }
     store.data.nodes.push(newNode)
     if (kind !== 'volume') store.documents[id] = '# ' + title + '\n\n'
+    if (kind === 'chapter') store.data.entities.push(fallbackChecklistEntity(newNode, store.data.entities, createdAt))
     updateTime(store.data)
     persist(projectPath, store)
     return store.data as T
