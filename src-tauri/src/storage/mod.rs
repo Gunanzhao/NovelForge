@@ -17,7 +17,7 @@ pub(crate) mod search_index;
 
 pub const PROJECT_FILE: &str = "project.json";
 pub(crate) use database::{all_entities, all_nodes, entity_from_id, open_db, node_from_id, trash_items};
-pub(crate) use filesystem::{atomic_write, create_project_directories, existing_project_root, move_to_trash, new_project_root, read_project_json, remove_file_if_exists, safe_relative, safe_trash_path, touch_project, write_project_json};
+pub(crate) use filesystem::{atomic_write, create_project_directories, existing_project_root, move_to_trash, new_project_root, read_project_json, remove_file_if_exists, safe_existing_path, safe_relative, safe_trash_path, touch_project, write_project_json};
 pub(crate) use history::{copy_history, history_items, parse_timestamp, recovery_items, write_recovery};
 pub(crate) use logging::{append_log, read_logs};
 pub(crate) use migration::quarantine_database;

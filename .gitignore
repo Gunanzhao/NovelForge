@@ -1,7 +1,13 @@
 node_modules/
 dist/
 .vite/
+.pnpm-store/
 src-tauri/target/
 src-tauri/gen/
 *.log
+.env
+.env.*
+!.env.example
+*.pem
+*.key
 .DS_Store

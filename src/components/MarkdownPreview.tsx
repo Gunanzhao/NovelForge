@@ -2,6 +2,7 @@ import { useMemo, type ComponentProps } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { wikiMarkdown, wikiTargetFromHref } from '../lib/markdown'
+import { isExternalMarkdownUrl, markdownUrlTransform } from '../lib/safe-url'
 import type { EntityRecord } from '../lib/types'
 
 export interface MarkdownPreviewProps {
@@ -33,7 +34,14 @@ export function MarkdownPreview({ markdown, entities = [], onWikiLink }: Markdow
     a: ({ node, href, children, ...anchorProps }: ComponentProps<'a'> & { node?: unknown }) => {
       void node
       const target = wikiTargetFromHref(href)
-      if (!target) return <a {...anchorProps} href={href}>{children}</a>
+      if (!target) {
+        if (!href) return <span>{children}</span>
+        return <a
+          {...anchorProps}
+          href={href}
+          rel={isExternalMarkdownUrl(href) ? 'noopener noreferrer' : anchorProps.rel}
+        >{children}</a>
+      }
       const candidates = entities.filter((entity) => wikiTitleKey(entity.title) === wikiTitleKey(target))
       const duplicate = candidates.length > 1
       return <a
@@ -47,12 +55,17 @@ export function MarkdownPreview({ markdown, entities = [], onWikiLink }: Markdow
         }}
       >{children}</a>
     },
+    img: ({ node, src, alt, ...imageProps }: ComponentProps<'img'> & { node?: unknown }) => {
+      void node
+      if (!src) return <span>{alt ?? ''}</span>
+      return <img {...imageProps} src={src} alt={alt ?? ''} referrerPolicy="no-referrer" />
+    },
   }), [entities, onWikiLink])
 
   return <ReactMarkdown
     remarkPlugins={[remarkGfm]}
     remarkRehypeOptions={remarkRehypeOptions}
     components={components}
-    urlTransform={(url) => url}
+    urlTransform={markdownUrlTransform}
   >{preview}</ReactMarkdown>
 }

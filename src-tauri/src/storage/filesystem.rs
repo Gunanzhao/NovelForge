@@ -14,9 +14,20 @@ fn canonical_root(root: &Path) -> Result<PathBuf, String> {
 fn canonical_existing_ancestor(path: &Path) -> Result<PathBuf, String> {
     let mut current = Some(path);
     while let Some(candidate) = current {
-        if candidate.exists() {
-            return fs::canonicalize(candidate)
-                .map_err(|error| format!("无法规范化项目路径 {}：{}", candidate.display(), error));
+        match fs::symlink_metadata(candidate) {
+            Ok(_) => {
+                return fs::canonicalize(candidate).map_err(|error| {
+                    format!("无法规范化项目路径 {}：{}", candidate.display(), error)
+                });
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(format!(
+                    "无法检查项目路径 {}：{}",
+                    candidate.display(),
+                    error
+                ));
+            }
         }
         current = candidate.parent();
     }
@@ -25,20 +36,41 @@ fn canonical_existing_ancestor(path: &Path) -> Result<PathBuf, String> {
 
 fn ensure_within_root(root: &Path, candidate: &Path) -> Result<(), String> {
     let canonical_root = canonical_root(root)?;
-    let boundary = if candidate.exists() {
-        let canonical_candidate = fs::canonicalize(candidate)
-            .map_err(|error| format!("无法规范化项目路径 {}：{}", candidate.display(), error))?;
-        if canonical_candidate == canonical_root {
-            return Err("项目路径不能指向项目根目录本身".to_string());
+    let boundary = match fs::symlink_metadata(candidate) {
+        Ok(_) => {
+            let canonical_candidate = fs::canonicalize(candidate).map_err(|error| {
+                format!("无法规范化项目路径 {}：{}", candidate.display(), error)
+            })?;
+            if canonical_candidate == canonical_root {
+                return Err("项目路径不能指向项目根目录本身".to_string());
+            }
+            canonical_candidate
         }
-        canonical_candidate
-    } else {
-        canonical_existing_ancestor(candidate)?
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            canonical_existing_ancestor(candidate)?
+        }
+        Err(error) => {
+            return Err(format!(
+                "无法检查项目路径 {}：{}",
+                candidate.display(),
+                error
+            ));
+        }
     };
     if !boundary.starts_with(&canonical_root) {
         return Err(format!("项目路径越界：{}", candidate.display()));
     }
     Ok(())
+}
+
+pub fn safe_existing_path(root: &Path, candidate: &Path) -> Result<PathBuf, String> {
+    let canonical_root = canonical_root(root)?;
+    let canonical_candidate = fs::canonicalize(candidate)
+        .map_err(|error| format!("无法规范化项目恢复路径 {}：{}", candidate.display(), error))?;
+    if canonical_candidate == canonical_root || !canonical_candidate.starts_with(&canonical_root) {
+        return Err(format!("项目恢复路径越界：{}", candidate.display()));
+    }
+    Ok(canonical_candidate)
 }
 
 pub fn create_project_directories(root: &Path) -> Result<(), String> {

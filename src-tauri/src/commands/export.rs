@@ -410,6 +410,82 @@ fn xml_escape(value: &str) -> String {
         .replace('"', "&quot;").replace('\'', "&apos;")
 }
 
+#[derive(Clone, Copy)]
+enum ExportUrlKind {
+    Link,
+    Image,
+}
+
+fn safe_export_url(value: &str, kind: ExportUrlKind) -> Option<&str> {
+    let value = value.trim();
+    if value.is_empty()
+        || value.chars().any(|character| character.is_control())
+        || value.starts_with("//")
+        || value.starts_with('\\')
+    {
+        return None;
+    }
+    if value.starts_with('#') {
+        return Some(value);
+    }
+    let scheme = value
+        .find(':')
+        .filter(|index| *index > 0)
+        .map(|index| &value[..index])
+        .filter(|candidate| {
+            candidate.chars().enumerate().all(|(index, character)| {
+                if index == 0 {
+                    character.is_ascii_alphabetic()
+                } else {
+                    character.is_ascii_alphanumeric() || matches!(character, '+' | '-' | '.')
+                }
+            })
+        });
+    let Some(scheme) = scheme else {
+        return Some(value);
+    };
+    if matches!(kind, ExportUrlKind::Image)
+        && scheme.eq_ignore_ascii_case("data")
+        && is_safe_data_image(value)
+    {
+        return Some(value);
+    }
+    let allowed = match kind {
+        ExportUrlKind::Link => ["http", "https", "mailto"].as_slice(),
+        ExportUrlKind::Image => ["http", "https"].as_slice(),
+    };
+    allowed
+        .iter()
+        .any(|candidate| scheme.eq_ignore_ascii_case(candidate))
+        .then_some(value)
+}
+
+fn is_safe_data_image(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    let Some((metadata, payload)) = lower.split_once(',') else {
+        return false;
+    };
+    matches!(
+        metadata,
+        "data:image/png;base64"
+            | "data:image/jpeg;base64"
+            | "data:image/jpg;base64"
+            | "data:image/gif;base64"
+            | "data:image/webp;base64"
+            | "data:image/avif;base64"
+    ) && {
+        let padding_start = payload.find('=').unwrap_or(payload.len());
+        let padding = &payload[padding_start..];
+        !payload.is_empty()
+            && payload.len() % 4 == 0
+            && payload[..padding_start]
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/'))
+            && padding.len() <= 2
+            && padding.bytes().all(|byte| byte == b'=')
+    }
+}
+
 fn heading_level(line: &str) -> Option<usize> {
     let level = line.chars().take_while(|character| *character == '#').count();
     (level > 0 && line.chars().nth(level) == Some(' ')).then_some(level)
@@ -428,8 +504,24 @@ fn export_html_inlines(inlines: &[ExportInline]) -> String {
         ExportInline::Emphasis(children) => format!("<em>{}</em>", export_html_inlines(children)),
         ExportInline::Strike(children) => format!("<del>{}</del>", export_html_inlines(children)),
         ExportInline::Code(text) => format!("<code>{}</code>", xml_escape(text)),
-        ExportInline::Link { label, href } => format!("<a href=\"{}\">{}</a>", xml_escape(href), export_html_inlines(label)),
-        ExportInline::Image { alt, src } => format!("<img src=\"{}\" alt=\"{}\" />", xml_escape(src), xml_escape(alt)),
+        ExportInline::Link { label, href } => {
+            let label = export_html_inlines(label);
+            safe_export_url(href, ExportUrlKind::Link)
+                .map(|href| {
+                    let rel = if href.to_ascii_lowercase().starts_with("http:")
+                        || href.to_ascii_lowercase().starts_with("https:")
+                    {
+                        " rel=\"noopener noreferrer\""
+                    } else {
+                        ""
+                    };
+                    format!("<a href=\"{}\"{}>{}</a>", xml_escape(href), rel, label)
+                })
+                .unwrap_or(label)
+        },
+        ExportInline::Image { alt, src } => safe_export_url(src, ExportUrlKind::Image)
+            .map(|src| format!("<img src=\"{}\" alt=\"{}\" referrerpolicy=\"no-referrer\" />", xml_escape(src), xml_escape(alt)))
+            .unwrap_or_else(|| xml_escape(alt)),
         ExportInline::Wiki(target) => format!("<a class=\"wiki-link\" data-wiki-target=\"{}\" href=\"#wiki-{}\">{}</a>", xml_escape(target), xml_escape(&target.replace(' ', "-")), xml_escape(target)),
         ExportInline::FootnoteReference(id) => {
             let slug = footnote_slug(id);
@@ -1044,5 +1136,19 @@ mod tests {
         let plain = export_plain_text(&document);
         assert!(plain.contains("[^]"));
         assert!(plain.contains("bad"));
+    }
+
+    #[test]
+    fn html_export_filters_unsafe_urls_and_preserves_safe_links() {
+        let document = parse_export_document(
+            "[危险](javascript:evil)\n\n![本地机密](file:///tmp/secret.png)\n\n[官网](https://example.com)\n\n![封面](data:image/png;base64,AA==)",
+        );
+        let (html, _) = export_html_fragment(&document, false);
+        assert!(!html.contains("javascript:"));
+        assert!(!html.contains("file:///"));
+        assert!(html.contains("危险"));
+        assert!(html.contains("本地机密"));
+        assert!(html.contains("href=\"https://example.com\" rel=\"noopener noreferrer\""));
+        assert!(html.contains("src=\"data:image/png;base64,AA==\""));
     }
 }

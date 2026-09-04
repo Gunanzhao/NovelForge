@@ -121,6 +121,57 @@ fn directory_entries(path: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(entries)
 }
 
+const RECOVERY_DIRECTORIES: &[&str] = &[
+    "manuscript",
+    "characters",
+    "locations",
+    "world",
+    "timeline",
+    "outlines",
+    "scenes",
+    "foreshadowing",
+    "relationships",
+    "notes",
+    ".novelforge/history",
+];
+
+fn validate_recovery_tree(root: &Path) -> Result<(), String> {
+    let mut pending = Vec::new();
+    for relative in RECOVERY_DIRECTORIES {
+        let path = storage::safe_relative(root, relative)?;
+        match fs::symlink_metadata(&path) {
+            Ok(_) => pending.push(path),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(format!("无法检查项目恢复目录 {}：{}", path.display(), error)),
+        }
+    }
+
+    let mut visited_directories = HashSet::new();
+    while let Some(path) = pending.pop() {
+        let canonical = storage::safe_existing_path(root, &path)?;
+        let metadata = fs::metadata(&canonical)
+            .map_err(|error| format!("无法读取项目恢复路径 {}：{}", path.display(), error))?;
+        if !metadata.is_dir() || !visited_directories.insert(canonical.clone()) {
+            continue;
+        }
+        for entry in fs::read_dir(&canonical)
+            .map_err(|error| format!("无法检查项目恢复目录 {}：{}", path.display(), error))?
+        {
+            let child = entry
+                .map_err(|error| format!("无法检查项目恢复目录项 {}：{}", path.display(), error))?
+                .path();
+            let child_canonical = storage::safe_existing_path(root, &child)?;
+            if fs::metadata(&child_canonical)
+                .map_err(|error| format!("无法读取项目恢复路径 {}：{}", child.display(), error))?
+                .is_dir()
+            {
+                pending.push(child);
+            }
+        }
+    }
+    Ok(())
+}
+
 fn relative_path(root: &Path, path: &Path) -> Result<String, String> {
     path.strip_prefix(root)
         .map(|value| value.to_string_lossy().replace('\\', "/"))
@@ -179,7 +230,13 @@ fn rebuild_nodes_from_markdown(root: &Path, connection: &Connection) -> Result<u
     let mut used_ids = HashSet::new();
     let mut id_map = HashMap::new();
     for volume_path in directory_entries(&manuscript)?.into_iter().filter(|path| path.is_dir()) {
+        let volume_path = storage::safe_existing_path(root, &volume_path)?;
         let volume_meta_path = volume_path.join(".novelforge.md");
+        let volume_meta_path = if volume_meta_path.exists() {
+            storage::safe_existing_path(root, &volume_meta_path)?
+        } else {
+            volume_meta_path
+        };
         let (volume_metadata, _volume_body) = if volume_meta_path.is_file() {
             let raw = fs::read_to_string(&volume_meta_path)
                 .map_err(|error| format!("读取卷元数据失败：{}", error))?;
@@ -226,6 +283,7 @@ fn rebuild_nodes_from_markdown(root: &Path, connection: &Connection) -> Result<u
             .filter(|path| path.is_file() && !should_skip_mirror(path) && path.extension().and_then(|value| value.to_str()) == Some("md"))
             .collect::<Vec<_>>();
         for (chapter_order, chapter_path) in chapter_files.into_iter().enumerate() {
+            let chapter_path = storage::safe_existing_path(root, &chapter_path)?;
             let raw = fs::read_to_string(&chapter_path)
                 .map_err(|error| format!("读取章节正文失败：{}", error))?;
             let (metadata, body) = storage::parse_markdown_mirror(&raw);
@@ -278,11 +336,13 @@ fn rebuild_nodes_from_markdown(root: &Path, connection: &Connection) -> Result<u
             if !section_directory.is_dir() {
                 continue;
             }
+            let section_directory = storage::safe_existing_path(root, &section_directory)?;
             for (section_order, section_path) in directory_entries(&section_directory)?
                 .into_iter()
                 .filter(|path| path.is_file() && !should_skip_mirror(path) && path.extension().and_then(|value| value.to_str()) == Some("md"))
                 .enumerate()
             {
+                let section_path = storage::safe_existing_path(root, &section_path)?;
                 let raw = fs::read_to_string(&section_path)
                     .map_err(|error| format!("读取小节正文失败：{}", error))?;
                 let (metadata, body) = storage::parse_markdown_mirror(&raw);
@@ -398,7 +458,9 @@ fn rebuild_entities_from_markdown(root: &Path, connection: &Connection) -> Resul
         if !directory_path.is_dir() {
             continue;
         }
+        let directory_path = storage::safe_existing_path(root, &directory_path)?;
         for path in directory_entries(&directory_path)?.into_iter().filter(|path| path.is_file() && path.extension().and_then(|value| value.to_str()) == Some("md")) {
+            let path = storage::safe_existing_path(root, &path)?;
             let fallback = path.file_stem().and_then(|name| name.to_str()).unwrap_or("Recovered Entry");
             let Some((title, tags, content, metadata)) = parse_entity_mirror(&path, fallback) else { continue };
             let (id, legacy) = recovered_id(metadata.as_ref(), kind, &mut used_ids);
@@ -437,14 +499,17 @@ fn rebuild_history_from_files(root: &Path, connection: &Connection) -> Result<us
     if !history_root.is_dir() {
         return Ok(0);
     }
+    let history_root = storage::safe_existing_path(root, &history_root)?;
     let nodes = storage::all_nodes(connection, false)?;
     let mut restored = 0_usize;
     for node_directory in directory_entries(&history_root)?.into_iter().filter(|path| path.is_dir()) {
+        let node_directory = storage::safe_existing_path(root, &node_directory)?;
         let node_id = node_directory.file_name().and_then(|value| value.to_str()).unwrap_or_default();
         let Some(node) = nodes.iter().find(|candidate| candidate.id == node_id && candidate.kind != "volume") else {
             continue;
         };
         for path in directory_entries(&node_directory)?.into_iter().filter(|path| path.is_file() && path.extension().and_then(|value| value.to_str()) == Some("md")) {
+            let path = storage::safe_existing_path(root, &path)?;
             let revision_id = path.file_stem().and_then(|value| value.to_str()).unwrap_or_default();
             if Uuid::parse_str(revision_id).is_err() {
                 continue;
@@ -472,12 +537,40 @@ fn rebuild_history_from_files(root: &Path, connection: &Connection) -> Result<us
     Ok(restored)
 }
 
+fn rebuild_project_from_files(
+    root: &Path,
+    connection: &mut Connection,
+    rebuild_nodes: bool,
+    rebuild_entities: bool,
+) -> Result<(usize, usize), String> {
+    validate_recovery_tree(root)?;
+    let transaction = connection
+        .transaction()
+        .map_err(|error| format!("无法开始项目恢复事务：{}", error))?;
+    let legacy_nodes = if rebuild_nodes {
+        let count = rebuild_nodes_from_markdown(root, &transaction)?;
+        rebuild_history_from_files(root, &transaction)?;
+        count
+    } else {
+        0
+    };
+    let legacy_entities = if rebuild_entities {
+        rebuild_entities_from_markdown(root, &transaction)?
+    } else {
+        0
+    };
+    transaction
+        .commit()
+        .map_err(|error| format!("无法提交项目恢复数据：{}", error))?;
+    Ok((legacy_nodes, legacy_entities))
+}
+
 fn recovered_project_connection(root: &Path) -> Result<Connection, String> {
+    validate_recovery_tree(root)?;
     let backup = storage::quarantine_database(root)?;
-    let connection = storage::open_db(root)?;
-    let legacy_nodes = rebuild_nodes_from_markdown(root, &connection)?;
-    let legacy_entities = rebuild_entities_from_markdown(root, &connection)?;
-    let _ = rebuild_history_from_files(root, &connection)?;
+    let mut connection = storage::open_db(root)?;
+    let (legacy_nodes, legacy_entities) =
+        rebuild_project_from_files(root, &mut connection, true, true)?;
     if backup.is_some() { let _ = storage::append_log(root, "WARN", "database_recovered"); }
     if legacy_nodes > 0 || legacy_entities > 0 {
         let _ = storage::append_log(root, "WARN", "database_recovery_legacy_metadata");

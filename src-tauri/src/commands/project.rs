@@ -87,7 +87,11 @@ pub fn create_project(input: ProjectInput) -> Result<ProjectData, String> {
 #[tauri::command]
 pub fn open_project(path: String) -> Result<ProjectData, String> {
     let root = storage::existing_project_root(&path)?;
-    let connection = match storage::open_db(&root) {
+    let database_path = storage::safe_relative(&root, ".novelforge/database.sqlite")?;
+    if !database_path.is_file() {
+        validate_recovery_tree(&root)?;
+    }
+    let mut connection = match storage::open_db(&root) {
         Ok(connection) if storage::all_nodes(&connection, false).is_ok() && storage::all_entities(&connection, false).is_ok() => connection,
         Ok(connection) => {
             drop(connection);
@@ -95,12 +99,10 @@ pub fn open_project(path: String) -> Result<ProjectData, String> {
         }
         Err(_) => recovered_project_connection(&root)?,
     };
-    if storage::all_nodes(&connection, false)?.is_empty() {
-        rebuild_nodes_from_markdown(&root, &connection)?;
-        rebuild_history_from_files(&root, &connection)?;
-    }
-    if storage::all_entities(&connection, false)?.is_empty() {
-        rebuild_entities_from_markdown(&root, &connection)?;
+    let nodes_empty = storage::all_nodes(&connection, false)?.is_empty();
+    let entities_empty = storage::all_entities(&connection, false)?.is_empty();
+    if nodes_empty || entities_empty {
+        rebuild_project_from_files(&root, &mut connection, nodes_empty, entities_empty)?;
     }
     storage::refresh_search_index(&root, &connection)?;
     let _ = storage::append_log(&root, "INFO", "project_opened");

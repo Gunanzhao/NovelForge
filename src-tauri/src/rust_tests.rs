@@ -10,6 +10,57 @@ fn test_root(name: &str) -> std::path::PathBuf {
     root
 }
 
+#[cfg(unix)]
+fn create_directory_link(
+    target: &std::path::Path,
+    link: &std::path::Path,
+) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+#[cfg(windows)]
+fn create_directory_link(
+    target: &std::path::Path,
+    link: &std::path::Path,
+) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_dir(target, link)
+}
+
+#[cfg(unix)]
+fn create_file_link(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+#[cfg(windows)]
+fn create_file_link(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
+    std::os::windows::fs::symlink_file(target, link)
+}
+
+fn remove_directory_link(link: &std::path::Path) {
+    #[cfg(unix)]
+    let _ = fs::remove_file(link);
+    #[cfg(windows)]
+    let _ = fs::remove_dir(link);
+}
+
+fn directory_link_unavailable(error: &std::io::Error) -> bool {
+    cfg!(windows)
+        && (error.kind() == std::io::ErrorKind::PermissionDenied
+            || error.raw_os_error() == Some(1314))
+}
+
+fn ai_input(endpoint: String) -> super::models::AiCompletionInput {
+    super::models::AiCompletionInput {
+        endpoint,
+        api_key: "test-secret".to_string(),
+        model: "mock-model".to_string(),
+        system_prompt: "系统".to_string(),
+        prompt: "用户请求".to_string(),
+        temperature: Some(0.7),
+        max_tokens: Some(100),
+    }
+}
+
 #[test]
 fn atomic_write_replaces_without_partial_content() {
     let root = test_root("atomic");
@@ -244,6 +295,117 @@ fn opening_corrupt_database_rebuilds_markdown_tree() {
     let backups = fs::read_dir(root.join("project/.novelforge")).expect("read database directory")
         .flatten().filter(|entry| entry.file_name().to_string_lossy().starts_with("database.sqlite.corrupt-")).count();
     assert_eq!(backups, 1);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn safe_relative_rejects_dangling_link_targets() {
+    let root = test_root("dangling-link");
+    let target = root.join("outside").join("missing.md");
+    let link = root.join("linked.md");
+    if let Err(error) = create_file_link(&target, &link) {
+        if directory_link_unavailable(&error) {
+            let _ = fs::remove_dir_all(root);
+            return;
+        }
+        panic!("create dangling file link: {error}");
+    }
+    let error = storage::safe_relative(&root, "linked.md")
+        .expect_err("dangling link must not be treated as a creatable project file");
+    assert!(error.contains("无法规范化项目路径"));
+    let _ = fs::remove_file(&link);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn recovery_rejects_directory_link_outside_project_before_quarantine() {
+    let root = test_root("recovery-outside-link");
+    let project_root = root.join("project");
+    let project_path = project_root.to_string_lossy().to_string();
+    super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "恢复路径边界".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "现代".to_string(),
+        target_words: 1000,
+    })
+    .expect("create project");
+
+    let outside = root.join("outside-volume");
+    fs::create_dir_all(&outside).expect("outside directory");
+    let sentinel = outside.join(".novelforge.md");
+    fs::write(&sentinel, b"outside sentinel").expect("outside sentinel");
+    let volume_link = project_root.join("manuscript/volume_001");
+    fs::remove_dir_all(&volume_link).expect("remove original volume");
+    if let Err(error) = create_directory_link(&outside, &volume_link) {
+        if directory_link_unavailable(&error) {
+            let _ = fs::remove_dir_all(root);
+            return;
+        }
+        panic!("create outside directory link: {error}");
+    }
+    fs::write(
+        project_root.join(".novelforge/database.sqlite"),
+        b"not a sqlite database",
+    )
+    .expect("corrupt database");
+
+    let error = super::commands::open_project(project_path).expect_err("outside link must abort recovery");
+    assert!(error.contains("项目恢复路径越界"));
+    assert!(error.contains("volume_001"));
+    assert_eq!(fs::read(&sentinel).expect("read sentinel"), b"outside sentinel");
+    let backups = fs::read_dir(project_root.join(".novelforge"))
+        .expect("read database directory")
+        .flatten()
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("database.sqlite.corrupt-")
+        })
+        .count();
+    assert_eq!(backups, 0);
+
+    remove_directory_link(&volume_link);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn recovery_accepts_directory_link_resolved_inside_project() {
+    let root = test_root("recovery-inside-link");
+    let project_root = root.join("project");
+    let project_path = project_root.to_string_lossy().to_string();
+    super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "恢复内部链接".to_string(),
+        author: "测试".to_string(),
+        description: String::new(),
+        genre: "现代".to_string(),
+        target_words: 1000,
+    })
+    .expect("create project");
+
+    let original_volume = project_root.join("manuscript/volume_001");
+    let internal_volume = project_root.join("linked-volume");
+    fs::rename(&original_volume, &internal_volume).expect("move volume inside project");
+    if let Err(error) = create_directory_link(&internal_volume, &original_volume) {
+        if directory_link_unavailable(&error) {
+            let _ = fs::remove_dir_all(root);
+            return;
+        }
+        panic!("create inside directory link: {error}");
+    }
+    fs::write(
+        project_root.join(".novelforge/database.sqlite"),
+        b"not a sqlite database",
+    )
+    .expect("corrupt database");
+
+    let reopened = super::commands::open_project(project_path).expect("inside link may recover");
+    assert!(reopened.nodes.iter().any(|node| node.kind == "chapter"));
+
+    remove_directory_link(&original_volume);
     let _ = fs::remove_dir_all(root);
 }
 
@@ -1139,7 +1301,11 @@ fn export_project_preserves_markdown_structure_and_embeds_cover() {
 fn ai_endpoint_normalization_rejects_invalid_urls() {
     assert_eq!(super::commands::normalize_ai_endpoint("http://127.0.0.1:1234/v1" ).expect("base endpoint"), "http://127.0.0.1:1234/v1/chat/completions");
     assert_eq!(super::commands::normalize_ai_endpoint("https://api.example.com/v1/chat/completions/").expect("completion endpoint"), "https://api.example.com/v1/chat/completions");
+    assert_eq!(super::commands::normalize_ai_endpoint("https://api.example.com/base?api-version=1").expect("query endpoint"), "https://api.example.com/base/v1/chat/completions?api-version=1");
     assert!(super::commands::normalize_ai_endpoint("api.example.com").is_err());
+    assert!(super::commands::normalize_ai_endpoint("ftp://api.example.com").is_err());
+    assert!(super::commands::normalize_ai_endpoint("https://user:secret@api.example.com").is_err());
+    assert!(super::commands::normalize_ai_endpoint("https://api.example.com/v1#fragment").is_err());
 }
 
 #[test]
@@ -1154,13 +1320,68 @@ fn ai_provider_parses_openai_compatible_response() {
         let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
         stream.write_all(response.as_bytes()).expect("mock AI response");
     });
-    let result = super::commands::ai_complete(super::models::AiCompletionInput {
-        endpoint: format!("http://{}/v1", address), api_key: "test-secret".to_string(), model: "mock-model".to_string(),
-        system_prompt: "系统".to_string(), prompt: "用户请求".to_string(), temperature: Some(0.7), max_tokens: Some(100),
-    }).expect("AI response");
+    let result = super::commands::ai_complete(ai_input(format!("http://{}/v1", address)))
+        .expect("AI response");
     handle.join().expect("mock AI thread");
     assert_eq!(result.content, "生成结果");
     assert_eq!(result.model, "mock-model");
+}
+
+#[test]
+fn ai_provider_rejects_redirects() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("mock AI listener");
+    let address = listener.local_addr().expect("mock AI address");
+    let handle = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("mock AI request");
+        let mut request = [0_u8; 8192];
+        let _ = stream.read(&mut request);
+        stream
+            .write_all(b"HTTP/1.1 302 Found\r\nLocation: http://example.com/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            .expect("mock redirect");
+    });
+    let error = super::commands::ai_complete(ai_input(format!("http://{}/v1", address)))
+        .expect_err("redirect must be rejected");
+    handle.join().expect("mock AI thread");
+    assert!(error.contains("重定向"));
+}
+
+#[test]
+fn ai_provider_rejects_oversized_response_from_content_length() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("mock AI listener");
+    let address = listener.local_addr().expect("mock AI address");
+    let handle = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("mock AI request");
+        let mut request = [0_u8; 8192];
+        let _ = stream.read(&mut request);
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2097153\r\nConnection: close\r\n\r\n")
+            .expect("mock oversized response");
+    });
+    let error = super::commands::ai_complete(ai_input(format!("http://{}/v1", address)))
+        .expect_err("oversized response must be rejected");
+    handle.join().expect("mock AI thread");
+    assert!(error.contains("2 MiB"));
+}
+
+#[test]
+fn ai_provider_rejects_oversized_stream_without_content_length() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("mock AI listener");
+    let address = listener.local_addr().expect("mock AI address");
+    let handle = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("mock AI request");
+        let mut request = [0_u8; 8192];
+        let _ = stream.read(&mut request);
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n")
+            .expect("mock oversized response headers");
+        stream
+            .write_all(&vec![b'a'; 2_097_153])
+            .expect("mock oversized response body");
+    });
+    let error = super::commands::ai_complete(ai_input(format!("http://{}/v1", address)))
+        .expect_err("oversized streamed response must be rejected");
+    handle.join().expect("mock AI thread");
+    assert!(error.contains("2 MiB"));
 }
 
 #[test]

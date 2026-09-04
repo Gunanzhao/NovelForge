@@ -1,17 +1,33 @@
 use crate::models::{AiCompletionInput, AiCompletionResult};
+use std::io::Read;
+
+const MAX_AI_RESPONSE_BYTES: u64 = 2 * 1024 * 1024;
 
 pub(crate) fn normalize_ai_endpoint(endpoint: &str) -> Result<String, String> {
-    let value = endpoint.trim().trim_end_matches('/');
-    if !(value.starts_with("http://") || value.starts_with("https://")) {
-        return Err("AI Provider 地址必须以 http:// 或 https:// 开头".to_string());
+    let mut url = reqwest::Url::parse(endpoint.trim())
+        .map_err(|_| "AI Provider 地址格式无效".to_string())?;
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err("AI Provider 地址必须使用 http:// 或 https://".to_string());
     }
-    if value.ends_with("/chat/completions") {
-        Ok(value.to_string())
-    } else if value.ends_with("/v1") {
-        Ok(format!("{}/chat/completions", value))
+    if url.host_str().is_none() {
+        return Err("AI Provider 地址缺少有效主机".to_string());
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err("AI Provider 地址不能包含用户名或密码".to_string());
+    }
+    if url.fragment().is_some() {
+        return Err("AI Provider 地址不能包含片段标识".to_string());
+    }
+    let path = url.path().trim_end_matches('/');
+    let path = if path.ends_with("/chat/completions") {
+        path.to_string()
+    } else if path.ends_with("/v1") {
+        format!("{path}/chat/completions")
     } else {
-        Ok(format!("{}/v1/chat/completions", value))
-    }
+        format!("{path}/v1/chat/completions")
+    };
+    url.set_path(&path);
+    Ok(url.to_string())
 }
 
 #[tauri::command]
@@ -43,6 +59,7 @@ pub fn ai_complete(input: AiCompletionInput) -> Result<AiCompletionResult, Strin
     }
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|_| "无法初始化 AI Provider 网络客户端".to_string())?;
     let mut request = client.post(endpoint).json(&payload);
@@ -53,15 +70,34 @@ pub fn ai_complete(input: AiCompletionInput) -> Result<AiCompletionResult, Strin
         .send()
         .map_err(|_| "AI Provider 网络请求失败，请检查地址、网络或本地服务状态".to_string())?;
     let status = response.status();
-    let body = response
-        .json::<serde_json::Value>()
-        .map_err(|_| "AI Provider 返回了无法解析的响应".to_string())?;
+    if status.is_redirection() {
+        return Err(format!(
+            "AI Provider 返回 HTTP {} 重定向；为避免内容被转发，请直接填写最终地址",
+            status.as_u16()
+        ));
+    }
     if !status.is_success() {
         return Err(format!(
             "AI Provider 返回 HTTP {}，请检查模型和鉴权设置",
             status.as_u16()
         ));
     }
+    if response
+        .content_length()
+        .is_some_and(|length| length > MAX_AI_RESPONSE_BYTES)
+    {
+        return Err("AI Provider 响应超过 2 MiB 安全上限".to_string());
+    }
+    let mut body_bytes = Vec::new();
+    response
+        .take(MAX_AI_RESPONSE_BYTES + 1)
+        .read_to_end(&mut body_bytes)
+        .map_err(|_| "无法读取 AI Provider 响应".to_string())?;
+    if body_bytes.len() as u64 > MAX_AI_RESPONSE_BYTES {
+        return Err("AI Provider 响应超过 2 MiB 安全上限".to_string());
+    }
+    let body = serde_json::from_slice::<serde_json::Value>(&body_bytes)
+        .map_err(|_| "AI Provider 返回了无法解析的响应".to_string())?;
     let content = body
         .get("choices")
         .and_then(|choices| choices.get(0))
