@@ -1,3 +1,5 @@
+import { protectedMarkdownRanges } from './markdown-protected-ranges'
+import { wikiRanges } from './markdown'
 import type { EntityRecord } from './types'
 
 export type MentionKind = 'character' | 'location' | 'world'
@@ -12,6 +14,10 @@ export interface MentionCandidate {
   entityId?: string
   status: MentionStatus
   confidence: number
+}
+
+export interface MentionScanOptions {
+  includeLinkedWikiMentions?: boolean
 }
 
 export interface MentionDocument {
@@ -40,31 +46,6 @@ const WORLD_LEADING_VERBS = ['学习', '使用', '施展', '掌握', '研究', '
 const CANDIDATE_STOP_WORDS = new Set([
   '先生', '老师', '今天', '城市', '这里', '那里', '自己', '他们', '她们', '我们', '你们',
 ])
-
-function addRange(ranges: Range[], start: number, end: number) {
-  if (end > start) ranges.push({ start, end })
-}
-
-function protectedMarkdownRanges(content: string): Range[] {
-  const ranges: Range[] = []
-  const wholePatterns = [
-    /```[\s\S]*?(?:```|$)/gu,
-    /~~~[\s\S]*?(?:~~~|$)/gu,
-    /`[^`\n]*`/gu,
-    /\[\[[^\]\n]+\]\]/gu,
-    /\b(?:https?:\/\/|mailto:)[^\s<>)\]]+/giu,
-  ]
-  for (const pattern of wholePatterns) {
-    for (const match of content.matchAll(pattern)) addRange(ranges, match.index, match.index + match[0].length)
-  }
-  const markdownDestination = /!?\[[^\]\n]*\]\(([^)\n]*)\)/gu
-  for (const match of content.matchAll(markdownDestination)) {
-    const destination = match[1]
-    const offset = match[0].indexOf(destination)
-    addRange(ranges, match.index + offset, match.index + offset + destination.length)
-  }
-  return ranges.sort((left, right) => left.start - right.start || left.end - right.end)
-}
 
 function overlapsRange(start: number, end: number, ranges: Range[]) {
   return ranges.some((range) => start < range.end && end > range.start)
@@ -180,6 +161,7 @@ export function scanMentions(
   content: string,
   entities: EntityRecord[],
   ignoredTexts: Iterable<string> = [],
+  options: MentionScanOptions = {},
 ): MentionCandidate[] {
   const protectedRanges = protectedMarkdownRanges(content)
   const ignored = new Set([...ignoredTexts].map(normalized))
@@ -206,6 +188,23 @@ export function scanMentions(
       }
     }
   }
+  if (options.includeLinkedWikiMentions) {
+    const eligible = entities.filter((entity) => MENTION_KINDS.has(entity.kind as MentionKind))
+    for (const wiki of wikiRanges(content)) {
+      // Resolve complete targets; canonical titles take precedence over aliases.
+      const target = normalized(wiki.target)
+      const entity = eligible.find((item) => normalized(item.title) === target)
+        ?? eligible.find((item) => aliases(item).some((alias) => normalized(alias) === target))
+      if (!entity) continue
+      const start = wiki.from + 2 + content.slice(wiki.from + 2, wiki.to - 2).indexOf(wiki.target)
+      const end = start + wiki.target.length
+      known.push({
+        id: `${entity.kind}:${start}:${end}:${wiki.target}`,
+        text: wiki.target, kind: entity.kind as MentionKind, start, end,
+        entityId: entity.id, status: ignored.has(target) ? 'ignored' : 'known', confidence: 1,
+      })
+    }
+  }
   const candidates = candidateMatches(content, protectedRanges).map((candidate) => (
     ignored.has(normalized(candidate.text)) ? { ...candidate, status: 'ignored' as const } : candidate
   ))
@@ -220,7 +219,7 @@ export function buildMentionIndex(
   const byDocument: Record<string, MentionCandidate[]> = {}
   const byEntity: MentionIndex['byEntity'] = {}
   for (const document of documents) {
-    const mentions = scanMentions(document.content, entities, ignoredTexts)
+    const mentions = scanMentions(document.content, entities, ignoredTexts, { includeLinkedWikiMentions: true })
     byDocument[document.nodeId] = mentions
     const counts = new Map<string, number>()
     for (const mention of mentions) {

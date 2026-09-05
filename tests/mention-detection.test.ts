@@ -97,4 +97,78 @@ describe('mention detection', () => {
     expect(insertMentionWiki('林月推开门。', mention)).toBe('[[林月]]推开门。')
     expect(insertMentionWiki('内容已经变化。', mention)).toBe('内容已经变化。')
   })
+
+  it('keeps linked targets out of suggestions and counts only exact known Wiki targets', () => {
+    const content = '林月。[[林月]][[ 月月 ]][[MOON LIN]][[雾港]][[Misty Harbor]][[星辉魔法]][[星术]][[雾港酒馆]][[林月不存在]][[未知城]]'
+    expect(scanMentions(content, entities).map((item) => item.text)).toEqual(['林月'])
+    expect(scanMentions(content, entities, [], { includeLinkedWikiMentions: false })).toEqual(scanMentions(content, entities))
+    const index = buildMentionIndex([{ nodeId: 'chapter-1', content }], entities)
+    expect(index.byEntity).toEqual({
+      c1: [{ nodeId: 'chapter-1', count: 4 }],
+      l1: [{ nodeId: 'chapter-1', count: 2 }],
+      l2: [{ nodeId: 'chapter-1', count: 1 }],
+      w1: [{ nodeId: 'chapter-1', count: 2 }],
+    })
+    expect(index.byDocument['chapter-1']).toHaveLength(9)
+    for (const mention of index.byDocument['chapter-1']) {
+      expect(content.slice(mention.start, mention.end)).toBe(mention.text)
+      expect(mention.status).toBe('known')
+    }
+    expect(buildMentionIndex([{ nodeId: 'c', content: '林月走进房间。[[林月]]拿起书。' }], entities).byEntity.c1).toEqual([{ nodeId: 'c', count: 2 }])
+  })
+
+  it('resolves array aliases once, prefers canonical titles, and respects ignored targets', () => {
+    const records = [
+      { ...entity('a', 'character', '甲甲'), content: { aliases: ['月月', '月月', '林月'] } },
+      entity('b', 'character', '林月'),
+    ]
+    expect(buildMentionIndex([{ nodeId: 'c', content: '[[月月]][[林月]]' }], records).byEntity).toEqual({
+      a: [{ nodeId: 'c', count: 1 }], b: [{ nodeId: 'c', count: 1 }],
+    })
+    expect(buildMentionIndex([{ nodeId: 'c', content: '[[月月]][[林月]]' }], records, ['月月']).byEntity).toEqual({ b: [{ nodeId: 'c', count: 1 }] })
+    expect(buildMentionIndex([{ nodeId: 'c', content: '[[月月]][[林月]]' }], []).byEntity).toEqual({})
+  })
+
+  const hidden = '林月说。雾港。星辉魔法。[[林月]][[雾港]][[星辉魔法]]'
+  it.each([
+    ['ordinary fence', `\`\`\`md\n${hidden}\n\`\`\``],
+    ['long fence with short and mixed closers', `\`\`\`\`md\n${hidden}\n\`\`\`\n${hidden}\n~~~~\n${hidden}\n\`\`\`\`\``],
+    ['tilde fence', `~~~~md\n${hidden}\n~~~\n${hidden}\n\`\`\`\`\n${hidden}\n~~~~`],
+    ['arbitrary length fence', `${'~'.repeat(17)}\n${hidden}\n${'~'.repeat(16)}\n${hidden}\n${'~'.repeat(20)}`],
+    ['closer with trailing info is not a closer', `\`\`\`\n${hidden}\n\`\`\`text\n${hidden}\n\`\`\``],
+    ['inline', `\`${hidden}\``],
+    ['multiple backticks', `\`\`${hidden} \` inside \`\``],
+    ['longer inline run is not a closer', `\`\`${hidden} \`\`\` ${hidden}\`\``],
+    ['multiline inline', `\`\`${hidden}\n${hidden}\`\``],
+    ['frontmatter', `---\ntitle: ${hidden}\n---`],
+    ['CRLF fence', `   ~~~~md\r\n${hidden}\r\n  ~~~~~\t`],
+    ['CR fence', `~~~\r${hidden}\r~~~`],
+  ])('protects %s in suggestions and statistics', (_name, protectedText) => {
+    expect(scanMentions(protectedText, [])).toEqual([])
+    const content = `${protectedText}\n林月。雾港。星辉魔法。`
+    expect(buildMentionIndex([{ nodeId: 'c', content }], entities).byEntity).toEqual({
+      c1: [{ nodeId: 'c', count: 1 }], l1: [{ nodeId: 'c', count: 1 }], w1: [{ nodeId: 'c', count: 1 }],
+    })
+  })
+
+  it.each(['```', '```````', '~~~~~'])('protects an unclosed %s fence to EOF', (fence) => {
+    const content = `林月。\n${fence}md\n${hidden}`
+    expect(buildMentionIndex([{ nodeId: 'c', content }], entities).byEntity).toEqual({ c1: [{ nodeId: 'c', count: 1 }] })
+    expect(scanMentions(`${fence}\n${hidden}`, [])).toEqual([])
+  })
+
+  it('protects URLs, balanced destinations, images and references but counts visible labels', () => {
+    const content = [
+      'https://example.test/林月 ftp://example.test/雾港 mailto:林月@example.test',
+      '<https://example.test/[[林月]]>',
+      '[林月](relative/(雾港)/星辉魔法 "林月")',
+      '![林月](images/(雾港)/星辉魔法.png)',
+      '[林月](<relative/雾港(星辉魔法)> "林月")',
+      '[林月](relative/\\(雾港\\)/星辉魔法)',
+      '[林月][雾港]',
+      '[雾港]: relative/林月 "星辉魔法"',
+      '[正文](relative/[[林月]]) ![正文](images/[[雾港]])',
+    ].join('\n')
+    expect(buildMentionIndex([{ nodeId: 'c', content }], entities).byEntity).toEqual({ c1: [{ nodeId: 'c', count: 5 }] })
+  })
 })

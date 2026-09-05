@@ -108,6 +108,34 @@ describe('character appearance analytics', () => {
     expect(characterPage.pageCount).toBe(9)
   })
 
+  it('counts plain and Wiki mentions exactly through project scanning and chapter aggregation', async () => {
+    const project = data()
+    project.entities[0].content = { aliases: ['月月'] }
+    const contents: Record<string, string> = {
+      c1: '林月。[[林月]][[雾港]]',
+      s1: '[[月月]][[陈默]][[雾港]]',
+      c2: '````md\n[[林月]][[陈默]][[雾港]]\n```\n林月\n````',
+      c3: '[[林月]][[陈默]][[雾港]][[不存在]] `[[林月]]`',
+    }
+    api.getDocument.mockImplementation(({ nodeId }: { nodeId: string }) => Promise.resolve({ content: contents[nodeId] }))
+    const index = await scanProjectMentionIndex('wiki-project', project)
+    expect(index.byEntity).toEqual({
+      alice: [{ nodeId: 'c1', count: 2 }, { nodeId: 's1', count: 1 }, { nodeId: 'c3', count: 1 }],
+      bob: [{ nodeId: 's1', count: 1 }, { nodeId: 'c3', count: 1 }],
+      harbor: [{ nodeId: 'c1', count: 1 }, { nodeId: 's1', count: 1 }, { nodeId: 'c3', count: 1 }],
+    })
+    const appearance = buildCharacterAppearance(project, index, 'alice')
+    expect(appearance?.totalMentions).toBe(4)
+    expect(appearance?.chapters.map((item) => [item.node.id, item.mentions])).toEqual([['c1', 3], ['c3', 1]])
+    expect(appearance?.firstChapter?.id).toBe('c1')
+    expect(appearance?.recentChapter?.id).toBe('c3')
+    expect(appearance?.companions.map((item) => [item.entity.id, item.chapters])).toEqual([['bob', 2]])
+    expect(appearance?.locations.map((item) => [item.entity.id, item.chapters])).toEqual([['harbor', 2]])
+    expect(chapterMentionRows(project, index).map((row) => Object.fromEntries(row.counts))).toEqual([
+      { alice: 3, harbor: 2, bob: 1 }, {}, { alice: 1, bob: 1, harbor: 1 },
+    ])
+  })
+
   it('does not let a slower forced scan replace the newest cached index', async () => {
     const project = data()
     project.nodes = [node('c1', 'chapter', 0, null)]

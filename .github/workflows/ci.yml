@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # Validate a commit on a working branch before advancing protected main.
+    branches: ['**']
   pull_request:
     branches: [main]
 

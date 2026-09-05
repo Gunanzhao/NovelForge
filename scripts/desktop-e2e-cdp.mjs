@@ -1033,6 +1033,8 @@ async function run() {
     await waitForCondition(page, "document.querySelector('.entity-list-head h2')?.textContent?.trim() === '人物'", '人物出场统计资料页')
     await clickSelectorContains(page, '.entity-list-item', '林月')
     await waitForCondition(page, "document.querySelector('.character-appearance-panel .appearance-metrics')?.textContent?.includes('第一章') && document.querySelector('.character-appearance-panel')?.textContent?.includes('苏岚') && document.querySelector('.character-appearance-panel')?.textContent?.includes('雾港')", '人物出场统计、共同人物和主要地点聚合')
+    await waitForCondition(page, "Array.from(document.querySelectorAll('.character-appearance-panel .appearance-columns button')).some((item) => item.querySelector('span')?.textContent === '第一章' && item.querySelector('small')?.textContent === '2 次')", '人物统计精确包含普通文本和 Wiki 各一次')
+    console.log('WIKI_MENTION_COUNT_OK')
     await clickSelectorContains(page, '.character-appearance-panel .appearance-columns button', '第一章')
     await waitForSelector(page, '.cm-content', '人物出场章节跳转')
     await clickText(page, '人物')
