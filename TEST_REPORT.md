@@ -1,12 +1,12 @@
 # 测试报告
 
-> 当前开发候选目标：`1.1.0-rc.3`（候选源码完成、本地产物已验收，未发布）。既有已发布安装包为 `NovelForge_1.1.0-rc.2_x64-setup.exe`；当前工作区源码不等同于该安装包。版本文件已升级 rc.3。
+> 当前版本：`1.1.0-rc.3`（预发布候选版）。Windows x64 安装包为 `NovelForge_1.1.0-rc.3_x64-setup.exe`；下载、发布状态及 SHA-256 校验文件见 [GitHub Release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.3)。
 >
 > rc.1/rc.2 的测试、benchmark、CI、tag 和发布记录属于各自历史版本，不作为 rc.3 通过证据。rc.3 最终数据统一见 [测试报告](TEST_REPORT.md#rc3-validation) 与 [发布清单](RELEASE_CHECKLIST.md#rc3-checklist)；全部本地门禁已通过，源码基线 CI 已通过。
 
 <a id="rc3-validation"></a>
 
-## V1.1.0-rc.3 当前验收（本地验收完成，源码基线 CI 通过，未发布）
+## V1.1.0-rc.3 当前验收（本地验收完成，源码基线 CI 通过）
 
 rc.3 两项 Rust 基准已完成实测；全部本地门禁已通过，源码基线 CI 已通过。各结果按所测版本、执行范围与日志分别记录，基准通过数量不代表 Rust 常规测试或完整测试套件数量。
 
@@ -30,7 +30,7 @@ rc.3 两项 Rust 基准已完成实测；全部本地门禁已通过，源码基
 | 桌面 WebDriver + Native Dialog | 原生对话框模式 | 完整通过，exit 0；含 WIKI_MENTION_COUNT_OK、原六项与 NATIVE_DIALOGS_OK；日志见本文记录 |
 | CI | `0f1eb3f8756a5936491f483c783387598b01a3d7`；[run 33966324453](https://github.com/Gunanzhao/NovelForge/actions/runs/33966324453) | completed / success；Frontend checks 与 Rust checks 均 completed / success |
 | 分支保护 | main protection / rulesets / Required Checks | 已生效：Frontend checks / Rust checks；strict 与管理员约束开启；不强制 PR，禁止强推及删除，完整字段见本文记录 |
-| 发布 | rc.3 tag、Release 与资产 | 未发布 |
+| 发布 | rc.3 tag、Release 与资产 | [v1.1.0-rc.3](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.3)；Windows 安装包及 SHA256SUMS.txt |
 
 ### rc.3 Rust 基准实测与内存采样
 
@@ -690,7 +690,7 @@ P1 扫描结果和出现索引均可重新计算；测试没有把缓存存在�
 
 源码基线 `0f1eb3f8756a5936491f483c783387598b01a3d7`（`fix/v1.1-audit-rc3`）已推送；[CI run 33966324453](https://github.com/Gunanzhao/NovelForge/actions/runs/33966324453) 为 `completed / success`，Frontend checks 与 Rust checks 均为 `completed / success`。全分支 push 触发已由该 run 验证。
 
-上述 CI 只证明该源码基线。后续文档提交仍须按受保护 main 规则重新运行并通过检查，再 fast-forward 更新 main；不将源码 CI 视为尚未产生的文档提交或 main 最终提交的验证结果。
+该记录对应功能源码基线；验收文档提交 `f2e2d67` 的 [main CI 33967007863](https://github.com/Gunanzhao/NovelForge/actions/runs/33967007863) 也已通过。发布文档在工作分支通过必需检查后合入 main；最新状态见 [main 工作流](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Amain)。
 
 ### 历史基线与 tag 保留
 
@@ -706,7 +706,7 @@ rc.2 基线 `90a6425` 的 CI run `33947878811` 成功。rc.2 发布时未重跑�
 - 每 250 ms 采样，共 248 次；合并两项测试进程 `sampledPeakWorkingSetBytes=31264768`（约 29.8 MiB）、`sampledPeakPrivateBytes=9777152`（约 9.32 MiB）。采样观测非绝对上限，不含编译进程；无 panic/OOM/异常超时，数据完整性断言通过。
 - 相较 rc.1 约 +15.6% / +20.8%，均小于 30%；包含采样且主机负载不同，rc.2 基准版本至 rc.3 无 Rust 业务改动，不据此严格归因为代码回退。日志 `src-tauri/target/rc3-benchmark.*.log` 位于被忽略的本地构建目录。
 
-### Windows 本地产物（未发布）
+### Windows 发布产物
 
 `pnpm tauri build` 成功；beforeBuild 执行 `pnpm build`（tsc + Vite），18.03 秒通过，计入前端 build 门禁。两项产物的 VersionInfo `ProductVersion` 均为 `1.1.0-rc.3`。
 
@@ -731,4 +731,4 @@ rc.2 基线 `90a6425` 的 CI run `33947878811` 成功。rc.2 发布时未重跑�
 
 先推工作分支，等待待合入提交的必需检查成功，再 fast-forward 更新 main 或走 PR；提交变化后重新验证。文档提交同样适用，不预写最终提交哈希或 main 更新结果。
 
-rc.3 候选源码完成、本地产物已验收，源码基线 CI 已通过。本次范围为修复与推送，不创建 rc.3 tag 或 Release，不上传发布资产；已发布安装包仍为 `NovelForge_1.1.0-rc.2_x64-setup.exe`。
+rc.3 候选源码、本地产物及三种桌面回归均已验收。发布版本为 `v1.1.0-rc.3`，附件包括 `NovelForge_1.1.0-rc.3_x64-setup.exe` 与 `SHA256SUMS.txt`；安装包 SHA-256 为 `cf5b38c3aee63e53f0791a1329cc75d072c623d43eb4d1e27d4e10228c70a92f`。既有 rc.1/rc.2 标签和历史发布资产保留。
