@@ -1,6 +1,41 @@
 # NovelForge 发布清单
 
-## 1.1.0-rc.1 当前发布清单
+> 当前开发候选目标：`1.1.0-rc.3`（候选源码完成、本地产物已验收，未发布）。既有已发布安装包为 `NovelForge_1.1.0-rc.2_x64-setup.exe`；当前工作区源码不等同于该安装包。版本文件已升级 rc.3。
+>
+> rc.1/rc.2 的测试、benchmark、CI、tag 和发布记录属于各自历史版本，不作为 rc.3 通过证据。rc.3 最终数据统一见 [测试报告](TEST_REPORT.md#rc3-validation) 与 [发布清单](RELEASE_CHECKLIST.md#rc3-checklist)；全部本地门禁已通过，源码基线 CI 已通过。
+
+<a id="rc3-checklist"></a>
+
+## 1.1.0-rc.3 修复与推送验收清单（不发布）
+
+- [x] ISSUE-01：Inspector 不重复提示 Wiki；人物/地点/世界观已知 Wiki 计数、普通文本混合精确计数、未知 Wiki 与代码区排除均通过。
+- [x] ISSUE-02：长 backtick/tilde fence、短 closer、混合字符、未闭合 fence、多 backtick inline code 和 Markdown helper 一致性回归通过。
+- [x] 前端 frozen-lockfile 安装、typecheck、lint、34 文件 / 221 项测试及 pnpm audit 通过。
+- [x] 前端 `pnpm build`（tsc + Vite）在 Tauri beforeBuild 中执行并通过，18.03 秒。
+- [x] Rust check、fmt、Clippy `-D warnings` 及常规测试通过：74 passed / 2 ignored，6.78 秒；ignored 基准已另行通过。
+- [x] Cargo audit 通过：exit 0，17 条 allowed warnings，与 rc.2 相同。
+- [x] rc.3 两项 benchmark 通过（42.180 秒 / 22.605 秒，2 passed / 0 failed / 0 ignored）；数据完整性断言通过，无 panic/OOM/异常超时，采样及比较边界见 TEST_REPORT。
+- [x] Windows `pnpm tauri build` 成功，EXE/NSIS 的 ProductVersion 均为 1.1.0-rc.3；大小及 SHA-256 见 TEST_REPORT。
+- [x] CDP（WEBDRIVER=0，NATIVE=0）完整通过，含 Wiki 精确计数及原六项标记。
+- [x] WebDriver（WEBDRIVER=1，NATIVE=0）完整通过，含 `WIKI_MENTION_COUNT_OK` 与原六项标记。
+- [x] WebDriver + Native Dialog 完整通过（exit 0），包含原六项标记、`WIKI_MENTION_COUNT_OK` 和 `NATIVE_DIALOGS_OK`；日志 `src-tauri/target/rc3-e2e-native.log`。
+- [x] CDP 已通过六个 V1.1 E2E 标记及 `WIKI_MENTION_COUNT_OK`；WebDriver 同样完整通过；Native Dialog 完整通过（exit 0）。
+- [x] 源码基线 `0f1eb3f` 的 CI run `33966324453` 及 Frontend checks / Rust checks 均 completed / success。
+- [x] ISSUE-05：main 分支保护已生效，必需检查为 Frontend checks / Rust checks，严格模式并约束管理员，不强制 PR，禁止强推及删除；完整配置见 RELEASE_CHECKLIST。rc.3 源码基线 CI 已通过。
+- [x] 版本文件已升级 rc.3。
+- [x] 版本文件与 Windows EXE/NSIS ProductVersion 均为 1.1.0-rc.3。
+- [x] ISSUE-04：当前源码、本地验收与历史发布边界已同步；源码基线 CI 成功已记录。
+- [x] rc.2 tag 未移动，远程与本地对象及解引用提交一致；详见 RELEASE_CHECKLIST。
+- 发布边界：保留既有 rc.1/rc.2 tag 与发布资产，本次不创建 rc.3 tag/Release。
+- 本次交付范围为修复与推送；rc.3 Release/tag/资产发布不属于本次任务。
+
+## V1.1.0-rc.2 历史基线
+
+依据既有 [rc.2 发布说明](docs/releases/v1.1.0-rc.2.md)：前端 33 文件 / 188 项、Rust 74 项常规测试通过；两项大型 benchmark 在 rc.2 发布轮次未重跑，后续基线补验已通过（详见 TEST_REPORT）。这些结果仅适用于对应历史版本。既有安装包为 `NovelForge_1.1.0-rc.2_x64-setup.exe`；不将后续源码修复归入该安装包。
+
+> 以下勾选为历史版本的发布证据，不属于 rc.3 发布前清单。
+
+## 1.1.0-rc.1 历史发布清单
 
 - [x] `package.json`、`Cargo.toml`、`Cargo.lock` 和 `tauri.conf.json` 统一为 `1.1.0-rc.1`。
 - [x] P1–P6 功能、兼容格式、可恢复 Markdown 镜像和浏览器 fallback 均完成。
@@ -13,7 +48,7 @@
 - [x] GitHub [v1.1.0-rc.1 Pre-release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.1) 已创建并附加 NSIS 安装包。
 - [x] NSIS：5,154,783 bytes，SHA-256 `E0E80D72E50E6484FEE1A9C9C0608291C4B83DAA3AEB7751A84064B871C11DB5`。
 
-## 1.0.0-rc.2 当前发布清单
+## 1.0.0-rc.2 历史发布清单
 
 - [x] 版本文件已升级为 `1.0.0-rc.2`；已公开 `v1.0.0-rc.1` 保持不变。
 - [x] FIX-01 ReactMarkdown 脚注预览、中文无障碍标签、引用/返回锚点及组件级测试通过。
@@ -57,3 +92,50 @@
 
 - [ ] 在 GitHub `main` 分支启用 required checks：`Frontend checks`、`Rust checks`。
 - [ ] 发布后确认分支保护规则已生效；当前 RC tag 已指向通过 CI 的提交，分支保护仍属于仓库维护建议。
+
+## rc.3 最终验证证据与交付边界
+
+源码基线 `0f1eb3f8756a5936491f483c783387598b01a3d7`（`fix/v1.1-audit-rc3`）已推送；[CI run 33966324453](https://github.com/Gunanzhao/NovelForge/actions/runs/33966324453) 为 `completed / success`，Frontend checks 与 Rust checks 均为 `completed / success`。全分支 push 触发已由该 run 验证。
+
+上述 CI 只证明该源码基线。后续文档提交仍须按受保护 main 规则重新运行并通过检查，再 fast-forward 更新 main；不将源码 CI 视为尚未产生的文档提交或 main 最终提交的验证结果。
+
+### 历史基线与 tag 保留
+
+`v1.1.0-rc.2` 未移动：远程与本地 tag 对象均为 `c4ac0ddd4c30a923ee9323de7ca1858c803817f5`，解引用仍为 `90a64257afd994eb3c541787c5350fb44d609494`。
+
+rc.2 基线 `90a6425` 的 CI run `33947878811` 成功。rc.2 发布时未重跑大型 benchmark；后续补验通过，分别为 38.506 秒 / 20.076 秒（`38506` / `20076` ms），顺序单线程总耗时 58.96 秒，0 失败、0 忽略，无 panic/OOM 退出，未连续采样峰值内存。相较 rc.1 的 36.48 / 18.71 秒约 +5.55% / +7.30%。这些历史证据不替代 rc.3 实测，也不改写原发布说明。
+
+### rc.3 本地门禁与基准
+
+- 前端安装、typecheck、lint、审计通过；34 文件 / 221 项全部通过，20:19:20 开始，25.20 秒；pnpm audit 无已知漏洞。
+- Rust check/fmt/Clippy `-D warnings` 通过；常规测试 74 passed / 2 ignored，6.78 秒；Cargo audit exit 0，17 条 allowed warnings，与 rc.2 相同。
+- 两项 ignored benchmark 单独通过：`LARGE_PROJECT_BENCHMARK_MS=42180`、`V1.1_AUXILIARY_BENCHMARK_MS=22605`，即 42.180 / 22.605 秒；2 passed / 0 failed / 0 ignored，执行 65.20 秒，不含编译 43.11 秒。
+- 每 250 ms 采样，共 248 次；合并两项测试进程 `sampledPeakWorkingSetBytes=31264768`（约 29.8 MiB）、`sampledPeakPrivateBytes=9777152`（约 9.32 MiB）。采样观测非绝对上限，不含编译进程；无 panic/OOM/异常超时，数据完整性断言通过。
+- 相较 rc.1 约 +15.6% / +20.8%，均小于 30%；包含采样且主机负载不同，rc.2 基准版本至 rc.3 无 Rust 业务改动，不据此严格归因为代码回退。日志 `src-tauri/target/rc3-benchmark.*.log` 位于被忽略的本地构建目录。
+
+### Windows 本地产物（未发布）
+
+`pnpm tauri build` 成功；beforeBuild 执行 `pnpm build`（tsc + Vite），18.03 秒通过，计入前端 build 门禁。两项产物的 VersionInfo `ProductVersion` 均为 `1.1.0-rc.3`。
+
+| 产物 | 大小（bytes） | SHA-256 |
+| --- | ---: | --- |
+| `novelforge.exe` | 17507840 | `50047CAD09DC1F847316235F92F0129F13C4BB746DA6FE5E933AE8194DED833F` |
+| `NovelForge_1.1.0-rc.3_x64-setup.exe` | 5167038 | `CF5B38C3AEE63E53F0791A1329CC75D072C623D43EB4D1E27D4E10228C70A92F` |
+
+### 三种桌面 E2E
+
+| 模式 | 结果 | 本地日志 |
+| --- | --- | --- |
+| CDP（WEBDRIVER=0 / NATIVE=0） | 完整通过 | `src-tauri/target/rc3-e2e-cdp.log` |
+| WebDriver（WEBDRIVER=1 / NATIVE=0） | 完整通过 | `src-tauri/target/rc3-e2e-webdriver.log` |
+| WebDriver + Native Dialog | 完整通过，exit 0 | `src-tauri/target/rc3-e2e-native.log` |
+
+三轮均包含 `WIKI_MENTION_COUNT_OK`、`MENTION_DETECTION_OK`、`STORY_ARC_OK`、`CHARACTER_STATS_OK`、`PROMPT_PRESET_OK`、`INBOX_OK`、`CHAPTER_CHECKLIST_OK`；Native Dialog 额外通过 `NATIVE_DIALOGS_OK`。日志位于本地构建目录，不作为已发布资产。
+
+### main 保护与维护流程
+
+保护已生效：`required_status_checks.contexts=["Frontend checks", "Rust checks"]`、`strict=true`、`enforce_admins.enabled=true`、`required_pull_request_reviews=null`（不强制 PR）、`allow_force_pushes=false`、`allow_deletions=false`。全分支 push 已实际触发检查。
+
+先推工作分支，等待待合入提交的必需检查成功，再 fast-forward 更新 main 或走 PR；提交变化后重新验证。文档提交同样适用，不预写最终提交哈希或 main 更新结果。
+
+rc.3 候选源码完成、本地产物已验收，源码基线 CI 已通过。本次范围为修复与推送，不创建 rc.3 tag 或 Release，不上传发布资产；已发布安装包仍为 `NovelForge_1.1.0-rc.2_x64-setup.exe`。

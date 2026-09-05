@@ -1,5 +1,24 @@
 # 开发进度
 
+> 当前开发候选目标：`1.1.0-rc.3`（候选源码完成、本地产物已验收，未发布）。既有已发布安装包为 `NovelForge_1.1.0-rc.2_x64-setup.exe`；当前工作区源码不等同于该安装包。版本文件已升级 rc.3。
+>
+> rc.1/rc.2 的测试、benchmark、CI、tag 和发布记录属于各自历史版本，不作为 rc.3 通过证据。rc.3 最终数据统一见 [测试报告](TEST_REPORT.md#rc3-validation) 与 [发布清单](RELEASE_CHECKLIST.md#rc3-checklist)；全部本地门禁已通过，源码基线 CI 已通过。
+
+## 2026-09-05：rc.3 修复与验收完成
+
+- 审计范围：Wiki mention 统计、Markdown 扫描边界、性能门禁、文档一致性与分支保护。
+- **ISSUE-01（Wiki 统计）**：区分识别建议与统计语义。Mention Inspector 不重复提示已有 Wiki；统计应计入已知人物、地点和世界观的 Wiki mention。普通文本与 Wiki 混合时精确累计，未知 Wiki 不生成已知资料计数，代码区 Wiki 仍排除。修复已完成，全部新增回归已纳入 rc.3 前端 34 文件 / 221 项测试并通过；三种桌面 E2E 均已完整通过。
+- **ISSUE-02（Markdown 边界）**：统一 Markdown protected-range 处理；fence opener 长度至少 3，closer 字符相同且长度不小于 opener，多 backtick inline code 按相同 delimiter 长度闭合，未闭合 fence 保护到文末。保留 URL、链接/图片目标、Wiki 和 frontmatter 边界，核对与 Markdown 字符转换 helper 的一致性。修复已完成，全部新增回归已纳入 rc.3 前端 34 文件 / 221 项测试并通过；三种桌面 E2E 均已完整通过。
+- ISSUE-03：rc.3 两项大型 benchmark 已通过；ISSUE-04：本地验收文档已同步，源码基线 CI 已通过；ISSUE-05：main Required Checks 等保护已生效；rc.3 源码基线 CI 已通过。
+- ISSUE-01/02 的修复验收与 benchmark 分别记录；性能门禁通过不替代 Wiki 计数和 Markdown 边界回归。
+- rc.3 前端自动门禁、Rust 静态检查与常规测试已通过；Cargo audit 已通过（exit 0，17 条 allowed warnings，与 rc.2 相同）；Windows 构建已通过，CDP 已完整通过，WebDriver 第二轮完整通过，三种桌面 E2E 均已通过，对应源码基线 CI 已通过；rc.3 未发布。
+
+## V1.1.0-rc.2 历史基线
+
+依据既有 [rc.2 发布说明](docs/releases/v1.1.0-rc.2.md)：前端 33 文件 / 188 项、Rust 74 项常规测试通过；两项大型 benchmark 在 rc.2 发布轮次未重跑，后续基线补验已通过（详见 TEST_REPORT）。这些结果仅适用于对应历史版本。既有安装包为 `NovelForge_1.1.0-rc.2_x64-setup.exe`；不将后续源码修复归入该安装包。
+
+> 以下为按日期与版本保留的历史进度。
+
 ## 2026-08-26：Phase 1 + MVP 核心实现
 
 ### 完成内容
@@ -680,3 +699,13 @@
 - 最终 `1.1.0-rc.1` release EXE 与 NSIS 构建成功；直接 CDP、Tauri WebDriver、WebDriver + Native Dialog 三轮均通过全部旧标记和六个 V1.1 标记。
 - E2E 过程中修正保存失败提示误报，并将失败保存夹具改为在恢复文件生成后阻断历史快照；原生附件选择器只使用启用的文件名控件。
 - GitHub `main` 最新 HEAD 的 Frontend/Rust Actions 成功后创建 [v1.1.0-rc.1 Pre-release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.1)，附加 NSIS 安装包。
+
+## rc.3 当前交付状态
+
+rc.3 候选源码完成、本地产物已验收，源码基线 CI 已通过。本次范围为修复与推送，不创建 rc.3 tag 或 Release，不上传发布资产；已发布安装包仍为 `NovelForge_1.1.0-rc.2_x64-setup.exe`。
+
+源码基线 `0f1eb3f8756a5936491f483c783387598b01a3d7`（`fix/v1.1-audit-rc3`）已推送；[CI run 33966324453](https://github.com/Gunanzhao/NovelForge/actions/runs/33966324453) 为 `completed / success`，Frontend checks 与 Rust checks 均为 `completed / success`。全分支 push 触发已由该 run 验证。
+
+上述 CI 只证明该源码基线。后续文档提交仍须按受保护 main 规则重新运行并通过检查，再 fast-forward 更新 main；不将源码 CI 视为尚未产生的文档提交或 main 最终提交的验证结果。
+
+本地测试、两项基准、三种桌面 E2E、产物摘要及历史 tag 证据见 [TEST_REPORT](TEST_REPORT.md#rc3-validation) 与 [RELEASE_CHECKLIST](RELEASE_CHECKLIST.md#rc3-checklist)。rc.2 tag 已核验未移动，main 保护规则已生效。

@@ -1,5 +1,22 @@
 # 架构决策记录
 
+> 当前开发候选目标：`1.1.0-rc.3`（候选源码完成、本地产物已验收，未发布）。既有已发布安装包为 `NovelForge_1.1.0-rc.2_x64-setup.exe`；当前工作区源码不等同于该安装包。版本文件已升级 rc.3。
+>
+> rc.1/rc.2 的测试、benchmark、CI、tag 和发布记录属于各自历史版本，不作为 rc.3 通过证据。rc.3 最终数据统一见 [测试报告](TEST_REPORT.md#rc3-validation) 与 [发布清单](RELEASE_CHECKLIST.md#rc3-checklist)；全部本地门禁已通过，源码基线 CI 已通过。
+
+## ADR-020：rc.3 Mention 建议与统计语义分离
+
+- 状态：修复设计与验收约束已记录；修复实现及全部新增自动化回归已通过；三种桌面 E2E 均已通过。
+- **ISSUE-01（Wiki 统计）**：区分识别建议与统计语义。Mention Inspector 不重复提示已有 Wiki；统计应计入已知人物、地点和世界观的 Wiki mention。普通文本与 Wiki 混合时精确累计，未知 Wiki 不生成已知资料计数，代码区 Wiki 仍排除。修复已完成，全部新增回归已纳入 rc.3 前端 34 文件 / 221 项测试并通过；三种桌面 E2E 均已完整通过。
+- **ISSUE-02（Markdown 边界）**：统一 Markdown protected-range 处理；fence opener 长度至少 3，closer 字符相同且长度不小于 opener，多 backtick inline code 按相同 delimiter 长度闭合，未闭合 fence 保护到文末。保留 URL、链接/图片目标、Wiki 和 frontmatter 边界，核对与 Markdown 字符转换 helper 的一致性。修复已完成，全部新增回归已纳入 rc.3 前端 34 文件 / 221 项测试并通过；三种桌面 E2E 均已完整通过。
+- 补充 ADR-013/015：继续使用本地可重建索引，不改变正文或资料事实来源；具体 API/helper 名称以最终源码为准，不将审计建议中的示例接口写成已实现接口。
+
+## ADR-021：候选证据与已发布安装包分别记录
+
+- rc.3 为当前开发目标，未发布；版本文件已升级 rc.3。
+- rc.1/rc.2 历史 tag 与发布记录保留，rc.3 修复、测试和构建结果不得追写为 rc.2 资产能力。
+- 当前候选的测试数量、两项 benchmark、CI、分支保护和产物摘要均需对应源码/产物的实际验证证据。
+
 ## ADR-001：使用 Tauri 2
 
 - 问题：需要桌面窗口、本地文件和 SQLite，同时保留 Linux/macOS 兼容空间。
@@ -145,3 +162,13 @@
 - 最终选择：编辑器仅在后端错误明确包含“恢复文件已保留”时显示对应状态；桌面 E2E 临时把当前章节历史目录替换为文件，使恢复文件与正文写入完成后在历史快照阶段失败。
 - 影响：验收可以直接核对恢复文件、重启提示、预览和恢复；夹具在测试后恢复原历史目录，不依赖不同磁盘的文件共享语义。
 - 日期：2026-09-05
+
+## rc.3 当前交付状态
+
+rc.3 候选源码完成、本地产物已验收，源码基线 CI 已通过。本次范围为修复与推送，不创建 rc.3 tag 或 Release，不上传发布资产；已发布安装包仍为 `NovelForge_1.1.0-rc.2_x64-setup.exe`。
+
+源码基线 `0f1eb3f8756a5936491f483c783387598b01a3d7`（`fix/v1.1-audit-rc3`）已推送；[CI run 33966324453](https://github.com/Gunanzhao/NovelForge/actions/runs/33966324453) 为 `completed / success`，Frontend checks 与 Rust checks 均为 `completed / success`。全分支 push 触发已由该 run 验证。
+
+上述 CI 只证明该源码基线。后续文档提交仍须按受保护 main 规则重新运行并通过检查，再 fast-forward 更新 main；不将源码 CI 视为尚未产生的文档提交或 main 最终提交的验证结果。
+
+本地测试、两项基准、三种桌面 E2E、产物摘要及历史 tag 证据见 [TEST_REPORT](TEST_REPORT.md#rc3-validation) 与 [RELEASE_CHECKLIST](RELEASE_CHECKLIST.md#rc3-checklist)。rc.2 tag 已核验未移动，main 保护规则已生效。

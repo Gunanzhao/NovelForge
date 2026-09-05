@@ -1,8 +1,19 @@
 # NovelForge
 
+> 当前开发候选目标：`1.1.0-rc.3`（候选源码完成、本地产物已验收，未发布）。既有已发布安装包为 `NovelForge_1.1.0-rc.2_x64-setup.exe`；当前工作区源码不等同于该安装包。版本文件已升级 rc.3。
+>
+> rc.1/rc.2 的测试、benchmark、CI、tag 和发布记录属于各自历史版本，不作为 rc.3 通过证据。rc.3 最终数据统一见 [测试报告](TEST_REPORT.md#rc3-validation) 与 [发布清单](RELEASE_CHECKLIST.md#rc3-checklist)；全部本地门禁已通过，源码基线 CI 已通过。
+
+## rc.3 审计修复（自动化回归通过）
+
+- **ISSUE-01（Wiki 统计）**：区分识别建议与统计语义。Mention Inspector 不重复提示已有 Wiki；统计应计入已知人物、地点和世界观的 Wiki mention。普通文本与 Wiki 混合时精确累计，未知 Wiki 不生成已知资料计数，代码区 Wiki 仍排除。修复已完成，全部新增回归已纳入 rc.3 前端 34 文件 / 221 项测试并通过；三种桌面 E2E 均已完整通过。
+- **ISSUE-02（Markdown 边界）**：统一 Markdown protected-range 处理；fence opener 长度至少 3，closer 字符相同且长度不小于 opener，多 backtick inline code 按相同 delimiter 长度闭合，未闭合 fence 保护到文末。保留 URL、链接/图片目标、Wiki 和 frontmatter 边界，核对与 Markdown 字符转换 helper 的一致性。修复已完成，全部新增回归已纳入 rc.3 前端 34 文件 / 221 项测试并通过；三种桌面 E2E 均已完整通过。
+
+草案见 [rc.3 发布说明](docs/releases/v1.1.0-rc.3.md)；既有 rc.2 安装包及兼容性见 [rc.2 发布说明](docs/releases/v1.1.0-rc.2.md)。
+
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2 + React + TypeScript + Vite + Rust + SQLite。
 
-当前候选版本：`1.1.0-rc.2`。本候选修复数据恢复、异步编辑、导出、剧情线和 AI 请求预览问题；支持自动资料识别、剧情线、人物出场统计、项目级 AI Prompt 模板、灵感箱和章节完成 Checklist，正文仍是普通 Markdown。
+当前开发候选目标：`1.1.0-rc.3`（未发布，候选源码完成、本地产物已验收，源码基线 CI 已通过）。既有 rc.2 已包含数据恢复、异步编辑、导出、剧情线和 AI 请求预览修复；支持自动资料识别、剧情线、人物出场统计、项目级 AI Prompt 模板、灵感箱和章节完成 Checklist，正文仍是普通 Markdown。
 
 ## 已实现
 
@@ -82,11 +93,11 @@ Markdown 预览支持 HTTP/HTTPS 远程图片，这类图片会向其托管服�
 
 ## 当前范围
 
-当前版本已覆盖 MVP、写作规划、关系图、一致性、附件、结构管理、多格式导出、AI 辅助、数据恢复，以及 V1.1 的六组长篇写作工作流。1000 章 / 100 万字基准和 V1.1 辅助数据基准均已通过，Windows x64 release EXE 与 NSIS 安装包已经构建。Markdown/TXT/HTML/DOCX/EPUB/PDF 六种格式保持桌面回归覆盖；没有 API Key 时核心写作流程和本地 AI 草稿模式完全可用。
+当前版本已覆盖 MVP、写作规划、关系图、一致性、附件、结构管理、多格式导出、AI 辅助、数据恢复，以及 V1.1 的六组长篇写作工作流。rc.3 两项大型基准已通过（42.180 秒 / 22.605 秒），Windows x64 完整 Tauri 构建已通过；CDP 已完整通过，WebDriver 第二轮完整通过，三种桌面回归均已通过；下方 rc.1 结果仅用于历史追溯，rc.2 发布时未重跑两项大型基准，后续补验已通过（详见 TEST_REPORT）；rc.3 实测结果独立记录。Markdown/TXT/HTML/DOCX/EPUB/PDF 六种格式保持桌面回归覆盖；没有 API Key 时核心写作流程和本地 AI 草稿模式完全可用。
 
 `1.1.0-rc.1` 的直连 release CDP、官方 Tauri WebDriver、原生文件选择器、恢复重启、六项新增工作流、右键菜单、AI Provider、回收站和导出验收均通过。GitHub Pre-release：[v1.1.0-rc.1](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.1)；Windows 安装包为 `NovelForge_1.1.0-rc.1_x64-setup.exe`。
 
-## V1.1.0-rc.1（2026-09-05）
+## V1.1.0-rc.1 历史记录（2026-09-05）
 
 - 自动资料识别不会逐字扫描整本小说；正文编辑时只防抖扫描当前章节，人物统计按需分批读取全文。
 - 剧情线、Prompt 模板、灵感和 Checklist 复用项目实体并保存可读 Markdown 镜像，旧项目无需迁移。
@@ -104,3 +115,17 @@ Markdown 预览支持 HTTP/HTTPS 远程图片，这类图片会向其托管服�
 - FIX-03：Native Dialog UI Automation 改为地址栏导航、ValuePattern 优先、控件重解析和最多三次有限重试；rc.2 release 已通过 `NATIVE_DIALOGS_OK` 及全部桌面阶段标记。
 - rc.2 发布候选代码提交为 `961ad26`，旧 `v1.0.0-rc.1` tag 未移动；`main` 已推送至 `5aac219`，GitHub Actions run #11（`33712235453`）通过。
 - GitHub Pre-release：[v1.0.0-rc.2](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.0.0-rc.2) 已发布并附带 NSIS 安装包 `NovelForge_1.0.0-rc.2_x64-setup.exe`（SHA-256：`C760969ECC72DEA0A7B6FFC5026C49B72597C68972FA41AAC9697412FA2ABD1A`）。
+
+## rc.3 当前交付状态
+
+rc.3 候选源码完成、本地产物已验收，源码基线 CI 已通过。本次范围为修复与推送，不创建 rc.3 tag 或 Release，不上传发布资产；已发布安装包仍为 `NovelForge_1.1.0-rc.2_x64-setup.exe`。
+
+源码基线 `0f1eb3f8756a5936491f483c783387598b01a3d7`（`fix/v1.1-audit-rc3`）已推送；[CI run 33966324453](https://github.com/Gunanzhao/NovelForge/actions/runs/33966324453) 为 `completed / success`，Frontend checks 与 Rust checks 均为 `completed / success`。全分支 push 触发已由该 run 验证。
+
+上述 CI 只证明该源码基线。后续文档提交仍须按受保护 main 规则重新运行并通过检查，再 fast-forward 更新 main；不将源码 CI 视为尚未产生的文档提交或 main 最终提交的验证结果。
+
+本地测试、两项基准、三种桌面 E2E、产物摘要及历史 tag 证据见 [TEST_REPORT](TEST_REPORT.md#rc3-validation) 与 [RELEASE_CHECKLIST](RELEASE_CHECKLIST.md#rc3-checklist)。rc.2 tag 已核验未移动，main 保护规则已生效。
+
+[![main CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Amain)
+
+徽章展示 main 分支的实时工作流状态，与上述源码基线的固定验收记录分别使用。
