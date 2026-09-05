@@ -1,5 +1,9 @@
 # 开发进度
 
+## 2026-09-06：Codex 订阅接入与 rc.4
+
+已完成官方订阅路由、共享登录与独立配置兼容；真实订阅续写、润色、分析、模板、取消和哨兵保护验收通过。rc.4 的发布验证见 [测试报告](TEST_REPORT.md#rc4-validation)。下方 rc.3 记录为历史证据。
+
 > 当前版本：`1.1.0-rc.3`（预发布候选版）。Windows x64 安装包为 `NovelForge_1.1.0-rc.3_x64-setup.exe`；下载、发布状态及 SHA-256 校验文件见 [GitHub Release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.3)。
 >
 > rc.1/rc.2 的测试、benchmark、CI、tag 和发布记录属于各自历史版本，不作为 rc.3 通过证据。rc.3 最终数据统一见 [测试报告](TEST_REPORT.md#rc3-validation) 与 [发布清单](RELEASE_CHECKLIST.md#rc3-checklist)；全部本地门禁已通过，源码基线 CI 已通过。

@@ -1285,5 +1285,6 @@ fn rewrite_node_mirror(
 #[path = "recovery_regression_tests.rs"]
 mod recovery_regression_tests;
 
+pub mod codex;
 #[cfg(test)]
 mod move_regression_tests;

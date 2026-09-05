@@ -6,6 +6,12 @@ mod storage_impl;
 
 pub fn run() {
     let builder = tauri::Builder::default()
+        .manage(commands::codex::CodexState::default())
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                commands::codex::close(window);
+            }
+        })
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::project::create_project,
@@ -39,6 +45,11 @@ pub fn run() {
             commands::search::search_project,
             commands::consistency::check_consistency,
             commands::ai::ai_complete,
+            commands::codex::codex_status,
+            commands::codex::codex_models,
+            commands::codex::codex_login,
+            commands::codex::codex_generate,
+            commands::codex::codex_cancel,
             commands::statistics::get_statistics,
             commands::export::export_project,
             commands::project::read_logs,

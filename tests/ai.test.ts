@@ -27,7 +27,7 @@ describe('AI context helpers', () => {
   it('persists endpoint/model preferences but has no API key field', () => {
     writeAiPreferences({ endpoint: 'http://127.0.0.1:1234/v1', model: 'local-model' })
     const preferences = readAiPreferences()
-    expect(preferences).toEqual({ endpoint: 'http://127.0.0.1:1234/v1', model: 'local-model' })
+    expect(preferences).toEqual({ endpoint: 'http://127.0.0.1:1234/v1', model: 'local-model', mode: 'provider' })
     expect(JSON.stringify(localStorage)).not.toContain('apiKey')
   })
 

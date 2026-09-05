@@ -4,6 +4,10 @@ import { sortManuscriptNodes } from './planning-data'
 export type AiAction = 'continue' | 'polish' | 'rewrite' | 'expand' | 'shrink' | 'summary' | 'chapter-summary' | 'outline' | 'dialogue' | 'setting-advice' | 'name'
 
 export interface AiPreferences {
+  mode?: 'offline' | 'provider' | 'codex'
+  codexPath?: string
+  codexModel?: string
+  codexEffort?: string
   endpoint: string
   model: string
   providerName?: string
@@ -58,12 +62,17 @@ export function readAiPreferences(): AiPreferences {
     const value = JSON.parse(localStorage.getItem(PREFERENCES_KEY) ?? '{}') as Record<string, unknown>
     if (typeof value.endpoint === 'string') defaults.endpoint = value.endpoint
     if (typeof value.model === 'string' && value.model.trim()) defaults.model = value.model
+    if (value.mode === 'offline' || value.mode === 'provider' || value.mode === 'codex') defaults.mode = value.mode
+    for (const key of ['codexPath', 'codexModel', 'codexEffort'] as const) {
+      if (typeof value[key] === 'string') defaults[key] = value[key]
+    }
     if (typeof value.providerName === 'string') defaults.providerName = value.providerName
     if (typeof value.temperature === 'number' && Number.isFinite(value.temperature)) defaults.temperature = Math.max(0, Math.min(2, value.temperature))
     if (typeof value.maxTokens === 'number' && Number.isFinite(value.maxTokens)) defaults.maxTokens = Math.max(1, Math.min(32_000, Math.round(value.maxTokens)))
   } catch {
     // 损坏的 Provider 偏好只回退到本地模式。
   }
+  defaults.mode ??= defaults.endpoint.trim() && defaults.endpoint.trim().toLowerCase() !== 'local' ? 'provider' : 'offline'
   return defaults
 }
 

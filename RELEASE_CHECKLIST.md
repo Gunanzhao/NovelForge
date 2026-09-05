@@ -1,5 +1,12 @@
 # NovelForge 发布清单
 
+## 1.1.0-rc.4
+
+- 代码、版本、锁文件与安装包统一为 1.1.0-rc.4。
+- 发布前执行前端/Rust 门禁、真实 CLI 与安装后桌面验收，证据见 [测试报告](TEST_REPORT.md#rc4-validation)。
+- 工作分支通过必需 CI 后再快进 main，保持分支保护，创建独立 rc.4 标签并校验 Release 附件。
+- [rc.4 发布说明](docs/releases/v1.1.0-rc.4.md)。以下为 rc.3 历史清单。
+
 > 当前版本：`1.1.0-rc.3`（预发布候选版）。Windows x64 安装包为 `NovelForge_1.1.0-rc.3_x64-setup.exe`；下载、发布状态及 SHA-256 校验文件见 [GitHub Release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.3)。
 >
 > rc.1/rc.2 的测试、benchmark、CI、tag 和发布记录属于各自历史版本，不作为 rc.3 通过证据。rc.3 最终数据统一见 [测试报告](TEST_REPORT.md#rc3-validation) 与 [发布清单](RELEASE_CHECKLIST.md#rc3-checklist)；全部本地门禁已通过，源码基线 CI 已通过。

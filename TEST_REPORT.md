@@ -1,6 +1,28 @@
 # 测试报告
 
-> 当前版本：`1.1.0-rc.3`（预发布候选版）。Windows x64 安装包为 `NovelForge_1.1.0-rc.3_x64-setup.exe`；下载、发布状态及 SHA-256 校验文件见 [GitHub Release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.3)。
+<a id="rc4-validation"></a>
+
+## V1.1.0-rc.4 验收（2026-09-06）
+
+- Rust 常规测试 **83 项通过 / 5 项默认忽略**；忽略项为 2 项原有大型基准和 3 项需要本机 CLI 的集成验收。
+- `cargo check --locked`、格式与 Clippy（`-D warnings`）通过；未新增运行时依赖。
+- 真实用户环境的官方 CLI 0.149.1 初始化与配置隔离通过，确认 `authMode=chatgpt`。
+- 真实订阅使用 `gpt-5.6-luna`，续写/润色/分析/模板分别返回 41/16/61/66 字中文；流式与最终文本一致。四项写作、外部哨兵和取消标记全部通过，整项测试 35.73 秒。
+- 哨兵测试没有返回工作目录外的随机秘密，外部哨兵文件内容保持不变，命令标记文件未创建；取消在首段文本到达后完成。
+- 修复了早期子进程 MCP 配置键错误，以及把订阅响应误发往 Platform API 的路由错误。最终固定使用官方 Codex 订阅路径；独立目录丢弃用户模型指令和工具能力，不修改全局 OpenCodex 配置。
+- 实测只使用合成小说，未发送用户真实小说；未复制、输出或提交登录凭据。真实账号结果不由假服务测试替代。
+- 前端 frozen-lockfile 安装、类型检查、Lint、构建通过；36 文件 / 233 项测试通过（46.70 秒）。
+- 最终独立模型目录的真实 CLI 请求捕获通过：CODEX_TOOL_CATALOG_EMPTY_OK；实际请求没有工具声明。
+- pnpm audit 无已知公告；cargo audit 退出码 0，保留 17 条既有 GTK/维护状态警告，不宣称零警告。
+- Windows rc.4 NSIS 构建、静默安装和完整 CDP 桌面回归通过；包括 CODEX_DESKTOP_STATUS_OK、CODEX_DESKTOP_SUBSCRIPTION_APPLY_OK、回收站与全部导出。
+- 安装包 5,258,568 字节，SHA-256：63be96a5a0f05c6d2e1b3dad23cf06ab825cadda626d7a9aa850b4b5b4c33dfd。
+- 本次未重复大型 Rust 性能基准、WebDriver 和原生对话框模式；历史结果不计入本次通过数。
+
+使用方法见 [Codex 接入说明](docs/CODEX_INTEGRATION.md)。
+
+## rc.3 历史发布记录
+
+> 历史版本：`1.1.0-rc.3`（预发布候选版）。Windows x64 安装包为 `NovelForge_1.1.0-rc.3_x64-setup.exe`；下载、发布状态及 SHA-256 校验文件见 [GitHub Release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.3)。
 >
 > rc.1/rc.2 的测试、benchmark、CI、tag 和发布记录属于各自历史版本，不作为 rc.3 通过证据。rc.3 最终数据统一见 [测试报告](TEST_REPORT.md#rc3-validation) 与 [发布清单](RELEASE_CHECKLIST.md#rc3-checklist)；全部本地门禁已通过，源码基线 CI 已通过。
 

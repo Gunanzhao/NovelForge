@@ -763,6 +763,16 @@ async function run() {
     }
     if (process.env.NOVELFORGE_E2E_SNAPSHOT === '1') return
 
+    if (process.env.NOVELFORGE_E2E_CODEX_ONLY === '1') {
+      await clickText(page, 'AI 辅助')
+      await selectValue(page, 'select[aria-label="AI 模式"]', 'codex')
+      await clickExact(page, '检查连接 / 刷新登录')
+      await waitForCondition(page, "document.querySelector('.ai-provider-card [role=status]') || document.querySelector('.ai-provider-card [role=alert]')", 'Codex 诊断结果')
+      console.log('CODEX_DIAGNOSTIC', await page.evaluate("document.querySelector('.ai-provider-card [role=status]')?.textContent || document.querySelector('.ai-provider-card [role=alert]')?.textContent"))
+      if (process.env.NOVELFORGE_CODEX_CLI) console.log('CODEX_EXPLICIT_PATH', await page.evaluate("window.__TAURI_INTERNALS__.invoke('codex_status',{cliPath:" + jsString(process.env.NOVELFORGE_CODEX_CLI) + "}).then(s=>({authMode:s.authMode,version:s.version})).catch(e=>({error:String(e)}))"))
+      return
+    }
+
     await waitForSelector(page, '.cm-content', '初始正文编辑器')
     await replaceEditor(page, '# 第一章\n\n[[林月]] 来到雾港。\n\n**关键线索**\n\n- 第一项\n- 第二项')
     await sleep(400)
@@ -1265,6 +1275,36 @@ async function run() {
     await pressEscape(page)
     await waitForText(page, '等待一次辅助任务')
     console.log('AI_PROVIDER_OK')
+
+    if (process.env.NOVELFORGE_E2E_CODEX === '1') {
+      await selectValue(page, 'select[aria-label="AI 模式"]', 'codex')
+      await waitForText(page, '实验性 Codex 接入')
+      await clickExact(page, '检查连接 / 刷新登录')
+      if (process.env.NOVELFORGE_E2E_CODEX_EXPECT_BLOCKED === '1') {
+        await waitForCondition(page, "document.querySelector('.ai-provider-card [role=alert]')?.textContent?.includes('openai_base_url 需要独立兼容验证')", '自定义代理配置被明确拒绝')
+        await waitForCondition(page, "Array.from(document.querySelectorAll('button')).some(b => b.textContent.includes('运行辅助') && b.disabled)", '未登录时禁止生成')
+        console.log('CODEX_DESKTOP_CUSTOM_CONFIG_GATE_OK')
+      } else {
+        await waitForCondition(page, "document.querySelector('.ai-provider-card')?.textContent?.includes('CLI 0.149.1')", '真实 Codex CLI 初始化及安全配置检查')
+        const state = await page.evaluate("document.querySelector('.ai-provider-card')?.textContent || ''")
+        if (state.includes('尚未登录')) {
+          await waitForCondition(page, "Array.from(document.querySelectorAll('button')).some(b => b.textContent.includes('运行辅助') && b.disabled)", '未登录时禁止生成')
+          console.log('CODEX_DESKTOP_UNAUTHENTICATED_GATE_OK')
+        } else {
+          console.log('CODEX_DESKTOP_STATUS_OK')
+          if (process.env.NOVELFORGE_E2E_CODEX_LIVE === '1') {
+            await waitForCondition(page, "Array.from(document.querySelectorAll('button')).some(b => b.textContent.includes('运行辅助') && !b.disabled)", '订阅生成入口就绪')
+            await selectValue(page, '.ai-action-card select', 'continue')
+            await setField(page, '例如：保持第一人称', '仅使用已有合成上下文续写，不超过80字，不使用工具。')
+            await clickExact(page, '运行辅助')
+            await waitForCondition(page, "(document.querySelector('.ai-result-text')?.value || '').length > 0 && Array.from(document.querySelectorAll('.ai-result-actions button')).some(b => b.textContent.includes('追加到正文'))", '真实订阅结果完成')
+            await clickSelector(page, '.ai-result-actions button', '追加到正文')
+            console.log('CODEX_DESKTOP_SUBSCRIPTION_APPLY_OK')
+          }
+        }
+      }
+      await selectValue(page, 'select[aria-label="AI 模式"]', 'provider')
+    }
 
     await clickText(page, '人物')
     await waitForCondition(page, "document.querySelector('.entity-list-head h2')?.textContent?.trim() === '人物'", '返回人物资料')
