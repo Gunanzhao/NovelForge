@@ -14,15 +14,18 @@ export function StoryArcInspector() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const arcs = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'story-arc'), [data?.entities])
   if (!document || !projectPath) return null
-  const currentDocument = document
+  const chapter = document.node.kind === 'chapter' ? document.node
+    : document.node.kind === 'section' ? data?.nodes.find((node) => node.id === document.node.parentId && node.kind === 'chapter') : undefined
+  if (!chapter) return null
+  const chapterId = chapter.id
   const currentProjectPath = projectPath
 
   async function toggle(arc: typeof arcs[number]) {
     setBusyId(arc.id)
     const content = parseStoryArc(arc)
-    const chapterIds = content.chapterIds.includes(currentDocument.node.id)
-      ? content.chapterIds.filter((id) => id !== currentDocument.node.id)
-      : [...content.chapterIds, currentDocument.node.id]
+    const chapterIds = content.chapterIds.includes(chapterId)
+      ? content.chapterIds.filter((id) => id !== chapterId)
+      : [...content.chapterIds, chapterId]
     try {
       await saveEntity({
         projectPath: currentProjectPath,
@@ -42,7 +45,7 @@ export function StoryArcInspector() {
   return <div className="story-arc-inspector">
     <div className="panel-title"><h3><GitBranch size={14} />剧情线</h3><Button variant="ghost" onClick={() => setView('story-arc')}>管理</Button></div>
     {arcs.length ? arcs.map((arc) => {
-      const linked = parseStoryArc(arc).chapterIds.includes(currentDocument.node.id)
+      const linked = parseStoryArc(arc).chapterIds.includes(chapterId)
       return <label key={arc.id}><input type="checkbox" checked={linked} disabled={busyId === arc.id} onChange={() => void toggle(arc)} /><span>{arc.title}</span></label>
     }) : <span className="field-hint">尚未创建剧情线。</span>}
   </div>

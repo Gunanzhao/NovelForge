@@ -48,7 +48,9 @@ pnpm tauri dev
 pnpm typecheck
 pnpm lint
 pnpm test
-cargo test --manifest-path src-tauri/Cargo.toml
+cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml --locked
 pnpm tauri build
 ~~~
 
@@ -57,6 +59,22 @@ pnpm tauri build
 ## 数据安全
 
 正文不进入数据库专有格式，而是保存在项目 manuscript/ 下的普通 Markdown 文件。SQLite 数据库位于 .novelforge/database.sqlite，恢复文件位于 .novelforge/recovery/，历史位于 .novelforge/history/。删除内容先移动到 trash/，不会直接永久删除。
+
+资料镜像在保存时写入版本化 `novelforgeEntity` JSON 前置元数据，完整保留多行字段、空白、标签和 JSON 类型，后面的 Markdown 是可读视图。恢复时校验两者一致；人工修改资料镜像后应同步这两个表示，发生冲突会报出文件路径并中止恢复。旧资料在下一次通过应用保存时升级镜像；旧镜像仍可读取，但旧格式已经丢失的字段边界无法可靠推断，恢复不会改写这些原文件。正文 Markdown 的编辑方式不受影响。
+
+恢复前检查正文、资料、历史和恢复目录的路径边界。损坏数据库重建失败时尝试恢复原数据库及日志侧文件，错误会明确报告回滚结果；章节读取失败时终止导出，不产生缺失正文的成功结果。
+
+Markdown 预览支持 HTTP/HTTPS 远程图片，这类图片会向其托管服务器请求资源。AI 最终预览分别展示 System Prompt 与 User Prompt，字符数和估算 Token 包含两者；前端合计安全阈值为 80,000 字符，后端硬上限为 200,000 字符。
+
+## 审阅修复（尚未单独发布）
+
+- 防止资料建档的异步响应覆盖最新正文；搜索和人物统计丢弃过期响应。
+- 修复资料镜像无损恢复、章节状态镜像同步、恢复目录扫描与失败回滚。
+- 跨卷/章节移动失败时同时恢复文件位置与原始镜像内容，并明确报告回滚失败。
+- 导出明确报告缺失或不可读章节；中文搜索返回限定长度摘要。
+- 小节的剧情线关联归入父章节，多卷推进顺序与章节树一致，检查结果可定位资料。
+- AI 预览和限额覆盖完整请求；收件箱筛选后的详情仅对应可见条目。
+- CI 增加 Rust 格式检查和零警告 Clippy 门禁。
 
 本 README 汇总产品范围、构建方式、数据安全边界和当前发布状态。
 

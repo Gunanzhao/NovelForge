@@ -107,4 +107,19 @@ describe('character appearance analytics', () => {
     expect(characterPage.items).toHaveLength(4)
     expect(characterPage.pageCount).toBe(9)
   })
+
+  it('does not let a slower forced scan replace the newest cached index', async () => {
+    const project = data()
+    project.nodes = [node('c1', 'chapter', 0, null)]
+    let finishOld: ((value: { content: string }) => void) | undefined
+    api.getDocument.mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve }))
+      .mockResolvedValueOnce({ content: '陈默说。' })
+    const old = scanProjectMentionIndex('race', project, true)
+    const newest = await scanProjectMentionIndex('race', project, true)
+    finishOld?.({ content: '林月说。' })
+    await old
+    expect(await scanProjectMentionIndex('race', project)).toBe(newest)
+    expect(newest.byEntity.bob).toEqual([{ nodeId: 'c1', count: 1 }])
+    expect(api.getDocument).toHaveBeenCalledTimes(2)
+  })
 })

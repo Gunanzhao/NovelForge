@@ -4,7 +4,7 @@ import { isDesktop, projectApi } from '../lib/api'
 import type { AiCompletionResult } from '../lib/types'
 import { aiHttpConfirmationKey, confirmInsecureAiEndpoint } from '../lib/ai-security'
 import {
-  AI_ACTIONS, AI_CONTEXT_SAFE_CHAR_LIMIT, applyAiSelectionResult, buildAiPrompt, contextItems, estimateContextBudget,
+  AI_ACTIONS, applyAiSelectionResult, buildAiPrompt, contextItems, estimateContextBudget,
   isSelectionAction, localAssist, recentChapterIds, readAiPreferences, writeAiPreferences,
 } from '../lib/ai-data'
 import type { AiAction, AiContextItem } from '../lib/ai-data'
@@ -12,6 +12,9 @@ import { useAppStore } from '../stores/app-store'
 import { Button, Field, Panel, TextInput } from './ui'
 import { PromptPresetManager } from './PromptPresetManager'
 import type { PromptPreset, PromptPresetAction, PromptResolution } from '../lib/prompt-preset'
+
+const SYSTEM_PROMPT = '你是 NovelForge 的中文小说创作助手。只处理用户明确选中的上下文，不擅自引入未提供的事实。'
+const PRESET_SYSTEM_PROMPT = '你是 NovelForge 的中文小说创作助手。只处理模板中明确引用的上下文。'
 
 export function AiAssistantView() {
   const data = useAppStore((state) => state.data)
@@ -33,10 +36,9 @@ export function AiAssistantView() {
   const [action, setAction] = useState<AiAction>('continue')
   const [instruction, setInstruction] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [contextContent, setContextContent] = useState<Record<string, string>>({})
+  const [loadedContext, setLoadedContext] = useState<Array<{ title: string; kind: string; content: string }>>([])
   const [recentCount, setRecentCount] = useState(3)
   const [requestSelection, setRequestSelection] = useState<typeof editorSelection>(null)
-  const [contextBudget, setContextBudget] = useState(estimateContextBudget([]))
   const [previewOpen, setPreviewOpen] = useState(false)
   const [result, setResult] = useState<AiCompletionResult | null>(null)
   const [busy, setBusy] = useState(false)
@@ -64,6 +66,11 @@ export function AiAssistantView() {
   const selectedItems = useMemo(() => items.filter((item) => selectedIds.has(item.id)), [items, selectedIds])
   const recentIds = useMemo(() => data ? recentChapterIds(data.nodes, document?.node.id, recentCount) : [], [data, document?.node.id, recentCount])
   const recentItems = useMemo(() => items.filter((item) => item.kind === 'node' && recentIds.includes(item.id)), [items, recentIds])
+
+  useEffect(() => {
+    setLoadedContext([])
+    setPreviewOpen(false)
+  }, [projectPath, selectedItems])
 
   useEffect(() => {
     setSelectedIds((current) => {
@@ -100,8 +107,6 @@ export function AiAssistantView() {
   }
 
   async function loadItemContent(item: AiContextItem) {
-    const cached = contextContent[item.id]
-    if (cached !== undefined) return cached
     let content = ''
     if (item.kind === 'node') {
       if (document?.node.id === item.id) content = document.content
@@ -116,14 +121,13 @@ export function AiAssistantView() {
       const entity = data?.entities.find((candidate) => candidate.id === item.id)
       if (entity) content = JSON.stringify({ tags: entity.tags, ...entity.content }, null, 2)
     }
-    setContextContent((current) => ({ ...current, [item.id]: content }))
     return content
   }
 
   async function loadSelectedContext() {
     const context: Array<{ title: string; kind: string; content: string }> = []
     for (const item of selectedItems) context.push({ title: item.title, kind: item.detail, content: await loadItemContent(item) })
-    setContextBudget(estimateContextBudget(context))
+    setLoadedContext(context)
     return context
   }
 
@@ -136,20 +140,20 @@ export function AiAssistantView() {
     setBusy(true)
     try {
       const context = await loadSelectedContext()
-      const budget = estimateContextBudget(context)
+      const prompt = buildAiPrompt(action, context, instruction)
+      const budget = estimateContextBudget([{ title: 'system', kind: 'system', content: SYSTEM_PROMPT }, { title: 'user', kind: 'user', content: prompt }])
       if (budget.overLimit) {
-        setError('上下文超过安全阈值，请减少选中的章节或资料后重试。')
+        setError('System 与 User Prompt 总和超过安全阈值，请减少写作要求、章节或资料后重试。')
         return
       }
       setRequestSelection(isSelectionAction(action) ? editorSelection : null)
       setResultApplication('builtin')
-      const prompt = buildAiPrompt(action, context, instruction)
       if (!endpoint.trim() || endpoint.trim().toLocaleLowerCase() === 'local' || !isDesktop) {
         const local = localAssist(action, context, instruction)
         setResult({ content: local.localContent, model: local.model })
       } else {
         if (!confirmInsecureAiEndpoint(endpoint, confirmedHttpProviders.current, (message) => window.confirm(message))) return
-        setResult(await projectApi.aiComplete({ endpoint, apiKey, model, systemPrompt: '你是 NovelForge 的中文小说创作助手。只处理用户明确选中的上下文，不擅自引入未提供的事实。', prompt, temperature: Math.max(0, Math.min(2, Number.parseFloat(temperature) || 0.7)), maxTokens: Math.max(1, Math.min(32_000, Number.parseInt(maxTokens, 10) || 4000)) }))
+        setResult(await projectApi.aiComplete({ endpoint, apiKey, model, systemPrompt: SYSTEM_PROMPT, prompt, temperature: Math.max(0, Math.min(2, Number.parseFloat(temperature) || 0.7)), maxTokens: Math.max(1, Math.min(32_000, Number.parseInt(maxTokens, 10) || 4000)) }))
       }
     } catch (error) {
       setError(error)
@@ -159,8 +163,10 @@ export function AiAssistantView() {
   }
 
   async function runPreset(preset: PromptPreset, resolution: PromptResolution) {
-    if (resolution.characters > AI_CONTEXT_SAFE_CHAR_LIMIT) {
-      setError('最终 Prompt 超过安全阈值，请减少模板引用的上下文。')
+    const systemPrompt = preset.systemPrompt ?? PRESET_SYSTEM_PROMPT
+    const budget = estimateContextBudget([{ title: 'system', kind: 'system', content: systemPrompt }, { title: 'user', kind: 'user', content: resolution.prompt }])
+    if (budget.overLimit) {
+      setError('System 与 User Prompt 总和超过安全阈值，请减少系统提示词、模板或引用的上下文。')
       return
     }
     if (preset.action === 'rewrite' && (!editorSelection || editorSelection.nodeId !== document?.node.id || !editorSelection.text.trim())) {
@@ -179,7 +185,7 @@ export function AiAssistantView() {
           endpoint,
           apiKey,
           model,
-          systemPrompt: preset.systemPrompt ?? '你是 NovelForge 的中文小说创作助手。只处理模板中明确引用的上下文。',
+          systemPrompt,
           prompt: resolution.prompt,
           temperature: Math.max(0, Math.min(2, Number.parseFloat(temperature) || 0.7)),
           maxTokens: Math.max(1, Math.min(32_000, Number.parseInt(maxTokens, 10) || 4000)),
@@ -218,7 +224,8 @@ export function AiAssistantView() {
     updateContent(mode === 'replace' ? result.content : `${document.content.trimEnd()}\n\n${result.content.trim()}\n`)
   }
 
-  const previewText = selectedItems.map((item) => `【${item.detail}｜${item.title}】\n${contextContent[item.id] ?? '正在读取…'}`).join('\n\n')
+  const previewText = buildAiPrompt(action, loadedContext, instruction)
+  const contextBudget = estimateContextBudget([{ title: 'system', kind: 'system', content: SYSTEM_PROMPT }, { title: 'user', kind: 'user', content: previewText }])
   const insecureHttpProvider = aiHttpConfirmationKey(endpoint) !== null
-  return <div className="workspace-view ai-view"><div className="view-header"><div><p className="eyebrow">OPTIONAL AI ASSISTANT</p><h1>AI 辅助</h1><p>显式选择上下文后再发送请求；不填写 Provider 地址时使用本地离线草稿模式。</p></div><div className="ai-mode-badge"><Sparkles size={14} />{endpoint.trim() && isDesktop ? '兼容 Provider' : '本地离线模式'}</div></div><PromptPresetManager busy={busy} onRun={runPreset} /><div className="ai-config-row"><Panel className="ai-provider-card"><div className="panel-title"><h3>Provider 设置</h3><span>{apiKey ? '本次会话已填写 Key' : '未填写 API Key'}</span></div><Field label="名称"><TextInput value={providerName} onChange={(event) => setProviderName(event.target.value)} placeholder="例如：本地 LM Studio" /></Field><div className="field-grid"><Field label="Base URL" hint="例如 http://127.0.0.1:1234/v1"><TextInput value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="留空使用本地离线模式" /></Field><Field label="模型"><TextInput value={model} onChange={(event) => setModel(event.target.value)} placeholder="local-writer" /></Field></div>{insecureHttpProvider ? <div className="ai-provider-warning"><TriangleAlert size={14} /><span>该地址使用非加密 HTTP。发送时，小说内容和 API Key 可能被网络中的其他人读取或篡改。</span></div> : null}<div className="field-grid"><Field label="Temperature"><TextInput type="number" min="0" max="2" step="0.1" value={temperature} onChange={(event) => setTemperature(event.target.value)} /></Field><Field label="Max Tokens"><TextInput type="number" min="1" max="32000" value={maxTokens} onChange={(event) => setMaxTokens(event.target.value)} /></Field></div><Field label="API Key" hint="仅保留在当前窗口内，既不保存也不写入日志"><div className="input-with-action"><KeyRound size={14} color="var(--faint)" style={{ marginTop: 8 }} /><TextInput type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="可选；本地 Provider 通常不需要" autoComplete="off" /></div></Field></Panel><Panel className="ai-action-card"><div className="panel-title"><h3>辅助任务</h3><span>{selectedItems.length} 项上下文</span></div><Field label="任务"><select className="select-input" value={action} onChange={(event) => setAction(event.target.value as AiAction)}>{AI_ACTIONS.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.description}</option>)}</select></Field><Field label="写作要求"><textarea className="text-area compact" value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="例如：保持第一人称，增加悬念，不改变已有设定…" /></Field><div className="ai-action-buttons"><Button variant="outline" disabled={busy} onClick={() => void showPreview()}><Eye size={14} />预览上下文</Button><Button disabled={busy} onClick={() => void runAssistant()}><Send size={14} />{busy ? '处理中…' : '运行辅助'}</Button></div></Panel></div><div className="ai-workspace-grid"><Panel className="ai-context-panel"><div className="panel-title"><h3>明确选择上下文</h3><span>未勾选内容不会发送</span></div><div className="ai-context-tools"><label>最近章节<select className="select-input" value={recentCount} onChange={(event) => setRecentCount(Number(event.target.value))}><option value="1">1 章</option><option value="3">3 章</option><option value="5">5 章</option><option value="10">10 章</option></select></label><Button variant="outline" disabled={!recentItems.length} onClick={selectRecentChapters}>选中最近 {recentCount} 章</Button></div>{selectionReady ? <div className="ai-selection-hint">已捕获当前选区：{editorSelection?.text.length.toLocaleString()} 字，可用于润色、改写、扩写或缩写。</div> : null}{contextBudget.characters ? <div className={'ai-context-budget' + (contextBudget.overLimit ? ' over' : '')}>上下文：{contextBudget.characters.toLocaleString()} 字符 · 预计 {contextBudget.estimatedTokens.toLocaleString()} Token{contextBudget.overLimit ? ' · 超过安全阈值，请减少选择' : ''}</div> : <div className="ai-context-budget">选择上下文后会显示字符数和预计 Token。</div>}<div className="ai-context-list">{items.length ? items.map((item) => <label className={'ai-context-item' + (selectedIds.has(item.id) ? ' active' : '')} key={item.id}><input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleContext(item)} /><span><strong>{item.title}</strong><small>{item.detail}</small></span></label>) : <div className="empty-state">没有可用的正文或资料。</div>}</div></Panel><Panel className="ai-result-panel"><div className="panel-title"><h3>AI 结果</h3><span>{result ? result.model : '尚未运行'}</span></div>{result ? <><textarea className="text-area ai-result-text" value={result.content} onChange={(event) => setResult((current) => current ? { ...current, content: event.target.value } : current)} /><div className="ai-result-actions"><Button variant="outline" onClick={() => void navigator.clipboard?.writeText(result.content)}><Clipboard size={13} />复制</Button><Button variant="outline" onClick={() => { setResult(null); setRequestSelection(null) }}>取消</Button>{document ? selectionAction && requestSelection ? <><Button variant="outline" onClick={() => applySelectionResult('replace')}>替换选区</Button><Button variant="outline" onClick={() => applySelectionResult('insert-after')}>插入选区后</Button></> : resultApplication === 'analyze' ? null : <><Button variant="outline" onClick={() => applyResult('append')}>{resultApplication === 'generate' ? '插入后方' : '追加到正文'}</Button>{resultApplication === 'builtin' ? <Button onClick={() => applyResult('replace')}>替换当前正文</Button> : null}</> : null}</div></> : <div className="ai-result-empty"><Sparkles size={28} /><strong>等待一次辅助任务</strong><span>结果会出现在这里，你可以先编辑结果，再追加或替换正文。</span></div>}</Panel></div>{previewOpen ? <Panel className="ai-preview-panel"><div className="panel-title"><h3>上下文预览</h3><Button variant="ghost" onClick={() => setPreviewOpen(false)}>关闭</Button></div><pre>{previewText}</pre></Panel> : null}</div>
+  return <div className="workspace-view ai-view"><div className="view-header"><div><p className="eyebrow">OPTIONAL AI ASSISTANT</p><h1>AI 辅助</h1><p>显式选择上下文后再发送请求；不填写 Provider 地址时使用本地离线草稿模式。</p></div><div className="ai-mode-badge"><Sparkles size={14} />{endpoint.trim() && isDesktop ? '兼容 Provider' : '本地离线模式'}</div></div><PromptPresetManager busy={busy} onRun={runPreset} defaultSystemPrompt={PRESET_SYSTEM_PROMPT} /><div className="ai-config-row"><Panel className="ai-provider-card"><div className="panel-title"><h3>Provider 设置</h3><span>{apiKey ? '本次会话已填写 Key' : '未填写 API Key'}</span></div><Field label="名称"><TextInput value={providerName} onChange={(event) => setProviderName(event.target.value)} placeholder="例如：本地 LM Studio" /></Field><div className="field-grid"><Field label="Base URL" hint="例如 http://127.0.0.1:1234/v1"><TextInput value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="留空使用本地离线模式" /></Field><Field label="模型"><TextInput value={model} onChange={(event) => setModel(event.target.value)} placeholder="local-writer" /></Field></div>{insecureHttpProvider ? <div className="ai-provider-warning"><TriangleAlert size={14} /><span>该地址使用非加密 HTTP。发送时，小说内容和 API Key 可能被网络中的其他人读取或篡改。</span></div> : null}<div className="field-grid"><Field label="Temperature"><TextInput type="number" min="0" max="2" step="0.1" value={temperature} onChange={(event) => setTemperature(event.target.value)} /></Field><Field label="Max Tokens"><TextInput type="number" min="1" max="32000" value={maxTokens} onChange={(event) => setMaxTokens(event.target.value)} /></Field></div><Field label="API Key" hint="仅保留在当前窗口内，既不保存也不写入日志"><div className="input-with-action"><KeyRound size={14} color="var(--faint)" style={{ marginTop: 8 }} /><TextInput type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="可选；本地 Provider 通常不需要" autoComplete="off" /></div></Field></Panel><Panel className="ai-action-card"><div className="panel-title"><h3>辅助任务</h3><span>{selectedItems.length} 项上下文</span></div><Field label="任务"><select className="select-input" value={action} onChange={(event) => setAction(event.target.value as AiAction)}>{AI_ACTIONS.map((item) => <option key={item.id} value={item.id}>{item.label} · {item.description}</option>)}</select></Field><Field label="写作要求"><textarea className="text-area compact" value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="例如：保持第一人称，增加悬念，不改变已有设定…" /></Field><div className="ai-action-buttons"><Button variant="outline" disabled={busy} onClick={() => void showPreview()}><Eye size={14} />预览上下文</Button><Button disabled={busy} onClick={() => void runAssistant()}><Send size={14} />{busy ? '处理中…' : '运行辅助'}</Button></div></Panel></div><div className="ai-workspace-grid"><Panel className="ai-context-panel"><div className="panel-title"><h3>明确选择上下文</h3><span>未勾选内容不会发送</span></div><div className="ai-context-tools"><label>最近章节<select className="select-input" value={recentCount} onChange={(event) => setRecentCount(Number(event.target.value))}><option value="1">1 章</option><option value="3">3 章</option><option value="5">5 章</option><option value="10">10 章</option></select></label><Button variant="outline" disabled={!recentItems.length} onClick={selectRecentChapters}>选中最近 {recentCount} 章</Button></div>{selectionReady ? <div className="ai-selection-hint">已捕获当前选区：{editorSelection?.text.length.toLocaleString()} 字，可用于润色、改写、扩写或缩写。</div> : null}{loadedContext.length ? <div className={'ai-context-budget' + (contextBudget.overLimit ? ' over' : '')}>System + User：{contextBudget.characters.toLocaleString()} 字符 · 预计 {contextBudget.estimatedTokens.toLocaleString()} Token · 安全阈值 {contextBudget.safeLimit.toLocaleString()} 字符{contextBudget.overLimit ? ' · 超过安全阈值，请减少选择' : ''}</div> : <div className="ai-context-budget">选择上下文后会显示字符数和预计 Token。</div>}<div className="ai-context-list">{items.length ? items.map((item) => <label className={'ai-context-item' + (selectedIds.has(item.id) ? ' active' : '')} key={item.id}><input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleContext(item)} /><span><strong>{item.title}</strong><small>{item.detail}</small></span></label>) : <div className="empty-state">没有可用的正文或资料。</div>}</div></Panel><Panel className="ai-result-panel"><div className="panel-title"><h3>AI 结果</h3><span>{result ? result.model : '尚未运行'}</span></div>{result ? <><textarea className="text-area ai-result-text" value={result.content} onChange={(event) => setResult((current) => current ? { ...current, content: event.target.value } : current)} /><div className="ai-result-actions"><Button variant="outline" onClick={() => void navigator.clipboard?.writeText(result.content)}><Clipboard size={13} />复制</Button><Button variant="outline" onClick={() => { setResult(null); setRequestSelection(null) }}>取消</Button>{document ? selectionAction && requestSelection ? <><Button variant="outline" onClick={() => applySelectionResult('replace')}>替换选区</Button><Button variant="outline" onClick={() => applySelectionResult('insert-after')}>插入选区后</Button></> : resultApplication === 'analyze' ? null : <><Button variant="outline" onClick={() => applyResult('append')}>{resultApplication === 'generate' ? '插入后方' : '追加到正文'}</Button>{resultApplication === 'builtin' ? <Button onClick={() => applyResult('replace')}>替换当前正文</Button> : null}</> : null}</div></> : <div className="ai-result-empty"><Sparkles size={28} /><strong>等待一次辅助任务</strong><span>结果会出现在这里，你可以先编辑结果，再追加或替换正文。</span></div>}</Panel></div>{previewOpen ? <Panel className="ai-preview-panel"><div className="panel-title"><h3>上下文预览</h3><Button variant="ghost" onClick={() => setPreviewOpen(false)}>关闭</Button></div><h4>System Prompt</h4><pre>{SYSTEM_PROMPT}</pre><h4>User Prompt</h4><pre>{previewText}</pre></Panel> : null}</div>
 }

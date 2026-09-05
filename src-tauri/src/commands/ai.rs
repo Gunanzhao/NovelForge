@@ -3,9 +3,45 @@ use std::io::Read;
 
 const MAX_AI_RESPONSE_BYTES: u64 = 2 * 1024 * 1024;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn combined_context_limit_is_checked_before_endpoint_or_network() {
+        for (system_length, user_length, too_long) in [
+            (100_000, 100_000, false),
+            (100_001, 100_000, true),
+            (200_000, 1, true),
+            (0, 200_000, false),
+            (0, 200_001, true),
+        ] {
+            let input = AiCompletionInput {
+                endpoint: "invalid endpoint".to_string(),
+                api_key: String::new(),
+                model: "test".to_string(),
+                system_prompt: "系".repeat(system_length),
+                prompt: "文".repeat(user_length),
+                temperature: None,
+                max_tokens: None,
+            };
+            let error = ai_complete(input).unwrap_err();
+            assert_eq!(
+                error,
+                if too_long {
+                    "AI 上下文过长，请减少选中的内容"
+                } else {
+                    "AI Provider 地址格式无效"
+                },
+                "system={system_length}, user={user_length}"
+            );
+        }
+    }
+}
+
 pub(crate) fn normalize_ai_endpoint(endpoint: &str) -> Result<String, String> {
-    let mut url = reqwest::Url::parse(endpoint.trim())
-        .map_err(|_| "AI Provider 地址格式无效".to_string())?;
+    let mut url =
+        reqwest::Url::parse(endpoint.trim()).map_err(|_| "AI Provider 地址格式无效".to_string())?;
     if !matches!(url.scheme(), "http" | "https") {
         return Err("AI Provider 地址必须使用 http:// 或 https://".to_string());
     }
@@ -38,7 +74,14 @@ pub fn ai_complete(input: AiCompletionInput) -> Result<AiCompletionResult, Strin
     if input.prompt.trim().is_empty() {
         return Err("AI 请求内容不能为空".to_string());
     }
-    if input.prompt.chars().count() > 200_000 {
+    if input
+        .system_prompt
+        .chars()
+        .chain(input.prompt.chars())
+        .take(200_001)
+        .count()
+        > 200_000
+    {
         return Err("AI 上下文过长，请减少选中的内容".to_string());
     }
     let endpoint = normalize_ai_endpoint(&input.endpoint)?;

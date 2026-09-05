@@ -62,6 +62,8 @@ jobs:
             librsvg2-dev
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          components: rustfmt, clippy
       - name: Install cargo-audit
         uses: taiki-e/install-action@e67fa11c4b9316fa714ddf0abed07a0c3143b95b # v2
         with:
@@ -78,6 +80,10 @@ jobs:
             ${{ runner.os }}-cargo-
       - name: Check
         run: cargo check --locked
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
       - name: Test
         run: cargo test --locked
       - name: Audit dependencies

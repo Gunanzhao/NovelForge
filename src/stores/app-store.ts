@@ -19,6 +19,7 @@ export interface RecentProject {
 }
 
 const RECENT_KEY = 'novelforge:recent-projects'
+let searchGeneration = 0
 
 function readRecent(): RecentProject[] {
   try {
@@ -459,14 +460,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   runSearch: async (query, options) => {
+    const generation = ++searchGeneration
     const projectPath = get().projectPath
-    set({ searchQuery: query })
+    const projectId = get().data?.project.id
+    const isCurrent = () => generation === searchGeneration && get().projectPath === projectPath && get().data?.project.id === projectId && get().searchQuery === query
+    set({ searchQuery: query, searchResults: [] })
     if (!projectPath || !query.trim()) {
       set({ searchResults: [] })
       return
     }
-    try { set({ searchResults: await projectApi.search({ projectPath, query, ...options }) }) }
-    catch (error) { get().setError(error) }
+    try {
+      const results = await projectApi.search({ projectPath, query, ...options })
+      if (isCurrent()) set({ searchResults: results })
+    } catch (error) { if (isCurrent()) get().setError(error) }
   },
 
   refreshStats: async () => {

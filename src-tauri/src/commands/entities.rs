@@ -21,10 +21,17 @@ pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
         entity.file_path.clone()
     } else {
         let directory = storage::kind_directory(&input.kind)?;
-        format!("{}/{}-{}.md", directory, safe_filename(&input.title), entity_id)
+        format!(
+            "{}/{}-{}.md",
+            directory,
+            safe_filename(&input.title),
+            entity_id
+        )
     };
-    let content_json = serde_json::to_string(&input.content).map_err(|error| format!("资料内容序列化失败：{}", error))?;
-    let tags_json = serde_json::to_string(&input.tags).map_err(|error| format!("标签序列化失败：{}", error))?;
+    let content_json = serde_json::to_string(&input.content)
+        .map_err(|error| format!("资料内容序列化失败：{}", error))?;
+    let tags_json =
+        serde_json::to_string(&input.tags).map_err(|error| format!("标签序列化失败：{}", error))?;
     let target = if input.kind == "attachment" {
         None
     } else {
@@ -32,8 +39,7 @@ pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
     };
     let old_existed = target.as_ref().is_some_and(|path| path.is_file());
     let old_content = if let Some(target) = target.as_ref().filter(|path| path.is_file()) {
-        Some(fs::read_to_string(target)
-            .map_err(|error| format!("读取原资料镜像失败：{}", error))?)
+        Some(fs::read_to_string(target).map_err(|error| format!("读取原资料镜像失败：{}", error))?)
     } else {
         None
     };
@@ -72,13 +78,24 @@ pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
                 params![entity_id, input.kind, input.title.trim(), content_json, tags_json, file_path, entity_created_at, timestamp],
             )
             .map_err(|error| format!("保存资料条目失败：{}", error))?;
-        storage::index_record(&transaction, &entity_id, &input.kind, input.title.trim(), &index_content, &file_path)?;
-        transaction.commit().map_err(|error| format!("提交资料保存事务失败：{}", error))
+        storage::index_record(
+            &transaction,
+            &entity_id,
+            &input.kind,
+            input.title.trim(),
+            &index_content,
+            &file_path,
+        )?;
+        transaction
+            .commit()
+            .map_err(|error| format!("提交资料保存事务失败：{}", error))
     })();
     if let Err(error) = database_result {
         if let Some(target) = target.as_ref() {
             let previous = old_content.as_deref().unwrap_or("");
-            if let Err(rollback_error) = restore_document_after_save_failure(target, old_existed, previous) {
+            if let Err(rollback_error) =
+                restore_document_after_save_failure(target, old_existed, previous)
+            {
                 return Err(format!("{}；资料镜像回滚失败：{}", error, rollback_error));
             }
         }
@@ -90,35 +107,68 @@ pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
 }
 
 fn attachment_extension(name: &str) -> String {
-    Path::new(name).extension().and_then(|extension| extension.to_str()).unwrap_or("")
-        .chars().filter(|character| character.is_ascii_alphanumeric()).take(12).collect()
+    Path::new(name)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or("")
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .take(12)
+        .collect()
 }
 
 fn attachment_filename(name: &str, id: &str) -> String {
-    let stem = Path::new(name).file_stem().and_then(|value| value.to_str()).unwrap_or("attachment");
+    let stem = Path::new(name)
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("attachment");
     let stem = safe_filename(stem);
     let extension = attachment_extension(name);
-    if extension.is_empty() { format!("{}-{}", stem, id) } else { format!("{}-{}.{}", stem, id, extension) }
+    if extension.is_empty() {
+        format!("{}-{}", stem, id)
+    } else {
+        format!("{}-{}.{}", stem, id, extension)
+    }
 }
 
 fn attachment_mime(name: &str) -> &'static str {
     match attachment_extension(name).to_lowercase().as_str() {
-        "md" | "markdown" => "text/markdown", "txt" => "text/plain", "json" => "application/json",
-        "pdf" => "application/pdf", "doc" => "application/msword", "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "epub" => "application/epub+zip", "png" => "image/png", "jpg" | "jpeg" => "image/jpeg", "gif" => "image/gif",
-        "webp" => "image/webp", "mp3" => "audio/mpeg", "wav" => "audio/wav", "mp4" => "video/mp4", _ => "application/octet-stream",
+        "md" | "markdown" => "text/markdown",
+        "txt" => "text/plain",
+        "json" => "application/json",
+        "pdf" => "application/pdf",
+        "doc" => "application/msword",
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "epub" => "application/epub+zip",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "mp4" => "video/mp4",
+        _ => "application/octet-stream",
     }
 }
 
 #[tauri::command]
 pub fn import_attachment(input: crate::models::AttachmentInput) -> Result<ProjectData, String> {
-    if input.source_path.trim().is_empty() { return Err("附件路径不能为空".to_string()); }
+    if input.source_path.trim().is_empty() {
+        return Err("附件路径不能为空".to_string());
+    }
     let source = PathBuf::from(&input.source_path);
-    let source_metadata = fs::metadata(&source).map_err(|error| format!("无法读取附件：{}", error))?;
-    if !source_metadata.is_file() { return Err("只能导入文件，不能导入文件夹".to_string()); }
+    let source_metadata =
+        fs::metadata(&source).map_err(|error| format!("无法读取附件：{}", error))?;
+    if !source_metadata.is_file() {
+        return Err("只能导入文件，不能导入文件夹".to_string());
+    }
     let (root, connection) = project_connection(&input.project_path)?;
     let id = storage::new_id();
-    let original_name = source.file_name().and_then(|value| value.to_str()).unwrap_or("附件").to_string();
+    let original_name = source
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("附件")
+        .to_string();
     let relative_path = format!("attachments/{}", attachment_filename(&original_name, &id));
     let destination = storage::safe_relative(&root, &relative_path)?;
     fs::copy(&source, &destination).map_err(|error| format!("复制附件失败：{}", error))?;
@@ -129,13 +179,21 @@ pub fn import_attachment(input: crate::models::AttachmentInput) -> Result<Projec
         "sizeBytes": source_metadata.len(),
         "description": input.description.trim(),
     });
-    let content_json = serde_json::to_string(&content).map_err(|error| format!("附件信息序列化失败：{}", error))?;
+    let content_json = serde_json::to_string(&content)
+        .map_err(|error| format!("附件信息序列化失败：{}", error))?;
     let database_result = (|| -> Result<(), String> {
         connection.execute(
             "INSERT INTO entities (id, kind, title, content_json, tags_json, file_path, created_at, updated_at) VALUES (?1, 'attachment', ?2, ?3, ?4, ?5, ?6, ?7)",
             params![id, original_name, content_json, serde_json::json!(["附件"]).to_string(), relative_path, timestamp, timestamp],
         ).map_err(|error| format!("保存附件资料失败：{}", error))?;
-        storage::index_record(&connection, &id, "attachment", &original_name, &content.to_string(), &relative_path)?;
+        storage::index_record(
+            &connection,
+            &id,
+            "attachment",
+            &original_name,
+            &content.to_string(),
+            &relative_path,
+        )?;
         storage::touch_project(&root)?;
         Ok(())
     })();
@@ -161,13 +219,19 @@ pub fn open_attachment(input: crate::models::NodeActionInput) -> Result<String, 
         return Err("附件文件不存在，可能已被外部程序移动".to_string());
     }
     #[cfg(target_os = "windows")]
-    std::process::Command::new("explorer.exe").arg(&absolute).spawn()
+    std::process::Command::new("explorer.exe")
+        .arg(&absolute)
+        .spawn()
         .map_err(|error| format!("无法打开附件：{}", error))?;
     #[cfg(target_os = "macos")]
-    std::process::Command::new("open").arg(&absolute).spawn()
+    std::process::Command::new("open")
+        .arg(&absolute)
+        .spawn()
         .map_err(|error| format!("无法打开附件：{}", error))?;
     #[cfg(target_os = "linux")]
-    std::process::Command::new("xdg-open").arg(&absolute).spawn()
+    std::process::Command::new("xdg-open")
+        .arg(&absolute)
+        .spawn()
         .map_err(|error| format!("无法打开附件：{}", error))?;
     Ok(absolute.to_string_lossy().to_string())
 }
@@ -178,7 +242,11 @@ pub(crate) fn safe_filename(title: &str) -> String {
         .filter(|character| character.is_alphanumeric() || *character == '-' || *character == '_')
         .take(48)
         .collect();
-    if cleaned.is_empty() { "entry".to_string() } else { cleaned }
+    if cleaned.is_empty() {
+        "entry".to_string()
+    } else {
+        cleaned
+    }
 }
 
 #[tauri::command]
@@ -193,12 +261,20 @@ pub fn delete_entity(input: crate::models::NodeActionInput) -> Result<ProjectDat
     let trash_path = storage::move_to_trash(&root, &original_absolute, &entity.id)?;
     let deleted_at = storage::now();
     let database_result = (|| -> Result<(), String> {
-        let transaction = connection.transaction()
+        let transaction = connection
+            .transaction()
             .map_err(|error| format!("无法开始资料删除事务：{}", error))?;
         transaction
-            .execute("UPDATE entities SET deleted_at = ?1, deleted_path = ?2 WHERE id = ?3", params![deleted_at, trash_path, entity.id])
+            .execute(
+                "UPDATE entities SET deleted_at = ?1, deleted_path = ?2 WHERE id = ?3",
+                params![deleted_at, trash_path, entity.id],
+            )
             .map_err(|error| format!("移入回收站失败：{}", error))?;
-        transaction.execute("DELETE FROM search_index WHERE ref_id = ?1", params![entity.id])
+        transaction
+            .execute(
+                "DELETE FROM search_index WHERE ref_id = ?1",
+                params![entity.id],
+            )
             .map_err(|error| format!("删除搜索索引失败：{}", error))?;
         transaction
             .execute(
@@ -206,7 +282,9 @@ pub fn delete_entity(input: crate::models::NodeActionInput) -> Result<ProjectDat
                 params![storage::new_id(), entity.id, entity.title, entity.file_path, trash_path, deleted_at],
             )
             .map_err(|error| format!("记录回收站失败：{}", error))?;
-        transaction.commit().map_err(|error| format!("提交资料删除事务失败：{}", error))
+        transaction
+            .commit()
+            .map_err(|error| format!("提交资料删除事务失败：{}", error))
     })();
     if let Err(error) = database_result {
         return match fs::rename(Path::new(&trash_path), &original_absolute) {
@@ -223,7 +301,10 @@ pub fn list_entities(path: String, kind: Option<String>) -> Result<Vec<EntityRec
     let (_root, connection) = project_connection(&path)?;
     let entities = storage::all_entities(&connection, false)?;
     Ok(match kind {
-        Some(kind) => entities.into_iter().filter(|entity| entity.kind == kind).collect(),
+        Some(kind) => entities
+            .into_iter()
+            .filter(|entity| entity.kind == kind)
+            .collect(),
         None => entities,
     })
 }

@@ -84,7 +84,7 @@ export function InboxView() {
       .filter((item) => !tag || item.tags.includes(tag))
       .sort((left, right) => sort === 'newest' ? right.createdAt.localeCompare(left.createdAt) : left.createdAt.localeCompare(right.createdAt))
   }, [items, query, sort, tab, tag])
-  const selected = items.find((item) => item.id === selectedId) ?? visible[0]
+  const selected = visible.find((item) => item.id === selectedId) ?? visible[0]
   useEffect(() => {
     const quick = () => window.dispatchEvent(new Event('novelforge:quick-inbox'))
     window.addEventListener('novelforge:new-inbox-item', quick)

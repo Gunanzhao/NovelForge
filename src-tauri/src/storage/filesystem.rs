@@ -1,10 +1,31 @@
 use super::*;
 
 const DIRECTORIES: &[&str] = &[
-    "manuscript", "characters", "locations", "world", "timeline", "outlines",
-    "scenes", "foreshadowing", "relationships", "notes", "research", "attachments", "mentions", "story-arcs", "prompts", "inbox", "checklist-templates", "checklists", "trash",
-    ".novelforge/history", ".novelforge/recovery", ".novelforge/cache",
-    ".novelforge/index", ".novelforge/exports", ".novelforge/logs",
+    "manuscript",
+    "characters",
+    "locations",
+    "world",
+    "timeline",
+    "outlines",
+    "scenes",
+    "foreshadowing",
+    "relationships",
+    "notes",
+    "research",
+    "attachments",
+    "mentions",
+    "story-arcs",
+    "prompts",
+    "inbox",
+    "checklist-templates",
+    "checklists",
+    "trash",
+    ".novelforge/history",
+    ".novelforge/recovery",
+    ".novelforge/cache",
+    ".novelforge/index",
+    ".novelforge/exports",
+    ".novelforge/logs",
 ];
 
 fn canonical_root(root: &Path) -> Result<PathBuf, String> {
@@ -76,9 +97,8 @@ pub fn safe_existing_path(root: &Path, candidate: &Path) -> Result<PathBuf, Stri
 pub fn create_project_directories(root: &Path) -> Result<(), String> {
     for directory in DIRECTORIES {
         let path = safe_relative(root, directory)?;
-        fs::create_dir_all(&path).map_err(|error| {
-            format!("无法创建项目目录 {}：{}", path.display(), error)
-        })?;
+        fs::create_dir_all(&path)
+            .map_err(|error| format!("无法创建项目目录 {}：{}", path.display(), error))?;
     }
     Ok(())
 }
@@ -92,7 +112,8 @@ pub fn new_project_root(input: &str) -> Result<PathBuf, String> {
         return Err("项目路径不是文件夹".to_string());
     }
     fs::create_dir_all(&root).map_err(|error| format!("无法创建项目文件夹：{}", error))?;
-    let canonical = fs::canonicalize(&root).map_err(|error| format!("无法访问项目文件夹：{}", error))?;
+    let canonical =
+        fs::canonicalize(&root).map_err(|error| format!("无法访问项目文件夹：{}", error))?;
     if canonical.join(PROJECT_FILE).exists() {
         return Err("该文件夹已经是 NovelForge 项目".to_string());
     }
@@ -138,7 +159,10 @@ pub fn safe_relative(root: &Path, relative: &str) -> Result<PathBuf, String> {
     if candidate.is_absolute() || relative.trim().is_empty() {
         return Err("项目相对路径无效".to_string());
     }
-    if candidate.components().any(|component| !matches!(component, Component::Normal(_))) {
+    if candidate
+        .components()
+        .any(|component| !matches!(component, Component::Normal(_)))
+    {
         return Err("项目路径只能包含普通相对路径段".to_string());
     }
     let joined = root.join(candidate);
@@ -159,23 +183,37 @@ pub fn safe_trash_path(root: &Path, stored_path: &str) -> Result<PathBuf, String
         .map_err(|error| format!("无法规范化回收站目录：{}", error))?;
     let canonical_candidate = fs::canonicalize(&candidate)
         .map_err(|error| format!("无法访问回收站内容 {}：{}", candidate.display(), error))?;
-    if canonical_candidate == canonical_trash_root || !canonical_candidate.starts_with(&canonical_trash_root) {
-        return Err(format!("拒绝访问项目回收站外的路径：{}", candidate.display()));
+    if canonical_candidate == canonical_trash_root
+        || !canonical_candidate.starts_with(&canonical_trash_root)
+    {
+        return Err(format!(
+            "拒绝访问项目回收站外的路径：{}",
+            candidate.display()
+        ));
     }
     Ok(canonical_candidate)
 }
 
 pub fn atomic_write(target: &Path, content: &[u8]) -> Result<(), String> {
-    let parent = target.parent().ok_or_else(|| "无法确定文件目录".to_string())?;
+    let parent = target
+        .parent()
+        .ok_or_else(|| "无法确定文件目录".to_string())?;
     fs::create_dir_all(parent).map_err(|error| format!("无法创建文件目录：{}", error))?;
-    let filename = target.file_name().and_then(|name| name.to_str())
+    let filename = target
+        .file_name()
+        .and_then(|name| name.to_str())
         .ok_or_else(|| "文件名无效".to_string())?;
     let temp = parent.join(format!(".{}.tmp-{}", filename, new_id()));
     let result = (|| -> Result<(), String> {
-        let mut file = OpenOptions::new().write(true).create_new(true).open(&temp)
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)
             .map_err(|error| format!("无法创建临时文件：{}", error))?;
-        file.write_all(content).map_err(|error| format!("写入临时文件失败：{}", error))?;
-        file.sync_all().map_err(|error| format!("刷新临时文件失败：{}", error))?;
+        file.write_all(content)
+            .map_err(|error| format!("写入临时文件失败：{}", error))?;
+        file.sync_all()
+            .map_err(|error| format!("刷新临时文件失败：{}", error))?;
         drop(file);
         replace_file(&temp, target)
     })();
@@ -190,7 +228,10 @@ fn replace_file(source: &Path, target: &Path) -> Result<(), String> {
     if target.exists() {
         let backup = target.with_file_name(format!(
             ".{}.backup-{}",
-            target.file_name().and_then(|name| name.to_str()).unwrap_or("file"),
+            target
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("file"),
             new_id()
         ));
         fs::rename(target, &backup).map_err(|error| format!("准备替换文件失败：{}", error))?;
@@ -222,9 +263,18 @@ pub fn move_to_trash(root: &Path, original: &Path, ref_id: &str) -> Result<Strin
         return Err(format!("待删除内容不存在：{}", original.display()));
     }
     let trash_directory = safe_relative(root, "trash/items")?;
-    fs::create_dir_all(&trash_directory).map_err(|error| format!("无法创建回收站目录：{}", error))?;
-    let filename = original.file_name().and_then(|name| name.to_str()).unwrap_or("item");
-    let trash_path = trash_directory.join(format!("{}_{}_{}", ref_id, Utc::now().timestamp_millis(), filename));
+    fs::create_dir_all(&trash_directory)
+        .map_err(|error| format!("无法创建回收站目录：{}", error))?;
+    let filename = original
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("item");
+    let trash_path = trash_directory.join(format!(
+        "{}_{}_{}",
+        ref_id,
+        Utc::now().timestamp_millis(),
+        filename
+    ));
     ensure_within_root(root, &trash_path)?;
     fs::rename(original, &trash_path).map_err(|error| format!("移动到回收站失败：{}", error))?;
     Ok(trash_path.to_string_lossy().to_string())

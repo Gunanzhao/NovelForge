@@ -58,12 +58,12 @@ export function ConsistencyView() {
       void selectNode(issue.refId)
       return
     }
-    if (issue.refKind === 'entity') {
-      const entity = currentData.entities.find((candidate) => candidate.id === issue.refId)
+    if (issue.refKind === 'entity' || Object.hasOwn(ENTITY_LABELS, issue.refKind)) {
+      const entity = currentData.entities.find((candidate) => candidate.id === issue.refId && (issue.refKind === 'entity' || candidate.kind === issue.refKind))
       if (entity) selectEntity(entity.kind, entity.id)
+      else if (issue.refKind === 'relationship') setView('relationship')
       return
     }
-    if (issue.refKind === 'relationship') setView('relationship')
   }
 
   return <div className="workspace-view consistency-view">

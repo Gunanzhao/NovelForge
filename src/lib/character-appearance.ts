@@ -36,6 +36,7 @@ interface CachedIndex {
 }
 
 const projectCache = new Map<string, CachedIndex>()
+const pendingScans = new Map<string, symbol>()
 
 function ignoreTexts(entities: EntityRecord[]) {
   return entities
@@ -53,6 +54,8 @@ export async function scanProjectMentionIndex(projectPath: string, data: Project
   const signature = indexSignature(data)
   const cached = projectCache.get(projectPath)
   if (!force && cached?.signature === signature) return cached.index
+  const request = Symbol(projectPath)
+  pendingScans.set(projectPath, request)
   const nodes = data.nodes.filter((node) => node.kind === 'chapter' || node.kind === 'section')
   const documents: Array<{ nodeId: string; content: string }> = []
   const batchSize = 20
@@ -65,13 +68,16 @@ export async function scanProjectMentionIndex(projectPath: string, data: Project
     documents.push(...loaded)
   }
   const index = buildMentionIndex(documents, data.entities, ignoreTexts(data.entities))
-  projectCache.set(projectPath, { signature, index })
+  if (pendingScans.get(projectPath) === request) {
+    projectCache.set(projectPath, { signature, index })
+    pendingScans.delete(projectPath)
+  }
   return index
 }
 
 export function clearProjectMentionIndex(projectPath?: string) {
-  if (projectPath) projectCache.delete(projectPath)
-  else projectCache.clear()
+  if (projectPath) { projectCache.delete(projectPath); pendingScans.delete(projectPath) }
+  else { projectCache.clear(); pendingScans.clear() }
 }
 
 function chapterForNode(nodes: NodeRecord[], nodeId: string) {

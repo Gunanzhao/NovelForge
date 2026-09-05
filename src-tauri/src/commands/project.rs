@@ -25,17 +25,14 @@ pub fn create_project(input: ProjectInput) -> Result<ProjectData, String> {
     let volume_id = storage::new_id();
     let volume_path = "manuscript/volume_001".to_string();
     let volume_absolute = storage::safe_relative(&root, &volume_path)?;
-    fs::create_dir_all(&volume_absolute)
-        .map_err(|error| format!("无法创建初始卷：{}", error))?;
+    fs::create_dir_all(&volume_absolute).map_err(|error| format!("无法创建初始卷：{}", error))?;
     let volume_status = default_status().to_string();
-    let volume_mirror = storage::markdown_volume(
-        &volume_id,
-        "第一卷",
-        &volume_status,
-        &timestamp,
-        &timestamp,
-    );
-    storage::atomic_write(&volume_absolute.join(".novelforge.md"), volume_mirror.as_bytes())?;
+    let volume_mirror =
+        storage::markdown_volume(&volume_id, "第一卷", &volume_status, &timestamp, &timestamp);
+    storage::atomic_write(
+        &volume_absolute.join(".novelforge.md"),
+        volume_mirror.as_bytes(),
+    )?;
     insert_node(
         &connection,
         &NodeRecord {
@@ -78,9 +75,19 @@ pub fn create_project(input: ProjectInput) -> Result<ProjectData, String> {
         &chapter.updated_at,
         starter_body,
     );
-    storage::atomic_write(&storage::safe_relative(&root, &chapter_path)?, starter.as_bytes())?;
+    storage::atomic_write(
+        &storage::safe_relative(&root, &chapter_path)?,
+        starter.as_bytes(),
+    )?;
     insert_node(&connection, &chapter)?;
-    storage::index_record(&connection, &chapter.id, &chapter.kind, &chapter.title, starter_body, &chapter.file_path)?;
+    storage::index_record(
+        &connection,
+        &chapter.id,
+        &chapter.kind,
+        &chapter.title,
+        starter_body,
+        &chapter.file_path,
+    )?;
     let _ = storage::append_log(&root, "INFO", "project_created");
     project_data(&root, &connection)
 }
@@ -89,10 +96,18 @@ pub fn open_project(path: String) -> Result<ProjectData, String> {
     let root = storage::existing_project_root(&path)?;
     let database_path = storage::safe_relative(&root, ".novelforge/database.sqlite")?;
     if !database_path.is_file() {
-        validate_recovery_tree(&root)?;
+        // Do not leave a newly initialized, empty database behind when recovery fails.
+        let connection = recovered_project_connection(&root)?;
+        let _ = storage::append_log(&root, "INFO", "project_opened");
+        return project_data(&root, &connection);
     }
     let mut connection = match storage::open_db(&root) {
-        Ok(connection) if storage::all_nodes(&connection, false).is_ok() && storage::all_entities(&connection, false).is_ok() => connection,
+        Ok(connection)
+            if storage::all_nodes(&connection, false).is_ok()
+                && storage::all_entities(&connection, false).is_ok() =>
+        {
+            connection
+        }
         Ok(connection) => {
             drop(connection);
             recovered_project_connection(&root)?

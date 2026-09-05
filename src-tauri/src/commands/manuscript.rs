@@ -38,7 +38,10 @@ pub fn create_node(input: NodeInput) -> Result<ProjectData, String> {
         _ => "",
     };
     if !expected_parent_kind.is_empty() && parent.kind != expected_parent_kind {
-        return Err(format!("{}只能创建在{}下面", input.kind, expected_parent_kind));
+        return Err(format!(
+            "{}只能创建在{}下面",
+            input.kind, expected_parent_kind
+        ));
     }
     if parent.deleted_at.is_some() {
         return Err("父节点不存在或已在回收站".to_string());
@@ -100,9 +103,18 @@ pub fn create_node(input: NodeInput) -> Result<ProjectData, String> {
             let content = fs::read_to_string(&absolute_path)
                 .map_err(|error| format!("读取新建正文失败：{}", error))?;
             let content = storage::strip_markdown_frontmatter(&content);
-            storage::index_record(&transaction, &node.id, &node.kind, &node.title, &content, &node.file_path)?;
+            storage::index_record(
+                &transaction,
+                &node.id,
+                &node.kind,
+                &node.title,
+                &content,
+                &node.file_path,
+            )?;
         }
-        transaction.commit().map_err(|error| format!("提交创建节点失败：{}", error))
+        transaction
+            .commit()
+            .map_err(|error| format!("提交创建节点失败：{}", error))
     })();
     if let Err(error) = database_result {
         let _ = remove_path_if_exists(&absolute_path);
@@ -182,13 +194,23 @@ pub fn rename_node(input: crate::models::RenameNodeInput) -> Result<ProjectData,
             .as_ref()
             .map(|content| replace_markdown_title(content, &next_title))
         {
-            storage::index_record(&transaction, &current.id, &current.kind, &next_title, &content, &current.file_path)?;
+            storage::index_record(
+                &transaction,
+                &current.id,
+                &current.kind,
+                &next_title,
+                &content,
+                &current.file_path,
+            )?;
         }
-        transaction.commit().map_err(|error| format!("提交重命名事务失败：{}", error))
+        transaction
+            .commit()
+            .map_err(|error| format!("提交重命名事务失败：{}", error))
     })();
     if let Err(error) = database_result {
         if let (Some(target), Some(content)) = (mirror_path.as_ref(), old_raw_content.as_deref()) {
-            if let Err(rollback_error) = restore_document_after_save_failure(target, true, content) {
+            if let Err(rollback_error) = restore_document_after_save_failure(target, true, content)
+            {
                 return Err(format!("{}；正文回滚失败：{}", error, rollback_error));
             }
         }
@@ -208,21 +230,80 @@ pub struct NodeStatusInput {
 
 #[tauri::command]
 pub fn set_node_status(input: NodeStatusInput) -> Result<ProjectData, String> {
-    let allowed = ["not-started", "draft", "first-draft", "editing", "done", "locked"];
+    let allowed = [
+        "not-started",
+        "draft",
+        "first-draft",
+        "editing",
+        "done",
+        "locked",
+    ];
     if !allowed.contains(&input.status.as_str()) {
         return Err("状态无效".to_string());
     }
-    let (root, connection) = project_connection(&input.project_path)?;
-    let changed = connection
+    let (root, mut connection) = project_connection(&input.project_path)?;
+    let node = storage::node_from_id(&connection, &input.node_id)?
+        .filter(|node| node.deleted_at.is_none())
+        .ok_or_else(|| "节点不存在或已在回收站".to_string())?;
+    let relative = if node.kind == "volume" {
+        format!("{}/.novelforge.md", node.file_path)
+    } else {
+        node.file_path.clone()
+    };
+    let target = storage::safe_relative(&root, &relative)?;
+    let old_raw = match fs::read_to_string(&target) {
+        Ok(raw) => Some(raw),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound && node.kind == "volume" => None,
+        Err(error) => return Err(format!("读取状态镜像失败：{}", error)),
+    };
+    let timestamp = storage::now();
+    let mirror = if node.kind == "volume" {
+        storage::markdown_volume(
+            &node.id,
+            &node.title,
+            &input.status,
+            &node.created_at,
+            &timestamp,
+        )
+    } else {
+        storage::markdown_node(
+            &node.id,
+            &node.kind,
+            node.parent_id.as_deref(),
+            &input.status,
+            &node.created_at,
+            &timestamp,
+            old_raw.as_deref().unwrap_or_default(),
+        )
+    };
+    let transaction = connection
+        .transaction()
+        .map_err(|error| format!("无法开始状态事务：{}", error))?;
+    let changed = transaction
         .execute(
             "UPDATE nodes SET status = ?1, updated_at = ?2 WHERE id = ?3 AND deleted_at IS NULL",
-            params![input.status, storage::now(), input.node_id],
+            params![input.status, timestamp, input.node_id],
         )
         .map_err(|error| format!("更新章节状态失败：{}", error))?;
     if changed == 0 {
         return Err("节点不存在或已在回收站".to_string());
     }
-    storage::touch_project(&root)?;
+    storage::atomic_write(&target, mirror.as_bytes())?;
+    if let Err(error) = transaction.commit() {
+        let rollback = restore_document_after_save_failure(
+            &target,
+            old_raw.is_some(),
+            old_raw.as_deref().unwrap_or_default(),
+        );
+        return match rollback {
+            Ok(()) => Err(format!("提交状态事务失败：{}；镜像已回滚", error)),
+            Err(rollback_error) => Err(format!(
+                "提交状态事务失败：{}；镜像回滚失败：{}",
+                error, rollback_error
+            )),
+        };
+    }
+    touch_project_best_effort(&root, "project_metadata_touch_failed");
     project_data(&root, &connection)
 }
 
@@ -255,10 +336,16 @@ pub fn reorder_node(input: crate::models::ReorderNodeInput) -> Result<ProjectDat
             .transaction()
             .map_err(|error| format!("无法开始排序事务：{}", error))?;
         transaction
-            .execute("UPDATE nodes SET order_index = ?1 WHERE id = ?2 AND deleted_at IS NULL", params![neighbour_order, current.id])
+            .execute(
+                "UPDATE nodes SET order_index = ?1 WHERE id = ?2 AND deleted_at IS NULL",
+                params![neighbour_order, current.id],
+            )
             .map_err(|error| format!("更新节点顺序失败：{}", error))?;
         transaction
-            .execute("UPDATE nodes SET order_index = ?1 WHERE id = ?2 AND deleted_at IS NULL", params![current.order_index, neighbour_id])
+            .execute(
+                "UPDATE nodes SET order_index = ?1 WHERE id = ?2 AND deleted_at IS NULL",
+                params![current.order_index, neighbour_id],
+            )
             .map_err(|error| format!("更新节点顺序失败：{}", error))?;
         transaction
             .commit()
@@ -334,10 +421,14 @@ pub fn move_node(input: MoveNodeInput) -> Result<ProjectData, String> {
         return project_data(&root, &connection);
     }
 
-    let (target_path, _) = next_node_location(&root, &allocation_nodes, &current.kind, target_parent.as_ref())?;
-    let source_absolute = storage::safe_relative(&root, &current.file_path)?;
-    let target_absolute = storage::safe_relative(&root, &target_path)?;
-    let sidecar_moved = move_node_files(&source_absolute, &target_absolute, &current.kind)?;
+    let (target_path, _) = next_node_location(
+        &root,
+        &allocation_nodes,
+        &current.kind,
+        target_parent.as_ref(),
+    )?;
+    let original_mirror = read_move_mirror(&root, &current.file_path, &current.kind)?;
+    let sidecar_moved = move_node_files(&root, &current.file_path, &target_path, &current.kind)?;
     let timestamp = storage::now();
     let current_prefix = node_path_prefix(&current);
     let target_prefix = node_path_prefix(&NodeRecord {
@@ -362,8 +453,15 @@ pub fn move_node(input: MoveNodeInput) -> Result<ProjectData, String> {
         &current.title,
         &timestamp,
     ) {
-        rollback_node_move(&source_absolute, &target_absolute, &current.kind, sidecar_moved);
-        return Err(error);
+        let rollback = rollback_node_move(
+            &root,
+            &current.file_path,
+            &target_path,
+            &current.kind,
+            sidecar_moved,
+            original_mirror.as_deref(),
+        );
+        return Err(move_rollback_error(error, rollback));
     }
     let database_result = (|| -> Result<(), String> {
         let transaction = connection
@@ -387,7 +485,10 @@ pub fn move_node(input: MoveNodeInput) -> Result<ProjectData, String> {
                 params![target_parent_id, target_order, target_path, timestamp, current.id],
             )
             .map_err(|error| format!("更新移动节点失败：{}", error))?;
-        for node in nodes.iter().filter(|node| node.id != current.id && descendants.iter().any(|id| id == &node.id)) {
+        for node in nodes
+            .iter()
+            .filter(|node| node.id != current.id && descendants.iter().any(|id| id == &node.id))
+        {
             let next_path = replace_path_prefix(&node.file_path, &current_prefix, &target_prefix);
             transaction
                 .execute(
@@ -402,8 +503,15 @@ pub fn move_node(input: MoveNodeInput) -> Result<ProjectData, String> {
         Ok(())
     })();
     if let Err(error) = database_result {
-        rollback_node_move(&source_absolute, &target_absolute, &current.kind, sidecar_moved);
-        return Err(error);
+        let rollback = rollback_node_move(
+            &root,
+            &current.file_path,
+            &target_path,
+            &current.kind,
+            sidecar_moved,
+            original_mirror.as_deref(),
+        );
+        return Err(move_rollback_error(error, rollback));
     }
     storage::refresh_search_index(&root, &connection)?;
     storage::touch_project(&root)?;
@@ -420,13 +528,19 @@ pub fn copy_node(input: CopyNodeInput) -> Result<ProjectData, String> {
         .find(|node| node.id == input.node_id)
         .cloned()
         .ok_or_else(|| "节点不存在或已在回收站".to_string())?;
-    let target_parent = validate_target_parent(&nodes, &current.kind, input.target_parent_id.as_deref())?;
+    let target_parent =
+        validate_target_parent(&nodes, &current.kind, input.target_parent_id.as_deref())?;
     let descendants = descendant_ids(&nodes, &current.id);
     let target_parent_id = input.target_parent_id.as_deref();
     if target_parent_id.is_some_and(|id| descendants.iter().any(|item| item == id)) {
         return Err("不能将节点复制到自己的后代下面".to_string());
     }
-    let (target_path, target_order) = next_node_location(&root, &allocation_nodes, &current.kind, target_parent.as_ref())?;
+    let (target_path, target_order) = next_node_location(
+        &root,
+        &allocation_nodes,
+        &current.kind,
+        target_parent.as_ref(),
+    )?;
     let source_absolute = storage::safe_relative(&root, &current.file_path)?;
     let target_absolute = storage::safe_relative(&root, &target_path)?;
     copy_path_recursive(&source_absolute, &target_absolute)?;
@@ -443,7 +557,10 @@ pub fn copy_node(input: CopyNodeInput) -> Result<ProjectData, String> {
 
     let timestamp = storage::now();
     let mut id_map = HashMap::new();
-    for node in nodes.iter().filter(|node| descendants.iter().any(|id| id == &node.id)) {
+    for node in nodes
+        .iter()
+        .filter(|node| descendants.iter().any(|id| id == &node.id))
+    {
         id_map.insert(node.id.clone(), storage::new_id());
     }
     let copied_root_title = input
@@ -467,7 +584,10 @@ pub fn copy_node(input: CopyNodeInput) -> Result<ProjectData, String> {
         deleted_at: None,
         deleted_path: None,
     });
-    for node in nodes.iter().filter(|node| descendants.iter().any(|id| id == &node.id)) {
+    for node in nodes
+        .iter()
+        .filter(|node| descendants.iter().any(|id| id == &node.id))
+    {
         let new_id = id_map
             .get(&node.id)
             .ok_or_else(|| "复制节点 ID 映射失败".to_string())?;
@@ -494,7 +614,11 @@ pub fn copy_node(input: CopyNodeInput) -> Result<ProjectData, String> {
             kind: node.kind.clone(),
             parent_id: new_parent_id.clone(),
             title: new_title.clone(),
-            order_index: if node.id == current.id { target_order } else { node.order_index },
+            order_index: if node.id == current.id {
+                target_order
+            } else {
+                node.order_index
+            },
             status: node.status.clone(),
             file_path: new_path.clone(),
             created_at: timestamp.clone(),
@@ -513,7 +637,6 @@ pub fn copy_node(input: CopyNodeInput) -> Result<ProjectData, String> {
             let _ = remove_path_if_exists(&target_absolute);
             if current.kind == "chapter" {
                 let _ = remove_path_if_exists(&target_absolute.with_extension(""));
-
             }
             return Err(error);
         }
@@ -522,7 +645,10 @@ pub fn copy_node(input: CopyNodeInput) -> Result<ProjectData, String> {
         let transaction = connection
             .transaction()
             .map_err(|error| format!("无法开始复制事务：{}", error))?;
-        for node in nodes.iter().filter(|node| descendants.iter().any(|id| id == &node.id)) {
+        for node in nodes
+            .iter()
+            .filter(|node| descendants.iter().any(|id| id == &node.id))
+        {
             let new_id = id_map
                 .get(&node.id)
                 .ok_or_else(|| "复制节点 ID 映射失败".to_string())?;
@@ -544,7 +670,11 @@ pub fn copy_node(input: CopyNodeInput) -> Result<ProjectData, String> {
             } else {
                 replace_path_prefix(&node.file_path, &current_prefix, &target_prefix)
             };
-            let new_order = if node.id == current.id { target_order } else { node.order_index };
+            let new_order = if node.id == current.id {
+                target_order
+            } else {
+                node.order_index
+            };
             transaction
                 .execute(
                     "INSERT INTO nodes (id, kind, parent_id, title, order_index, status, file_path, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -587,19 +717,30 @@ pub fn delete_node(input: crate::models::NodeActionInput) -> Result<ProjectData,
     let ids = descendant_ids(&nodes, &node.id);
     let original_path = node.file_path.clone();
     let original_absolute = storage::safe_relative(&root, &original_path)?;
-    let (trash_path, sidecar_moved) = move_node_to_trash(&root, &original_absolute, &node.kind, &node.id)?;
+    let (trash_path, sidecar_moved) =
+        move_node_to_trash(&root, &original_absolute, &node.kind, &node.id)?;
     let deleted_at = storage::now();
     let database_result = (|| -> Result<(), String> {
-        let transaction = connection.transaction()
+        let transaction = connection
+            .transaction()
             .map_err(|error| format!("无法开始删除事务：{}", error))?;
         for id in &ids {
             transaction
                 .execute(
                     "UPDATE nodes SET deleted_at = ?1, deleted_path = ?2 WHERE id = ?3",
-                    params![deleted_at, if id == &node.id { Some(trash_path.clone()) } else { None::<String> }, id],
+                    params![
+                        deleted_at,
+                        if id == &node.id {
+                            Some(trash_path.clone())
+                        } else {
+                            None::<String>
+                        },
+                        id
+                    ],
                 )
                 .map_err(|error| format!("移入回收站失败：{}", error))?;
-            transaction.execute("DELETE FROM search_index WHERE ref_id = ?1", params![id])
+            transaction
+                .execute("DELETE FROM search_index WHERE ref_id = ?1", params![id])
                 .map_err(|error| format!("删除搜索索引失败：{}", error))?;
         }
         transaction
@@ -608,10 +749,17 @@ pub fn delete_node(input: crate::models::NodeActionInput) -> Result<ProjectData,
                 params![storage::new_id(), node.id, node.title, original_path, trash_path, deleted_at],
             )
             .map_err(|error| format!("记录回收站失败：{}", error))?;
-        transaction.commit().map_err(|error| format!("提交删除事务失败：{}", error))
+        transaction
+            .commit()
+            .map_err(|error| format!("提交删除事务失败：{}", error))
     })();
     if let Err(error) = database_result {
-        return match restore_node_from_trash(&original_absolute, Path::new(&trash_path), &node.kind, sidecar_moved) {
+        return match restore_node_from_trash(
+            &original_absolute,
+            Path::new(&trash_path),
+            &node.kind,
+            sidecar_moved,
+        ) {
             Ok(()) => Err(format!("{}；文件已恢复到原位置", error)),
             Err(rollback_error) => Err(format!("{}；文件回滚失败：{}", error, rollback_error)),
         };
@@ -620,7 +768,11 @@ pub fn delete_node(input: crate::models::NodeActionInput) -> Result<ProjectData,
     project_data(&root, &connection)
 }
 
-pub(crate) fn restore_document_after_save_failure(target: &Path, target_existed: bool, old_content: &str) -> Result<(), String> {
+pub(crate) fn restore_document_after_save_failure(
+    target: &Path,
+    target_existed: bool,
+    old_content: &str,
+) -> Result<(), String> {
     if target_existed {
         storage::atomic_write(target, old_content.as_bytes())
     } else {
@@ -635,8 +787,8 @@ pub(crate) fn save_document_internal(
     content: &str,
     reason: &str,
 ) -> Result<DocumentData, String> {
-    let node = storage::node_from_id(connection, node_id)?
-        .ok_or_else(|| "章节不存在".to_string())?;
+    let node =
+        storage::node_from_id(connection, node_id)?.ok_or_else(|| "章节不存在".to_string())?;
     if node.deleted_at.is_some() || node.kind == "volume" {
         return Err("只有未删除的章节或小节可以编辑".to_string());
     }
@@ -665,15 +817,18 @@ pub(crate) fn save_document_internal(
         Ok(path) => path,
         Err(error) => {
             let _ = storage::append_log(root, "ERROR", "document_save_failed");
-            let rollback = restore_document_after_save_failure(&target, target_existed, &old_raw_content);
+            let rollback =
+                restore_document_after_save_failure(&target, target_existed, &old_raw_content);
             return match rollback {
                 Ok(()) => Err(format!("{}；原正文已恢复，恢复文件已保留", error)),
-                Err(rollback_error) => Err(format!("{}；原正文恢复失败：{}；恢复文件已保留", error, rollback_error)),
+                Err(rollback_error) => Err(format!(
+                    "{}；原正文恢复失败：{}；恢复文件已保留",
+                    error, rollback_error
+                )),
             };
         }
     };
     let database_result = (|| -> Result<(), String> {
-
         let transaction = connection
             .transaction()
             .map_err(|error| format!("无法开始保存事务：{}", error))?;
@@ -705,18 +860,34 @@ pub(crate) fn save_document_internal(
                 params![persisted_timestamp, node.id],
             )
             .map_err(|error| format!("更新章节时间失败：{}", error))?;
-        storage::index_record(&transaction, &node.id, &node.kind, &node.title, content, &node.file_path)?;
-        transaction.commit().map_err(|error| format!("提交保存事务失败：{}", error))
+        storage::index_record(
+            &transaction,
+            &node.id,
+            &node.kind,
+            &node.title,
+            content,
+            &node.file_path,
+        )?;
+        transaction
+            .commit()
+            .map_err(|error| format!("提交保存事务失败：{}", error))
     })();
     if let Err(error) = database_result {
         let _ = storage::append_log(root, "ERROR", "document_save_failed");
-        let cleanup = storage::remove_file_if_exists(&storage::safe_relative(root, &revision_path)?);
-        let rollback = restore_document_after_save_failure(&target, target_existed, &old_raw_content);
+        let cleanup =
+            storage::remove_file_if_exists(&storage::safe_relative(root, &revision_path)?);
+        let rollback =
+            restore_document_after_save_failure(&target, target_existed, &old_raw_content);
         let mut detail = error;
-        if let Err(cleanup_error) = cleanup { detail.push_str(&format!("；历史快照清理失败：{}", cleanup_error)); }
+        if let Err(cleanup_error) = cleanup {
+            detail.push_str(&format!("；历史快照清理失败：{}", cleanup_error));
+        }
         return match rollback {
             Ok(()) => Err(format!("{}；原正文已恢复，恢复文件已保留", detail)),
-            Err(rollback_error) => Err(format!("{}；原正文恢复失败：{}；恢复文件已保留", detail, rollback_error)),
+            Err(rollback_error) => Err(format!(
+                "{}；原正文恢复失败：{}；恢复文件已保留",
+                detail, rollback_error
+            )),
         };
     }
     if storage::touch_project(root).is_err() {
@@ -728,7 +899,10 @@ pub(crate) fn save_document_internal(
     let _ = storage::append_log(root, "INFO", "document_saved");
     let updated = storage::node_from_id(connection, node_id)?
         .ok_or_else(|| "保存后无法读取章节".to_string())?;
-    Ok(DocumentData { node: updated, content: content.to_string() })
+    Ok(DocumentData {
+        node: updated,
+        content: content.to_string(),
+    })
 }
 
 pub(crate) fn preserve_current_revision(
@@ -737,14 +911,14 @@ pub(crate) fn preserve_current_revision(
     node_id: &str,
     reason: &str,
 ) -> Result<(), String> {
-    let node = storage::node_from_id(connection, node_id)?
-        .ok_or_else(|| "章节不存在".to_string())?;
+    let node =
+        storage::node_from_id(connection, node_id)?.ok_or_else(|| "章节不存在".to_string())?;
     if node.deleted_at.is_some() || node.kind == "volume" {
         return Err("只有未删除的章节或小节可以创建历史快照".to_string());
     }
     let target = storage::safe_relative(root, &node.file_path)?;
-    let current_content = fs::read_to_string(&target)
-        .map_err(|error| format!("无法读取恢复前的正文：{}", error))?;
+    let current_content =
+        fs::read_to_string(&target).map_err(|error| format!("无法读取恢复前的正文：{}", error))?;
     let current_content = storage::strip_markdown_frontmatter(&current_content);
     let revision_id = storage::new_id();
     let revision_path = storage::copy_history(root, node_id, &revision_id, &current_content)?;
@@ -781,11 +955,20 @@ pub fn get_document(input: crate::models::NodeActionInput) -> Result<DocumentDat
     }
     let content = fs::read_to_string(storage::safe_relative(&root, &node.file_path)?)
         .map_err(|error| format!("读取正文失败：{}", error))?;
-    Ok(DocumentData { node, content: storage::strip_markdown_frontmatter(&content) })
+    Ok(DocumentData {
+        node,
+        content: storage::strip_markdown_frontmatter(&content),
+    })
 }
 
 #[tauri::command]
 pub fn save_document(input: SaveDocumentInput) -> Result<DocumentData, String> {
     let (root, mut connection) = project_connection(&input.project_path)?;
-    save_document_internal(&root, &mut connection, &input.node_id, &input.content, &input.reason)
+    save_document_internal(
+        &root,
+        &mut connection,
+        &input.node_id,
+        &input.content,
+        &input.reason,
+    )
 }

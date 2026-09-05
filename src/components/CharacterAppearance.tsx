@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BarChart3, ChevronLeft, ChevronRight, RefreshCw, Users } from 'lucide-react'
 import {
   buildCharacterAppearance, chapterMentionRows, matrixWindow, scanProjectMentionIndex,
@@ -14,18 +14,25 @@ function useMentionIndex() {
   const setError = useAppStore((state) => state.setError)
   const [index, setIndex] = useState<MentionIndex | null>(null)
   const [busy, setBusy] = useState(false)
+  const scanGeneration = useRef(0)
   const scan = useCallback(async (force = false) => {
-    if (!data || !projectPath) return
+    const generation = ++scanGeneration.current
+    if (!data || !projectPath) { setIndex(null); setBusy(false); return }
+    setIndex(null)
     setBusy(true)
     try {
-      setIndex(await scanProjectMentionIndex(projectPath, data, force))
+      const result = await scanProjectMentionIndex(projectPath, data, force)
+      if (generation === scanGeneration.current) setIndex(result)
     } catch (error) {
-      setError(error)
+      if (generation === scanGeneration.current) setError(error)
     } finally {
-      setBusy(false)
+      if (generation === scanGeneration.current) setBusy(false)
     }
   }, [data, projectPath, setError])
-  useEffect(() => { void scan(false) }, [scan])
+  useEffect(() => {
+    void scan(false)
+    return () => { scanGeneration.current += 1 }
+  }, [scan])
   return { data, index, busy, scan }
 }
 

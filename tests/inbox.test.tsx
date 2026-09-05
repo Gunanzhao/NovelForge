@@ -54,4 +54,14 @@ describe('inbox integration', () => {
     expect(useAppStore.getState().data?.entities.find((item) => item.id === inbox.id)?.content.processed).toBe(false)
     expect(api.upsertEntity).toHaveBeenCalledTimes(1)
   })
+
+  it('does not retain a selected item hidden by the processed tab', () => {
+    const processed = { ...inbox, id: 'processed', title: '已整理灵感', content: { content: '已归档正文', processed: true } }
+    useAppStore.setState({ data: { ...project, entities: [inbox, processed] } })
+    const { container } = render(<InboxView />)
+    fireEvent.click(screen.getByRole('button', { name: /钟声线索/u }))
+    fireEvent.click(screen.getByRole('button', { name: /^已整理/u }))
+    expect(container.textContent).toContain('已归档正文')
+    expect(container.textContent).not.toContain('午夜钟声。')
+  })
 })

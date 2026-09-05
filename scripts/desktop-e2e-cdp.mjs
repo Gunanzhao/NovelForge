@@ -1053,7 +1053,7 @@ async function run() {
     await clickSelectorContains(page, '.prompt-preset-list button', '章节验收预设')
     await clickSelector(page, '.prompt-preset-actions button', '运行')
     await waitForText(page, 'Prompt 预览 · 章节验收预设')
-    await waitForCondition(page, "document.querySelector('.prompt-preview-text')?.textContent?.includes('林月来到雾港')", '提示词显式上下文预览')
+    await waitForCondition(page, "(() => { const blocks = Array.from(document.querySelectorAll('.prompt-preview-text')); return blocks.length === 2 && blocks[0].textContent.includes('NovelForge') && blocks[1].textContent.includes('林月来到雾港') })()", '提示词完整 System/User 上下文预览')
     await clickModalButton(page, '确认运行')
     await waitForCondition(page, "(document.querySelector('.ai-result-text')?.value||'').length > 0", '提示词预设运行结果')
     await clickSelector(page, '.ai-result-actions button', '复制')

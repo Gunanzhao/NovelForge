@@ -2,6 +2,8 @@ use super::*;
 
 #[derive(Debug, Clone, Default)]
 pub struct MirrorMetadata {
+    /// Versioned JSON is authoritative; the Markdown body is a readable view.
+    pub entity_data: Option<String>,
     pub id: Option<String>,
     pub kind: Option<String>,
     pub parent_id: Option<String>,
@@ -12,11 +14,7 @@ pub struct MirrorMetadata {
 }
 
 fn clean_metadata_value(value: &str) -> String {
-    value
-        .replace('\r', " ")
-        .replace('\n', " ")
-        .trim()
-        .to_string()
+    value.replace(['\r', '\n'], " ").trim().to_string()
 }
 
 fn parse_metadata_line(line: &str, metadata: &mut MirrorMetadata) -> bool {
@@ -24,6 +22,10 @@ fn parse_metadata_line(line: &str, metadata: &mut MirrorMetadata) -> bool {
         return false;
     };
     let key = key.trim();
+    if key == "novelforgeEntity" {
+        metadata.entity_data = Some(value.trim().to_string());
+        return true;
+    }
     let value = value.trim().trim_matches('"').trim_matches('\'');
     let value = (!value.is_empty() && value != "null").then(|| value.to_string());
     match key {
@@ -47,7 +49,7 @@ pub fn parse_markdown_mirror(raw: &str) -> (Option<MirrorMetadata>, String) {
         return (None, raw.to_string());
     };
     let first_line = first
-        .trim_end_matches(|character| character == '\r' || character == '\n')
+        .trim_end_matches(['\r', '\n'])
         .trim_start_matches('\u{feff}')
         .trim();
     if first_line != "---" {
@@ -59,14 +61,13 @@ pub fn parse_markdown_mirror(raw: &str) -> (Option<MirrorMetadata>, String) {
     let mut closed = false;
     for line in lines {
         body_start += line.len();
-        let trimmed = line
-            .trim_end_matches(|character| character == '\r' || character == '\n')
-            .trim();
+        let trimmed = line.trim_end_matches(['\r', '\n']).trim();
         if trimmed == "---" {
             closed = true;
             break;
         }
-        recognized |= parse_metadata_line(trimmed, &mut metadata);
+        let parsed = parse_metadata_line(trimmed, &mut metadata);
+        recognized |= parsed && trimmed.starts_with("novelforge");
     }
     if !closed || !recognized {
         return (None, raw.to_string());
@@ -113,7 +114,13 @@ pub fn markdown_node(
     output
 }
 
-pub fn markdown_volume(id: &str, title: &str, status: &str, created_at: &str, updated_at: &str) -> String {
+pub fn markdown_volume(
+    id: &str,
+    title: &str,
+    status: &str,
+    created_at: &str,
+    updated_at: &str,
+) -> String {
     let mut output = metadata_block(&[
         ("novelforgeId", Some(id)),
         ("novelforgeKind", Some("volume")),
@@ -128,6 +135,13 @@ pub fn markdown_volume(id: &str, title: &str, status: &str, created_at: &str, up
     output
 }
 
+/// Entity mirror format: `novelforgeEntity` contains version 1 JSON with exact title,
+/// content (including its JSON types) and tags; the following Markdown remains human-readable.
+/// Recovery checks that the body matches this readable projection (allowing CRLF conversion).
+/// Manual edits must update both representations; conflicting, corrupt or unknown-version
+/// structures fail recovery and preserve the source, never fall back to the legacy parser.
+/// Mirrors without this key use the legacy best-effort parser: their ambiguous field
+/// boundaries cannot be reconstructed exactly, so recovery must not rewrite those originals.
 pub fn markdown_entity_with_metadata(
     id: &str,
     kind: &str,
@@ -143,20 +157,35 @@ pub fn markdown_entity_with_metadata(
         ("novelforgeCreatedAt", Some(created_at)),
         ("novelforgeUpdatedAt", Some(updated_at)),
     ]);
+    // JSON escapes newlines and headings, preserving exact field values and types.
+    let data =
+        serde_json::json!({ "version": 1, "title": title, "content": content, "tags": tags });
+    output.truncate(output.len() - "---\n".len());
+    output.push_str("novelforgeEntity: ");
+    output.push_str(&data.to_string());
+    output.push_str("\n---\n");
     output.push_str(&markdown_entity(title, content, tags));
     output
 }
 
 pub fn kind_directory(kind: &str) -> Result<&'static str, String> {
     match kind {
-        "character" => Ok("characters"), "location" => Ok("locations"), "world" => Ok("world"),
-        "timeline" => Ok("timeline"), "foreshadowing" => Ok("foreshadowing"), "relationship" => Ok("relationships"), "attachment" => Ok("attachments"),
-        "outline" => Ok("outlines"), "scene" => Ok("scenes"), "note" => Ok("notes"),
+        "character" => Ok("characters"),
+        "location" => Ok("locations"),
+        "world" => Ok("world"),
+        "timeline" => Ok("timeline"),
+        "foreshadowing" => Ok("foreshadowing"),
+        "relationship" => Ok("relationships"),
+        "attachment" => Ok("attachments"),
+        "outline" => Ok("outlines"),
+        "scene" => Ok("scenes"),
+        "note" => Ok("notes"),
         "mention-ignore" => Ok("mentions"),
         "story-arc" => Ok("story-arcs"),
         "prompt-preset" => Ok("prompts"),
         "inbox" => Ok("inbox"),
-        "checklist-template" => Ok("checklist-templates"), "chapter-checklist" => Ok("checklists"),
+        "checklist-template" => Ok("checklist-templates"),
+        "chapter-checklist" => Ok("checklists"),
         _ => Err(format!("不支持的资料类型：{}", kind)),
     }
 }
@@ -171,7 +200,10 @@ pub fn markdown_entity(title: &str, content: &Value, tags: &[String]) -> String 
             if key == "description" || key == "notes" || key == "summary" {
                 continue;
             }
-            let display = match value { Value::String(text) => text.clone(), _ => value.to_string() };
+            let display = match value {
+                Value::String(text) => text.clone(),
+                _ => value.to_string(),
+            };
             if !display.is_empty() {
                 output.push_str(&format!("## {}\n\n{}\n\n", key, display));
             }
@@ -188,4 +220,3 @@ pub fn markdown_entity(title: &str, content: &Value, tags: &[String]) -> String 
     }
     output
 }
-

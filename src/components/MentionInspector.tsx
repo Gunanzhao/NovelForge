@@ -70,7 +70,11 @@ export function MentionInspector() {
           firstAppearanceTitle: currentDocument.node.title,
         },
       })
-      if (insertWiki) updateContent(insertMentionWiki(currentDocument.content, mention))
+      const latest = useAppStore.getState()
+      if (insertWiki && latest.projectPath === currentProjectPath && latest.document?.node.id === currentDocument.node.id) {
+        // Only replace a range that still contains the scanned text; never restore an old snapshot.
+        updateContent(insertMentionWiki(latest.document.content, mention))
+      }
       setScanVersion((version) => version + 1)
     } catch (error) {
       setError(error)

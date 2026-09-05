@@ -29,7 +29,12 @@ pub fn read_recovery(input: RecoveryActionInput) -> Result<String, String> {
 #[tauri::command]
 pub fn restore_recovery(input: RecoveryActionInput) -> Result<ProjectData, String> {
     let (root, mut connection) = project_connection(&input.project_path)?;
-    let node_id = input.recovery_id.split("--").next().unwrap_or_default().to_string();
+    let node_id = input
+        .recovery_id
+        .split("--")
+        .next()
+        .unwrap_or_default()
+        .to_string();
     if node_id.is_empty() {
         return Err("恢复文件关联的章节无效".to_string());
     }
@@ -66,7 +71,11 @@ pub struct RevisionActionInput {
 pub fn read_history(input: RevisionActionInput) -> Result<String, String> {
     let (root, connection) = project_connection(&input.project_path)?;
     let path: String = connection
-        .query_row("SELECT file_path FROM revisions WHERE id = ?1", params![input.revision_id], |row| row.get(0))
+        .query_row(
+            "SELECT file_path FROM revisions WHERE id = ?1",
+            params![input.revision_id],
+            |row| row.get(0),
+        )
         .map_err(|error| format!("版本不存在：{}", error))?;
     let content = fs::read_to_string(storage::safe_relative(&root, &path)?)
         .map_err(|error| format!("无法读取历史内容：{}", error))?;
@@ -77,7 +86,11 @@ pub fn read_history(input: RevisionActionInput) -> Result<String, String> {
 pub fn restore_history(input: RevisionActionInput) -> Result<ProjectData, String> {
     let (root, mut connection) = project_connection(&input.project_path)?;
     let (node_id, path): (String, String) = connection
-        .query_row("SELECT node_id, file_path FROM revisions WHERE id = ?1", params![input.revision_id], |row| Ok((row.get(0)?, row.get(1)?)))
+        .query_row(
+            "SELECT node_id, file_path FROM revisions WHERE id = ?1",
+            params![input.revision_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
         .map_err(|error| format!("版本不存在：{}", error))?;
     let content = fs::read_to_string(storage::safe_relative(&root, &path)?)
         .map_err(|error| format!("无法读取历史内容：{}", error))?;
