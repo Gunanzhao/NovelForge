@@ -80,6 +80,11 @@ export function writeAiPreferences(preferences: AiPreferences) {
   try { localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences)) } catch { /* 偏好不是核心数据 */ }
 }
 
+export function parseTemperature(value: string): number {
+  const number = Number.parseFloat(value)
+  return Number.isFinite(number) ? Math.max(0, Math.min(2, number)) : 0.7
+}
+
 export function paragraphRange(content: string, position = 0) {
   if (!content) return null
   const safePosition = Math.max(0, Math.min(position, content.length))

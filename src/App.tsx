@@ -121,11 +121,15 @@ export default function App() {
   useEffect(() => { loadRecent() }, [loadRecent])
 
   useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
     const applyTheme = () => {
-      const resolved = theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : theme === 'system' ? 'light' : theme
+      const resolved = theme === 'system' ? media.matches ? 'dark' : 'light' : theme
       globalThis.document.documentElement.dataset.theme = resolved
     }
     applyTheme()
+    if (theme !== 'system') return
+    media.addEventListener('change', applyTheme)
+    return () => media.removeEventListener('change', applyTheme)
   }, [theme])
 
   useEffect(() => {

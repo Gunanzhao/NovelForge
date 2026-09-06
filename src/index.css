@@ -63,9 +63,9 @@ button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .52; }
 
-.app-shell { display: grid; grid-template-rows: 54px 1fr 28px; height: 100%; min-width: 1100px; background: var(--bg); }
+.app-shell { display: grid; grid-template-rows: 54px minmax(0, 1fr) 28px; height: 100%; min-width: 0; background: var(--bg); }
 .app-shell.focus-mode { grid-template-rows: 1fr; min-width: 0; }
-.topbar { display: flex; align-items: center; gap: 18px; padding: 0 17px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.topbar { display: flex; min-width: 0; align-items: center; gap: 18px; padding: 0 17px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 185px; }
 .brand-mark { display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid var(--accent); border-radius: 7px; color: var(--accent); font-family: Georgia, serif; font-size: 17px; font-weight: 700; }
 .brand-name { letter-spacing: .03em; font-size: 14px; font-weight: 650; }
@@ -163,7 +163,7 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .editor-title-row { display: flex; align-items: center; gap: 13px; padding: 15px 19px 11px; }
 .editor-title-row h1 { flex: 1; overflow: hidden; margin: 0; text-overflow: ellipsis; white-space: nowrap; font-family: Georgia, "Noto Serif SC", serif; font-size: 20px; font-weight: 600; }
 .editor-title-row small { color: var(--muted); font-size: 11px; }
-.editor-toolbar { display: flex; align-items: center; gap: 3px; padding: 0 17px 10px; }
+.editor-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; padding: 0 17px 10px; }
 .toolbar-separator { width: 1px; height: 18px; margin: 0 6px; background: var(--line); }
 .mode-switch { display: flex; margin-left: auto; padding: 2px; border-radius: 6px; background: var(--surface-2); }
 .mode-switch button { min-height: 25px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); font-size: 10px; }
@@ -260,6 +260,13 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .recovery-banner { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--yellow-soft); color: var(--yellow); font-size: 11px; }.recovery-banner strong { font-weight: 650; }.recovery-banner .banner-actions { display: flex; gap: 5px; margin-left: auto; }.toast-error { position: fixed; z-index: 30; right: 18px; bottom: 44px; display: flex; align-items: flex-start; gap: 9px; max-width: 420px; padding: 12px 14px; border: 1px solid var(--danger); border-radius: 7px; background: var(--danger-soft); color: var(--danger); box-shadow: var(--shadow); font-size: 11px; }.toast-error button { margin-left: 8px; border: 0; background: transparent; color: inherit; }
 
 @media (max-width: 1250px) {
+  .topbar { gap: 8px; padding-inline: 10px; }
+  .brand { min-width: 125px; }
+  .brand-subtitle { display: none; }
+  .topbar-actions .button { padding-inline: 7px; white-space: nowrap; }
+  .topbar-actions { gap: 2px; flex-shrink: 0; }
+  .editor-title-row > div { min-width: 0; }
+  .editor-title-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .main-layout { grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--inspector-width); }
   .main-layout.sidebar-closed { grid-template-columns: 0 minmax(0, 1fr) var(--inspector-width); }
   .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -14,7 +14,7 @@ vi.mock('../src/lib/api', () => ({
 }))
 
 import { AiAssistantView } from '../src/components/AiAssistantView'
-import { writeAiPreferences } from '../src/lib/ai-data'
+import { readAiPreferences, writeAiPreferences } from '../src/lib/ai-data'
 import type { NodeRecord, ProjectData } from '../src/lib/types'
 import { useAppStore } from '../src/stores/app-store'
 
@@ -98,5 +98,14 @@ describe('AiAssistantView insecure HTTP confirmation', () => {
     await user.click(screen.getByRole('button', { name: '运行辅助' }))
     await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1))
     expect(aiComplete).not.toHaveBeenCalled()
+  })
+  it('persists and sends Temperature zero without replacing it with the default', async () => {
+    writeAiPreferences({ endpoint: 'https://provider.example/v1', model: 'mock-model', temperature: 0 })
+    render(<AiAssistantView />)
+    await waitFor(() => expect(screen.getByText(/1 项上下文/u)).toBeTruthy())
+    fireEvent.click(screen.getByRole('button', { name: '运行辅助' }))
+    await waitFor(() => expect(aiComplete).toHaveBeenCalledTimes(1))
+    expect(aiComplete.mock.calls[0][0]).toMatchObject({ temperature: 0 })
+    expect(readAiPreferences().temperature).toBe(0)
   })
 })

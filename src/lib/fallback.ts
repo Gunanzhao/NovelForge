@@ -245,7 +245,11 @@ export function exportText(store: FallbackStore, format: 'markdown' | 'txt' | 'h
     const heading = includeTitle
       ? format === 'markdown' ? '\n' + '#'.repeat(Math.max(1, level)) + ' ' + current.title + '\n' : '\n' + current.title + '\n'
       : ''
-    const body = current.kind === 'volume' ? '' : '\n' + (store.documents[current.id] ?? '').replace(/^# .*\n?/u, '').trim() + '\n'
+    let content = store.documents[current.id] ?? ''
+    const trimmed = content.replace(/^[\r\n]+/u, '')
+    const firstLine = trimmed.split('\n', 1)[0]
+    if (firstLine.trimEnd() === '# ' + current.title.trim()) content = trimmed.slice(firstLine.length).replace(/^[\r\n]+/u, '')
+    const body = current.kind === 'volume' ? '' : '\n' + content.trim() + '\n'
     const children = active.filter((item) => item.parentId === current.id).sort((a, b) => a.orderIndex - b.orderIndex).map((item) => renderNode(item, level + 1)).join('')
     return heading + body + children
   }

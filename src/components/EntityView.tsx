@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { Copy, Plus, Save, Search, Trash2 } from 'lucide-react'
 import { ENTITY_FIELDS, ENTITY_LABELS } from '../lib/types'
 import type { EntityDraft, EntityKind, SearchResult } from '../lib/types'
 import { getObjectString } from '../lib/utils'
 import { projectApi } from '../lib/api'
-import { useAppStore } from '../stores/app-store'
+import { captureProjectSession, isCurrentProjectSession, useAppStore } from '../stores/app-store'
 import type { ContextMenuItem } from '../lib/context-menu'
 import { writeClipboardText } from '../lib/clipboard'
 import { Button, Field, TextInput } from './ui'
@@ -94,6 +94,9 @@ export function EntityView({ kind }: { kind: EntityKind }) {
   const [sortMode, setSortMode] = useState<'created' | 'title' | 'updated'>('created')
   const [customFields, setCustomFields] = useState<Array<{ key: string; value: string }>>([])
   const [busy, setBusy] = useState(false)
+  const saving = useRef(false)
+  const newEntityId = useRef<string | null>(null)
+  useEffect(() => { newEntityId.current = null }, [kind, selectedEntityId, projectPath])
   const [references, setReferences] = useState<SearchResult[]>([])
   const [referencesBusy, setReferencesBusy] = useState(false)
   const entities = useMemo(() => data?.entities.filter((entity) => entity.kind === kind) ?? [], [data?.entities, kind])
@@ -170,7 +173,11 @@ export function EntityView({ kind }: { kind: EntityKind }) {
   }
 
   async function submit() {
-    if (!draft.title.trim()) return
+    if (!draft.title.trim() || saving.current) return
+    saving.current = true
+    const session = captureProjectSession()
+    const view = useAppStore.getState().activeView
+    const id = selected?.id ?? (newEntityId.current ??= crypto.randomUUID())
     setBusy(true)
     try {
       const fixedKeys = new Set(ENTITY_FIELDS[kind].map((field) => field.key))
@@ -179,15 +186,16 @@ export function EntityView({ kind }: { kind: EntityKind }) {
         .filter((field) => field.key && !fixedKeys.has(field.key) && !(kind === 'location' && field.key === 'parent') && field.value.trim() !== '')
         .map((field) => [field.key, field.value]))
       await saveEntity({
-        projectPath: currentProjectPath, kind, id: selected?.id ?? null, title: draft.title.trim(),
+        projectPath: currentProjectPath, kind, id, title: draft.title.trim(),
         content: {
           ...Object.fromEntries(Object.entries(draft.fields).filter(([, value]) => value.trim() !== '')),
           ...customContent,
         },
         tags: draft.tags.split(/[,，]/u).map((tag) => tag.trim()).filter(Boolean),
       })
-      selectEntity(kind, selected?.id ?? null)
-    } catch (error) { setError(error) } finally { setBusy(false) }
+      const current = useAppStore.getState()
+      if (isCurrentProjectSession(session) && current.activeView === view && current.selectedEntityId === selectedEntityId) selectEntity(kind, id)
+    } catch (error) { if (isCurrentProjectSession(session)) setError(error) } finally { saving.current = false; setBusy(false) }
   }
 
   async function remove() {
