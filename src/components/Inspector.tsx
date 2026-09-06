@@ -1,3 +1,4 @@
+import { linkedAttachments } from '../lib/attachment-data'
 import { useEffect, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { ChevronDown, ChevronUp, Clipboard, GitCompare, History, Lightbulb, RotateCcw } from 'lucide-react'
 import { projectApi } from '../lib/api'
@@ -35,6 +36,7 @@ export function Inspector() {
   }, [document, projectPath, setError])
 
   if (!document || !data || !projectPath) return <aside className="inspector"><div className="inspector-inner"><div className="empty-state"><Lightbulb size={22} /><div><strong>辅助栏</strong><span>选择章节后，这里会显示字数、设定链接、写作提示和版本历史。</span></div></div></div></aside>
+  const attachments = linkedAttachments(data.entities, data.nodes, document.node.id)
   const currentDocument = document
   const currentProjectPath = projectPath
   const hints = writingHints(document.content)
@@ -118,6 +120,7 @@ export function Inspector() {
       <div className="inspector-head"><div><h2>辅助栏</h2><small>当前章节</small></div><span className="tag">{formatNumber(wordCount)} 字</span></div>
       <div className="inspector-section"><h3>章节信息</h3><div className="inspector-meta"><div className="meta-row"><span>标题</span><strong>{document.node.title}</strong></div><div className="meta-row"><span>状态</span><strong>{NODE_STATUS_LABELS[document.node.status] ?? document.node.status}</strong></div><div className="meta-row"><span>文件</span><strong className="path-text" title={document.node.filePath}>{document.node.filePath}</strong></div><div className="meta-row"><span>更新时间</span><strong>{formatDate(document.node.updatedAt)}</strong></div></div></div>
       <div className="inspector-section"><div className="panel-title"><h3>设定链接</h3><span>{targets.length} 个</span></div>{targets.length ? <div className="wiki-list">{targets.map((target, index) => { const matches = foundEntities(target); const label = matches.length > 1 ? target + '（' + matches.length + ' 个同名）' : matches.length ? target : target + '（未建档）'; return <button type="button" key={target + '-' + String(index)} className={'wiki-chip' + (matches.length !== 1 ? ' missing' : '')} onClick={() => openWikiTarget(target)}>{label}</button> })}</div> : <span className="field-hint">在正文中输入 [[人物名]]、[[地点名]] 或 [[世界观条目]]，这里会自动列出链接。</span>}</div>
+      <div className="inspector-section linked-attachments"><div className="panel-title"><h3>关联附件</h3><span>{attachments.length} 个</span></div>{attachments.length ? <><div className="planning-reference-list">{attachments.map(attachment => <button type="button" className="planning-reference" key={attachment.id} onClick={() => selectEntity('attachment', attachment.id)}>{attachment.title}</button>)}</div><p className="field-hint">AI 辅助可显式勾选这些附件的说明文本。</p></> : <span className="field-hint">在资料附件中选择本章，参考素材就会显示在这里。</span>}</div>
       <div className="inspector-section"><div className="panel-title"><h3>写作提示</h3><span>{hints.length ? hints.length + ' 项待确认' : '干净'}</span></div>{hints.length ? <div className="hint-list">{hints.slice(0, 4).map((hint, index) => <div className="hint-item" key={index}>第 {hint.line} 行：{hint.message}<small>{hint.sample || '空行'}</small></div>)}</div> : <div className="field-hint"><Lightbulb size={12} /> 暂未发现明显的标点或空白问题。</div>}<div className="inspector-actions" style={{ marginTop: 10 }}><Button variant="outline" onClick={() => punctuation('full')}>标点转全角</Button><Button variant="outline" onClick={() => punctuation('half')}>标点转半角</Button><Button variant="outline" onClick={() => width('full')}>字符转全角</Button><Button variant="outline" onClick={() => width('half')}>字符转半角</Button><Button variant="outline" onClick={() => transformContent(cleanWritingWhitespace, '清理行尾空格并合并连续空行？')}>清理空格/空行</Button><Button variant="outline" onClick={() => transformContent(indentParagraphs, '为普通段落添加全角空格首行缩进？')}>首行缩进</Button></div></div>
       <div className="inspector-section"><NameGenerator /></div>
       <div className="inspector-section"><MentionInspector /></div>

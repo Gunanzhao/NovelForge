@@ -133,15 +133,31 @@ struct ExportDocument {
     blocks: Vec<ExportBlock>,
 }
 
-fn export_fence_character(line: &str) -> Option<char> {
-    let trimmed = line.trim_start();
-    if trimmed.as_bytes().starts_with(&[96, 96, 96]) {
-        Some(char::from(96))
-    } else if trimmed.starts_with("~~~") {
-        Some('~')
-    } else {
-        None
+fn export_fence(line: &str) -> Option<(char, usize)> {
+    let indent = line.chars().take_while(|c| *c == ' ').count();
+    if indent > 3 {
+        return None;
     }
+    let trimmed = &line[indent..];
+    let character = trimmed.chars().next()?;
+    if !matches!(character, '`' | '~') {
+        return None;
+    }
+    let length = trimmed.chars().take_while(|c| *c == character).count();
+    if length < 3 || (character == '`' && trimmed[length..].contains('`')) {
+        return None;
+    }
+    Some((character, length))
+}
+
+fn closes_export_fence(line: &str, character: char, length: usize) -> bool {
+    let indent = line.chars().take_while(|c| *c == ' ').count();
+    if indent > 3 {
+        return false;
+    }
+    let trimmed = &line[indent..];
+    let run = trimmed.chars().take_while(|c| *c == character).count();
+    run >= length && trimmed[run..].trim().is_empty()
 }
 
 fn export_list_marker(line: &str) -> Option<(bool, Option<bool>, String)> {
@@ -227,7 +243,7 @@ fn export_is_block_start(line: &str) -> bool {
     let trimmed = line.trim();
     !trimmed.is_empty()
         && (heading_level(trimmed).is_some()
-            || export_fence_character(trimmed).is_some()
+            || export_fence(line).is_some()
             || export_list_marker(trimmed).is_some()
             || trimmed.starts_with('>')
             || export_is_horizontal_rule(trimmed)
@@ -389,12 +405,11 @@ fn parse_export_document(markdown: &str) -> ExportDocument {
             });
             continue;
         }
-        if let Some(fence) = export_fence_character(trimmed) {
+        if let Some(fence) = export_fence(line) {
             index += 1;
             let mut code = Vec::new();
             while index < lines.len() {
-                if export_fence_character(lines[index]).is_some_and(|character| character == fence)
-                {
+                if closes_export_fence(lines[index], fence.0, fence.1) {
                     index += 1;
                     break;
                 }
@@ -1749,6 +1764,28 @@ pub fn export_project(input: ExportInput) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn exported_fences_preserve_long_delimiters_and_reject_false_closers() {
+        for (open, inside, close) in [
+            ("````text", "```", "````"),
+            ("~~~~", "~~~", "~~~~~"),
+            ("```", "```still-code", "```"),
+        ] {
+            let source = format!("{open}\nCODE_A\n{inside}\n# INSIDE_CODE\n{close}\nAFTER_CODE");
+            let document = parse_export_document(&source);
+            let (html, _) = export_html_fragment(&document, false);
+            assert!(
+                html.contains(&format!(
+                    "<pre><code>CODE_A\n{inside}\n# INSIDE_CODE</code></pre><p>AFTER_CODE</p>"
+                )),
+                "{html}"
+            );
+            assert!(export_plain_text(&document).contains("# INSIDE_CODE"));
+        }
+        let document = parse_export_document("````\n```\n# STILL_CODE");
+        let (html, _) = export_html_fragment(&document, false);
+        assert!(html.contains("<pre><code>```\n# STILL_CODE</code></pre>"));
+    }
 
     #[test]
     fn export_rejects_unreadable_or_invalid_chapters_in_every_format() {

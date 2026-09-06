@@ -1,3 +1,4 @@
+import { attachmentContextText } from '../lib/attachment-data'
 import { isNodeLocked } from '../lib/node-lock'
 import { parseTemperature } from '../lib/ai-data'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -218,7 +219,7 @@ export function AiAssistantView() {
       }
     } else {
       const entity = data?.entities.find((candidate) => candidate.id === item.id)
-      if (entity) content = JSON.stringify({ tags: entity.tags, ...entity.content }, null, 2)
+      if (entity) content = entity.kind === 'attachment' ? attachmentContextText(entity) : JSON.stringify({ tags: entity.tags, ...entity.content }, null, 2)
     }
     return content
   }
