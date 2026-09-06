@@ -792,15 +792,17 @@ pub(crate) fn save_document_internal(
     if node.deleted_at.is_some() || node.kind == "volume" {
         return Err("只有未删除的章节或小节可以编辑".to_string());
     }
-    let target = storage::safe_relative(root, &node.file_path)?;
+    let (_recovery_id, recovery_path) = storage::write_recovery(root, node_id, content)?;
+    let target = storage::safe_relative(root, &node.file_path)
+        .map_err(|error| format!("{}；恢复文件已保留", error))?;
     let target_existed = target.exists();
     let old_raw_content = if target_existed {
-        fs::read_to_string(&target).map_err(|error| format!("读取原正文失败：{}", error))?
+        fs::read_to_string(&target)
+            .map_err(|error| format!("读取原正文失败：{}；恢复文件已保留", error))?
     } else {
         String::new()
     };
     let old_content = storage::strip_markdown_frontmatter(&old_raw_content);
-    let (_recovery_id, recovery_path) = storage::write_recovery(root, node_id, content)?;
     let persisted_timestamp = storage::now();
     let persisted_content = storage::markdown_node(
         &node.id,
@@ -811,7 +813,8 @@ pub(crate) fn save_document_internal(
         &persisted_timestamp,
         content,
     );
-    storage::atomic_write(&target, persisted_content.as_bytes())?;
+    storage::atomic_write(&target, persisted_content.as_bytes())
+        .map_err(|error| format!("{}；恢复文件已保留", error))?;
     let revision_id = storage::new_id();
     let revision_path = match storage::copy_history(root, node_id, &revision_id, content) {
         Ok(path) => path,

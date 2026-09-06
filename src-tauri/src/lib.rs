@@ -4,16 +4,35 @@ mod models;
 #[path = "storage/mod.rs"]
 mod storage_impl;
 
+#[tauri::command]
+async fn confirm_window_close(window: tauri::WebviewWindow) -> Result<(), String> {
+    use tauri::Manager;
+    let app = window.app_handle().clone();
+    let label = window.label().to_owned();
+    tauri::async_runtime::spawn_blocking(move || commands::codex::shutdown(&app, &label))
+        .await
+        .map_err(|_| "无法清理 Codex 子进程")?;
+    window
+        .destroy()
+        .map_err(|error| format!("关闭窗口失败：{error}"))
+}
+
 pub fn run() {
     let builder = tauri::Builder::default()
         .manage(commands::codex::CodexState::default())
         .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                use tauri::Emitter;
+                api.prevent_close();
+                let _ = window.emit("novelforge:request-close", ());
+            }
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 commands::codex::close(window);
             }
         })
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            confirm_window_close,
             commands::project::create_project,
             commands::project::open_project,
             commands::project::list_documents,

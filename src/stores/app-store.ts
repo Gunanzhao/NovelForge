@@ -20,6 +20,24 @@ export interface RecentProject {
 
 const RECENT_KEY = 'novelforge:recent-projects'
 let searchGeneration = 0
+let selectionGeneration = 0
+let transitionGeneration = 0
+
+export interface ProjectSession {
+  path: string | null
+  id: string | undefined
+  generation: number
+}
+
+export function captureProjectSession(): ProjectSession {
+  const state = useAppStore.getState()
+  return { path: state.projectPath, id: state.data?.project.id, generation: state.projectSession }
+}
+
+export function isCurrentProjectSession(session: ProjectSession) {
+  const state = useAppStore.getState()
+  return state.projectPath === session.path && state.data?.project.id === session.id && state.projectSession === session.generation
+}
 
 function readRecent(): RecentProject[] {
   try {
@@ -60,6 +78,7 @@ const emptyStats: Stats = {
 
 interface AppState {
   projectPath: string | null
+  projectSession: number
   data: ProjectData | null
   document: DocumentData | null
   editorSelection: EditorSelection | null
@@ -95,11 +114,11 @@ interface AppState {
   openProject: (path: string) => Promise<void>
   closeProject: () => Promise<boolean>
   loadRecent: () => void
-  selectNode: (nodeId: string) => Promise<void>
+  selectNode: (nodeId: string, reload?: boolean) => Promise<void>
   setEditorSelection: (selection: EditorSelection | null) => void
   updateContent: (content: string) => void
   saveCurrentDocument: (reason?: string) => Promise<boolean>
-  refreshData: (data: ProjectData, preserveSelection?: boolean) => Promise<void>
+  refreshData: (data: ProjectData, preserveSelection?: boolean, session?: ProjectSession) => Promise<void>
   createNode: (kind: NodeRecord['kind'], title: string, parentId: string | null) => Promise<void>
   renameNode: (nodeId: string, title: string) => Promise<void>
   setNodeStatus: (nodeId: string, status: string) => Promise<void>
@@ -124,6 +143,7 @@ let activeSave: Promise<boolean> | null = null
 
 export const useAppStore = create<AppState>((set, get) => ({
   projectPath: null,
+  projectSession: 0,
   data: null,
   document: null,
   editorSelection: null,
@@ -185,11 +205,13 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   createProject: async (input) => {
+    const request = ++transitionGeneration
     try {
       if (get().document && get().saveState !== 'saved') {
         const saved = await get().saveCurrentDocument('切换项目前保存')
         if (!saved) throw new Error('当前正文保存失败，已取消创建新项目')
       }
+      if (request !== transitionGeneration) return
       let data = await projectApi.create(input)
       let checklistError: unknown = null
       const initialChapter = firstChapter(data)
@@ -197,43 +219,59 @@ export const useAppStore = create<AppState>((set, get) => ({
         try { data = await addInitialChecklist(input.path, data, initialChapter) }
         catch (error) { checklistError = error }
       }
-      set((state) => ({ projectPath: input.path, data, document: null, editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null }))
+      if (request !== transitionGeneration) return
+      if (get().document && get().saveState !== 'saved' && !await get().saveCurrentDocument('切换项目前保存')) throw new Error('当前正文保存失败，已保留当前项目')
+      if (request !== transitionGeneration) return
+      ++selectionGeneration
+      set((state) => ({ projectPath: input.path, projectSession: state.projectSession + 1, data, document: null, editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], stats: emptyStats, saveState: 'saved' }))
       if (checklistError) get().setError(checklistError)
       const chapter = firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
+      if (request !== transitionGeneration) return
       set({ recentProjects: rememberProject(input.path, data) })
       await get().refreshStats()
     } catch (error) {
-      get().setError(error)
+      if (request === transitionGeneration) get().setError(error)
       throw error
     }
   },
 
   openProject: async (path) => {
+    const request = ++transitionGeneration
     try {
       if (get().document && get().saveState !== 'saved') {
         const saved = await get().saveCurrentDocument('切换项目前保存')
         if (!saved) throw new Error('当前正文保存失败，已取消打开其他项目')
       }
+      if (request !== transitionGeneration) return
       const data = await projectApi.open(path)
-      set((state) => ({ projectPath: path, data, document: null, editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null }))
+      if (request !== transitionGeneration) return
+      if (get().document && get().saveState !== 'saved' && !await get().saveCurrentDocument('切换项目前保存')) throw new Error('当前正文保存失败，已保留当前项目')
+      if (request !== transitionGeneration) return
+      ++selectionGeneration
+      set((state) => ({ projectPath: path, projectSession: state.projectSession + 1, data, document: null, editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], stats: emptyStats, saveState: 'saved' }))
       const chapter = firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
+      if (request !== transitionGeneration) return
       set({ recentProjects: rememberProject(path, data) })
       await get().refreshStats()
     } catch (error) {
-      get().setError(error)
+      if (request === transitionGeneration) get().setError(error)
       throw error
     }
   },
 
   closeProject: async () => {
+    const request = ++transitionGeneration
     if (get().document && get().saveState !== 'saved') {
       const saved = await get().saveCurrentDocument('关闭项目前保存')
       if (!saved) return false
     }
+    if (request !== transitionGeneration) return false
+    ++selectionGeneration
     set((state) => ({
       projectPath: null,
+      projectSession: state.projectSession + 1,
       data: null,
       document: null,
       editorSelection: null,
@@ -250,7 +288,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     return true
   },
 
-  selectNode: async (nodeId) => {
+  selectNode: async (nodeId, reload = false) => {
+    const request = ++selectionGeneration
+    const session = captureProjectSession()
     const path = get().projectPath
     if (!path) return
     const current = get().document
@@ -258,17 +298,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       const saved = await get().saveCurrentDocument('切换章节前保存')
       if (!saved) return
     }
+    if (request !== selectionGeneration || !isCurrentProjectSession(session)) return
     const selected = get().data?.nodes.find((node) => node.id === nodeId)
     if (!selected || selected.kind === 'volume') {
-      set({ document: null })
+      set((state) => ({ document: null, editorSelection: null, documentVersion: state.documentVersion + 1 }))
       return
     }
+    if (!reload && get().document?.node.id === nodeId) { set({ activeView: 'manuscript', selectedEntityId: null }); return }
+    const version = get().documentVersion
     try {
       const document = await projectApi.getDocument({ projectPath: path, nodeId })
-      if (get().projectPath !== path) return
+      if (request !== selectionGeneration || !isCurrentProjectSession(session) || get().documentVersion !== version) return
       set((state) => ({ document, editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', selectedEntityId: null, error: null, saveState: 'saved' }))
     } catch (error) {
-      get().setError(error)
+      if (request === selectionGeneration && isCurrentProjectSession(session)) get().setError(error)
     }
   },
 
@@ -281,6 +324,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       while (true) {
         const { projectPath, document, documentVersion } = get()
         if (!projectPath || !document) return true
+        const session = captureProjectSession()
         const savedProjectPath = projectPath
         const savedNodeId = document.node.id
         const savedContent = document.content
@@ -289,6 +333,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           const saved = await projectApi.saveDocument({
             projectPath: savedProjectPath, nodeId: savedNodeId, content: savedContent, reason,
           })
+          if (!isCurrentProjectSession(session)) return true
           const current = get()
           const sameDocument = current.projectPath === savedProjectPath && current.document?.node.id === savedNodeId
           const sameVersion = sameDocument && current.documentVersion === documentVersion && current.document?.content === savedContent
@@ -305,6 +350,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           await get().refreshStats()
           return true
         } catch (error) {
+          if (!isCurrentProjectSession(session) || get().document?.node.id !== savedNodeId) return false
           set({ saveState: 'error' })
           get().setError(error)
           return false
@@ -314,7 +360,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     return activeSave
   },
 
-  refreshData: async (data, preserveSelection = true) => {
+  refreshData: async (data, preserveSelection = true, session) => {
+    if (data.project.id !== get().data?.project.id || (session && !isCurrentProjectSession(session))) return
     const current = get().document
     const currentNode = current ? data.nodes.find((node) => node.id === current.node.id) : undefined
     set({
@@ -325,50 +372,56 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   createNode: async (kind, title, parentId) => {
+    const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
     try {
       const previousChapterIds = new Set(get().data?.nodes.filter((node) => node.kind === 'chapter').map((node) => node.id) ?? [])
       let data = await projectApi.createNode({ projectPath, kind, title, parentId })
-      await get().refreshData(data, true)
+      if (!isCurrentProjectSession(session)) return
+      await get().refreshData(data, true, session)
       if (kind === 'chapter') {
         const chapter = data.nodes.find((node) => node.kind === 'chapter' && !previousChapterIds.has(node.id))
         if (chapter) {
           try {
             data = await addInitialChecklist(projectPath, data, chapter)
-            await get().refreshData(data, true)
+            await get().refreshData(data, true, session)
           } catch (error) {
-            get().setError(error)
+            if (isCurrentProjectSession(session)) get().setError(error)
           }
         }
       }
-    } catch (error) { get().setError(error); throw error }
+    } catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
   },
 
   renameNode: async (nodeId, title) => {
+    const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
     try {
       const data = await projectApi.renameNode({ projectPath, nodeId, title })
-      await get().refreshData(data, true)
-    } catch (error) { get().setError(error); throw error }
+      await get().refreshData(data, true, session)
+    } catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
   },
 
   setNodeStatus: async (nodeId, status) => {
+    const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
-    try { await get().refreshData(await projectApi.setNodeStatus({ projectPath, nodeId, status }), true) }
-    catch (error) { get().setError(error) }
+    try { await get().refreshData(await projectApi.setNodeStatus({ projectPath, nodeId, status }), true, session) }
+    catch (error) { if (isCurrentProjectSession(session)) get().setError(error) }
   },
 
   reorderNode: async (nodeId, direction) => {
+    const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
-    try { await get().refreshData(await projectApi.reorderNode({ projectPath, nodeId, direction }), true) }
-    catch (error) { get().setError(error) }
+    try { await get().refreshData(await projectApi.reorderNode({ projectPath, nodeId, direction }), true, session) }
+    catch (error) { if (isCurrentProjectSession(session)) get().setError(error) }
   },
 
   moveNode: async (nodeId, targetParentId, targetOrderIndex) => {
+    const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
     try {
@@ -376,21 +429,24 @@ export const useAppStore = create<AppState>((set, get) => ({
         const saved = await get().saveCurrentDocument('移动节点前保存')
         if (!saved) throw new Error('当前正文保存失败，已取消移动')
       }
+      if (!isCurrentProjectSession(session)) return
       const data = await projectApi.moveNode({ projectPath, nodeId, targetParentId, targetOrderIndex })
-      await get().refreshData(data, true)
-    } catch (error) { get().setError(error); throw error }
+      await get().refreshData(data, true, session)
+    } catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
   },
 
   copyNode: async (nodeId, targetParentId, title) => {
+    const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
     try {
       const data = await projectApi.copyNode({ projectPath, nodeId, targetParentId, title })
-      await get().refreshData(data, true)
-    } catch (error) { get().setError(error); throw error }
+      await get().refreshData(data, true, session)
+    } catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
   },
 
   deleteNode: async (nodeId) => {
+    const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
     try {
@@ -398,72 +454,83 @@ export const useAppStore = create<AppState>((set, get) => ({
         const saved = await get().saveCurrentDocument('删除节点前保存')
         if (!saved) throw new Error('当前正文保存失败，已取消删除')
       }
+      if (!isCurrentProjectSession(session)) return
       const data = await projectApi.deleteNode({ projectPath, nodeId })
+      if (!isCurrentProjectSession(session)) return
       const next = firstChapter(data)
       set((state) => ({ document: null, documentVersion: state.documentVersion + 1 }))
-      await get().refreshData(data, false)
+      await get().refreshData(data, false, session)
       if (next) await get().selectNode(next.id)
-    } catch (error) { get().setError(error); throw error }
+    } catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
   },
 
   selectEntity: (kind, entityId = null) => set({ activeView: kind, selectedEntityId: entityId }),
 
   saveEntity: async (input) => {
+    const session = captureProjectSession()
+    if (input.projectPath !== session.path) throw new Error('项目已切换，请重新打开资料后保存')
     try {
       const data = await projectApi.upsertEntity(input)
-      await get().refreshData(data, true)
-    } catch (error) { get().setError(error); throw error }
+      await get().refreshData(data, true, session)
+    } catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
   },
 
   deleteEntity: async (entityId) => {
+    const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
     try {
       const data = await projectApi.deleteEntity({ projectPath, nodeId: entityId })
-      await get().refreshData(data, false)
+      if (!isCurrentProjectSession(session)) return
+      await get().refreshData(data, false, session)
       set({ selectedEntityId: null })
-    } catch (error) { get().setError(error); throw error }
+    } catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
   },
 
   loadTrash: async () => {
+    const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
-    try { set({ trash: await projectApi.listTrash(projectPath) }) }
-    catch (error) { get().setError(error) }
+    try { const trash = await projectApi.listTrash(projectPath); if (isCurrentProjectSession(session)) set({ trash }) }
+    catch (error) { if (isCurrentProjectSession(session)) get().setError(error) }
   },
 
   restoreTrash: async (trashId) => {
+    const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
     try {
-      await get().refreshData(await projectApi.restoreTrash({ projectPath, nodeId: trashId }), false)
-      await get().loadTrash()
-    } catch (error) { get().setError(error) }
+      await get().refreshData(await projectApi.restoreTrash({ projectPath, nodeId: trashId }), false, session)
+      if (isCurrentProjectSession(session)) await get().loadTrash()
+    } catch (error) { if (isCurrentProjectSession(session)) get().setError(error) }
   },
 
   permanentlyDelete: async (trashId) => {
+    const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
     try {
-      await get().refreshData(await projectApi.permanentDelete({ projectPath, nodeId: trashId }), false)
-      await get().loadTrash()
-    } catch (error) { get().setError(error) }
+      await get().refreshData(await projectApi.permanentDelete({ projectPath, nodeId: trashId }), false, session)
+      if (isCurrentProjectSession(session)) await get().loadTrash()
+    } catch (error) { if (isCurrentProjectSession(session)) get().setError(error) }
   },
 
   emptyTrash: async () => {
+    const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
     try {
-      await get().refreshData(await projectApi.emptyTrash(projectPath), false)
-      await get().loadTrash()
-    } catch (error) { get().setError(error) }
+      await get().refreshData(await projectApi.emptyTrash(projectPath), false, session)
+      if (isCurrentProjectSession(session)) await get().loadTrash()
+    } catch (error) { if (isCurrentProjectSession(session)) get().setError(error) }
   },
 
   runSearch: async (query, options) => {
+    const session = captureProjectSession()
     const generation = ++searchGeneration
     const projectPath = get().projectPath
     const projectId = get().data?.project.id
-    const isCurrent = () => generation === searchGeneration && get().projectPath === projectPath && get().data?.project.id === projectId && get().searchQuery === query
+    const isCurrent = () => isCurrentProjectSession(session) && generation === searchGeneration && get().projectPath === projectPath && get().data?.project.id === projectId && get().searchQuery === query
     set({ searchQuery: query, searchResults: [] })
     if (!projectPath || !query.trim()) {
       set({ searchResults: [] })
@@ -476,22 +543,28 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   refreshStats: async () => {
+    const session = captureProjectSession()
+    const nodeId = get().document?.node.id
     const projectPath = get().projectPath
     if (!projectPath) return
-    try { set({ stats: await projectApi.stats(projectPath, get().document?.node.id) }) }
-    catch (error) { get().setError(error) }
+    try { const stats = await projectApi.stats(projectPath, nodeId); if (isCurrentProjectSession(session) && get().document?.node.id === nodeId) set({ stats }) }
+    catch (error) { if (isCurrentProjectSession(session)) get().setError(error) }
   },
 
   exportProject: async (format, options = {}) => {
+    const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) throw new Error('请先打开一个项目')
+    if (get().document && get().saveState !== 'saved' && !await get().saveCurrentDocument('导出前保存')) throw new Error('当前正文保存失败，已取消导出')
+    if (!isCurrentProjectSession(session)) throw new Error('项目已切换，已取消导出')
     return projectApi.exportProject({ projectPath, format, ...options })
   },
 
   updateProject: async (input) => {
+    const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
-    try { await get().refreshData(await projectApi.updateProject({ projectPath, ...input }), true) }
-    catch (error) { get().setError(error); throw error }
+    try { await get().refreshData(await projectApi.updateProject({ projectPath, ...input }), true, session) }
+    catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
   },
 }))

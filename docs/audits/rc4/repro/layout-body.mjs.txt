@@ -1,0 +1,38 @@
+    const out = resolve(root, 'docs/audits/rc4/screenshots')
+    mkdirSync(out, { recursive: true })
+    const rows = []
+    const capture = async (name) => {
+      await sleep(250)
+      const metrics = await page.evaluate(`(() => {
+        const visible = e => { const r=e.getBoundingClientRect(); return r.width>0&&r.height>0&&r.bottom>0&&r.top<innerHeight };
+        const clipped = Array.from(document.querySelectorAll('main button, main input, main select, main textarea, .modal-card button, .topbar button')).filter(visible).flatMap(e=>{
+          const r=e.getBoundingClientRect(); const x=Math.max(0,Math.min(innerWidth-1,r.x+r.width/2)); const y=Math.max(0,Math.min(innerHeight-1,r.y+r.height/2));
+          const hit=document.elementFromPoint(x,y); const label=(e.textContent||e.getAttribute('aria-label')||e.placeholder||e.tagName).trim().slice(0,70);
+          return (!e.contains(hit)||r.right>innerWidth+1||r.left<0)?[{label,rect:{x:r.x,y:r.y,w:r.width,h:r.height},hit:hit?.className}]:[];
+        });
+        return {width:innerWidth,height:innerHeight,bodyWidth:document.body.scrollWidth,clipped};
+      })()`)
+      rows.push({name,...metrics})
+      const shot = await page.command('Page.captureScreenshot', {format:'png'})
+      writeFileSync(resolve(out,name+'.png'), Buffer.from(shot.result.data,'base64'))
+    }
+    const labels = ['总览','正文','写作规划','人物','地点','世界观 Wiki','时间线','伏笔','剧情线','灵感箱','人物关系图','资料附件','一致性检查','详细统计','AI 辅助']
+    for (const [width,height] of [[1440,900],[1100,650],[1366,768]]) {
+      await page.command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false})
+      for (const [i,label] of labels.entries()) {
+        await page.evaluate("Array.from(document.querySelectorAll('.nav-item')).find(e=>e.textContent.trim().startsWith("+jsString(label)+")).click()")
+        await capture(width+'-'+i)
+        if(label==='AI 辅助') { await selectValue(page,'select[aria-label="AI 模式"]','codex'); await capture(width+'-codex') }
+      }
+      await clickExact(page,'导出'); await capture(width+'-export');
+      await page.evaluate("document.querySelector('.modal-header button').click()")
+    }
+    await page.command('Emulation.setEmulatedMedia',{features:[{name:'prefers-color-scheme',value:'dark'}]})
+    await sleep(300)
+    rows.push({name:'system-theme-change',...(await page.evaluate("({preference:localStorage.getItem('novelforge:theme'),matchesDark:matchMedia('(prefers-color-scheme: dark)').matches,actual:document.documentElement.dataset.theme})"))})
+    writeFileSync(resolve(out,'../layout-metrics.json'),JSON.stringify(rows,null,2))
+    console.log('AUDIT_LAYOUT_OK',out)
+    console.log('AUDIT_PROJECT',projectPath)
+    await page.command('Emulation.clearDeviceMetricsOverride')
+    if(process.env.NOVELFORGE_AUDIT_HOLD==='1') await sleep(180000)
+    return

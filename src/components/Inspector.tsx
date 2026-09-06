@@ -5,7 +5,7 @@ import { cleanWritingWhitespace, convertFullwidth, convertHalfwidth, convertPunc
 import { diffLines } from '../lib/text-diff'
 import { NODE_STATUS_LABELS } from '../lib/types'
 import { countWords, formatDate, formatNumber } from '../lib/utils'
-import { useAppStore } from '../stores/app-store'
+import { captureProjectSession, isCurrentProjectSession, useAppStore } from '../stores/app-store'
 import type { ContextMenuItem } from '../lib/context-menu'
 import { writeClipboardText } from '../lib/clipboard'
 import { Button } from './ui'
@@ -97,11 +97,18 @@ export function Inspector() {
   }
 
   async function restoreRevision(id: string) {
+    const session = captureProjectSession()
     if (!window.confirm('恢复这个历史版本？当前内容会先生成新的历史快照。')) return
     const currentNodeId = currentDocument.node.id
     try {
-      await refreshData(await projectApi.restoreHistory({ projectPath: currentProjectPath, revisionId: id }), true)
-      await useAppStore.getState().selectNode(currentNodeId)
+      const store = useAppStore.getState()
+      if (store.saveState !== 'saved' && !await store.saveCurrentDocument('恢复前保存')) return
+      if (!isCurrentProjectSession(session)) return
+      const version = useAppStore.getState().documentVersion
+      const result = await projectApi.restoreHistory({ projectPath: currentProjectPath, revisionId: id })
+      if (!isCurrentProjectSession(session)) return
+      await refreshData(result, true, session)
+      if (useAppStore.getState().document?.node.id === currentNodeId && useAppStore.getState().documentVersion === version) await useAppStore.getState().selectNode(currentNodeId, true)
       setHistoryPreview(null)
     } catch (error) { setError(error) }
   }

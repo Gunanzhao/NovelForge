@@ -1,0 +1,11 @@
+{
+  "projectPath": "D:\\NovelForge\\src-tauri\\target\\audit-close-1788655192280",
+  "target": "D:\\NovelForge\\src-tauri\\target\\audit-close-1788655192280\\manuscript\\volume_001\\chapter_001.md",
+  "sentinel": "UNSAVED_CLOSE_SENTINEL_20260906",
+  "stage": "failed save before native close",
+  "closedWithoutSavePrompt": true,
+  "recoveryCount": 0,
+  "sentinelInOriginal": false,
+  "ownedCodexStillRunning": false,
+  "fixtureRestoredAfterEvidence": true
+}

@@ -582,18 +582,25 @@ fn client(window: &tauri::WebviewWindow) -> Result<Arc<Client>, String> {
 }
 
 pub fn close(window: &tauri::Window) {
-    let state = window.state::<CodexState>();
-    if let Ok(mut clients) = state.0.lock() {
-        if let Some(client) = clients.remove(window.label()) {
-            client.closed.store(true, Ordering::SeqCst);
-            client.cancel.store(true, Ordering::SeqCst);
-            std::thread::spawn(move || {
-                if let Ok(mut rpc) = client.rpc.lock() {
-                    *rpc = None;
-                }
-            });
+    shutdown(window.app_handle(), window.label());
+}
+
+pub fn shutdown(app: &tauri::AppHandle, label: &str) {
+    let state = app.state::<CodexState>();
+    let client = state
+        .0
+        .lock()
+        .ok()
+        .and_then(|mut clients| clients.remove(label));
+    if let Some(client) = client {
+        client.closed.store(true, Ordering::SeqCst);
+        client.cancel.store(true, Ordering::SeqCst);
+        // Called on a blocking worker before destroying the window, so cleanup is complete
+        // before the last application window exits. Never hold the clients-map lock here.
+        if let Ok(mut rpc) = client.rpc.lock() {
+            *rpc = None;
         }
-    };
+    }
 }
 
 fn with_rpc<T>(

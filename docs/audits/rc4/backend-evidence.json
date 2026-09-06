@@ -1,0 +1,65 @@
+[
+  {
+    "case": "export-content",
+    "format": "markdown",
+    "hasBodyHeading": false,
+    "hasCodeSentinel": false,
+    "path": "\\\\?\\D:\\NovelForge\\src-tauri\\target\\audit-backend-1788655667577\\project\\.novelforge\\exports\\组合边界审计-20260906004748920.markdown"
+  },
+  {
+    "case": "export-content",
+    "format": "txt",
+    "hasBodyHeading": false,
+    "hasCodeSentinel": false,
+    "path": "\\\\?\\D:\\NovelForge\\src-tauri\\target\\audit-backend-1788655667577\\project\\.novelforge\\exports\\组合边界审计-20260906004748950.txt"
+  },
+  {
+    "case": "export-content",
+    "format": "html",
+    "hasBodyHeading": false,
+    "hasCodeSentinel": false,
+    "path": "\\\\?\\D:\\NovelForge\\src-tauri\\target\\audit-backend-1788655667577\\project\\.novelforge\\exports\\组合边界审计-20260906004748985.html"
+  },
+  {
+    "case": "delete-child-delete-parent-restore-parent",
+    "restoredNodes": [
+      {
+        "id": "48f63d82-66df-45b9-bab0-22f9aa5e4ccd",
+        "kind": "volume",
+        "parentId": null,
+        "title": "第一卷",
+        "orderIndex": 0,
+        "status": "not-started",
+        "filePath": "manuscript/volume_001",
+        "createdAt": "2026-09-06T00:47:48.732Z",
+        "updatedAt": "2026-09-06T00:47:49.142Z"
+      },
+      {
+        "id": "76920600-7801-4c1d-adb2-54c2e83ded7e",
+        "kind": "chapter",
+        "parentId": "48f63d82-66df-45b9-bab0-22f9aa5e4ccd",
+        "title": "第一章",
+        "orderIndex": 0,
+        "status": "draft",
+        "filePath": "manuscript/volume_001/chapter_001.md",
+        "createdAt": "2026-09-06T00:47:48.732Z",
+        "updatedAt": "2026-09-06T00:47:49.142Z"
+      }
+    ],
+    "readError": "Error: 页面脚本异常：{\"exceptionId\":1,\"text\":\"Uncaught (in promise)\",\"lineNumber\":0,\"columnNumber\":0,\"exception\":{\"type\":\"string\",\"value\":\"读取正文失败：系统找不到指定的文件。 (os error 2)\"}}",
+    "childRestoreError": "Error: 页面脚本异常：{\"exceptionId\":2,\"text\":\"Uncaught (in promise)\",\"lineNumber\":0,\"columnNumber\":0,\"exception\":{\"type\":\"string\",\"value\":\"节点不在回收站\"}}",
+    "childTrashFileExists": true
+  },
+  {
+    "case": "locked-status",
+    "status": "locked",
+    "content": "LOCKED_BUT_EDITED"
+  },
+  {
+    "case": "attachment-after-rebuild",
+    "beforeCount": 1,
+    "afterCount": 0,
+    "originalFileExists": true,
+    "recoveryPath": "D:\\NovelForge\\src-tauri\\target\\audit-backend-1788655667577\\recovery-project"
+  }
+]

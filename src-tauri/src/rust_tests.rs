@@ -10,6 +10,44 @@ fn test_root(name: &str) -> std::path::PathBuf {
     root
 }
 
+#[test]
+fn unreadable_original_keeps_new_edits_in_recovery() {
+    let root = test_root("unreadable-original-recovery");
+    let path = root.to_string_lossy().to_string();
+    let data = super::commands::create_project(super::models::ProjectInput {
+        path: path.clone(),
+        title: "恢复测试".into(),
+        author: String::new(),
+        description: String::new(),
+        genre: String::new(),
+        target_words: 1000,
+    })
+    .unwrap();
+    let chapter = data.nodes.iter().find(|n| n.kind == "chapter").unwrap();
+    let target = root.join(&chapter.file_path);
+    fs::rename(&target, target.with_extension("audit-original")).unwrap();
+    fs::create_dir(&target).unwrap();
+    let error = super::commands::save_document(super::models::SaveDocumentInput {
+        project_path: path.clone(),
+        node_id: chapter.id.clone(),
+        content: "必须保留的新正文".into(),
+        reason: "test".into(),
+    })
+    .unwrap_err();
+    assert!(error.contains("恢复文件已保留"));
+    let recovery = super::commands::list_recovery(path.clone()).unwrap();
+    assert_eq!(recovery.len(), 1);
+    assert_eq!(
+        super::commands::read_recovery(super::commands::RecoveryActionInput {
+            project_path: path,
+            recovery_id: recovery[0].id.clone(),
+        })
+        .unwrap(),
+        "必须保留的新正文"
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[cfg(unix)]
 fn create_directory_link(target: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
     std::os::unix::fs::symlink(target, link)

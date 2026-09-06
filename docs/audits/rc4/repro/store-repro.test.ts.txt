@@ -1,0 +1,42 @@
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { createElement } from 'react'
+import { act,cleanup,fireEvent,render,screen } from '@testing-library/react'
+import type { DocumentData, NodeRecord, ProjectData } from '../src/lib/types'
+const api = vi.hoisted(() => ({ getDocument:vi.fn(),upsertEntity:vi.fn(),exportProject:vi.fn(),saveDocument:vi.fn(),stats:vi.fn() }))
+vi.mock('../src/lib/api',()=>({isDesktop:false,projectApi:api}))
+vi.mock('../src/components/ContextMenu',()=>({useContextMenu:()=>({openContextMenu:vi.fn()})}))
+import { useAppStore } from '../src/stores/app-store'
+import { EntityView } from '../src/components/EntityView'
+const a:NodeRecord={id:'a',kind:'chapter',parentId:'v',title:'A',orderIndex:0,status:'draft',filePath:'a.md',createdAt:'',updatedAt:''}
+const b:NodeRecord={...a,id:'b',title:'B',filePath:'b.md'}
+const p:ProjectData={project:{formatVersion:1,id:'p',title:'P',author:'',description:'',genre:'',targetWords:1,createdAt:'',updatedAt:''},nodes:[a,b],entities:[],recovery:[]}
+function deferred<T>(){let resolve!:(v:T)=>void;const promise=new Promise<T>(r=>{resolve=r});return {resolve,promise}}
+beforeEach(()=>{vi.resetAllMocks();useAppStore.setState({...useAppStore.getInitialState(),projectPath:'P',data:p,document:{node:a,content:'original'},saveState:'saved'})})
+afterEach(cleanup)
+it('AUDIT-01 latest chapter selection must win when disk reads finish out of order',async()=>{
+ const slow=deferred<DocumentData>();api.getDocument.mockReturnValueOnce(slow.promise).mockResolvedValueOnce({node:a,content:'original'});
+ const first=useAppStore.getState().selectNode('b');await useAppStore.getState().selectNode('a');
+ useAppStore.getState().updateContent('new user edits');slow.resolve({node:b,content:'B content'});await first;
+ expect(useAppStore.getState().document?.content).toBe('new user edits');
+})
+it('AUDIT-02 old project entity save must not replace newly opened project data',async()=>{
+ const pending=deferred<ProjectData>();api.upsertEntity.mockReturnValue(pending.promise);
+ const saving=useAppStore.getState().saveEntity({projectPath:'P',kind:'character',title:'Alice',tags:[],content:{}});
+ const next={...p,project:{...p.project,id:'q',title:'Q'}};useAppStore.setState({projectPath:'Q',data:next,document:null});
+ pending.resolve(p);await saving;expect(useAppStore.getState().data?.project.id).toBe('q');
+})
+it('AUDIT-03 export must flush dirty content before reading files',async()=>{
+ const calls:string[]=[];api.saveDocument.mockImplementation(async()=>{calls.push('save');return {node:a,content:'new'}});api.exportProject.mockImplementation(async()=>{calls.push('export');return 'out.md'});
+ useAppStore.getState().updateContent('new');await useAppStore.getState().exportProject('markdown');expect(calls).toEqual(['save','export']);
+})
+it('AUDIT-04 second save of a newly created character should update that character',async()=>{
+ const entity={id:'new-character',kind:'character' as const,title:'林月',content:{},tags:[],filePath:'characters/new.md',createdAt:'',updatedAt:''};
+ api.upsertEntity.mockResolvedValue({...p,entities:[entity]});
+ render(createElement(EntityView,{kind:'character'}));
+ fireEvent.change(screen.getByPlaceholderText('输入人物名称'),{target:{value:'林月'}});
+ await act(async()=>fireEvent.click(screen.getByRole('button',{name:'保存资料'})));
+ await vi.waitFor(()=>expect(screen.getByRole('button',{name:'保存资料'}).hasAttribute('disabled')).toBe(false));
+ await act(async()=>fireEvent.click(screen.getByRole('button',{name:'保存资料'})));
+ await vi.waitFor(()=>expect(api.upsertEntity).toHaveBeenCalledTimes(2));
+ expect(api.upsertEntity.mock.calls[1][0].id).toBe(entity.id);
+})

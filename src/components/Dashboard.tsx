@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { BookOpen, CheckCircle2, FileClock, Flame, HardDrive, RotateCcw, Sparkles, Target, Trash2 } from 'lucide-react'
 import { projectApi } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/utils'
-import { useAppStore } from '../stores/app-store'
+import { captureProjectSession, isCurrentProjectSession, useAppStore } from '../stores/app-store'
 import { Button, Modal, Panel } from './ui'
 import { ChecklistDashboard } from './ChapterWorkflow'
 
@@ -22,13 +22,14 @@ export function Dashboard() {
   const progress = stats.targetWords > 0 ? Math.min(100, Math.round((stats.totalWords / stats.targetWords) * 100)) : 0
   const recovery = data.recovery.find((item) => item.id !== ignoredRecoveryId)
   const currentProjectPath = projectPath
-  const currentData = data
 
   async function previewRecovery() {
+    const session = captureProjectSession()
     if (!recovery) return
     setRecoveryBusy(true)
     try {
       const content = await projectApi.readRecovery({ projectPath: currentProjectPath, recoveryId: recovery.id })
+      if (!isCurrentProjectSession(session)) return
       setRecoveryPreview({ id: recovery.id, title: recovery.nodeTitle, content })
     } catch (error) { setError(error) } finally { setRecoveryBusy(false) }
   }
@@ -40,21 +41,32 @@ export function Dashboard() {
   }
 
   async function restoreRecovery() {
+    const session = captureProjectSession()
     if (!recovery) return
     setRecoveryBusy(true)
     try {
-      await refreshData(await projectApi.restoreRecovery({ projectPath: currentProjectPath, recoveryId: recovery.id }), false)
+      const store = useAppStore.getState()
+      if (store.document && store.saveState !== 'saved' && !await store.saveCurrentDocument('恢复前保存')) return
+      if (!isCurrentProjectSession(session)) return
+      const version = useAppStore.getState().documentVersion
+      const result = await projectApi.restoreRecovery({ projectPath: currentProjectPath, recoveryId: recovery.id })
+      if (!isCurrentProjectSession(session)) return
+      await refreshData(result, false, session)
+      if (useAppStore.getState().document?.node.id === recovery.nodeId && useAppStore.getState().documentVersion === version) await selectNode(recovery.nodeId, true)
       setIgnoredRecoveryId(null)
       setRecoveryPreview(null)
     } catch (error) { setError(error) } finally { setRecoveryBusy(false) }
   }
 
   async function discardRecovery() {
+    const session = captureProjectSession()
     if (!recovery || !window.confirm('删除这份恢复数据？删除后无法从 NovelForge 恢复。')) return
     setRecoveryBusy(true)
     try {
       const remaining = await projectApi.discardRecovery({ projectPath: currentProjectPath, recoveryId: recovery.id })
-      await refreshData({ project: currentData.project, nodes: currentData.nodes, entities: currentData.entities, recovery: remaining }, true)
+      const latest = useAppStore.getState().data
+      if (!isCurrentProjectSession(session) || !latest) return
+      await refreshData({ ...latest, recovery: remaining }, true, session)
       setIgnoredRecoveryId(null)
       setRecoveryPreview(null)
     } catch (error) { setError(error) } finally { setRecoveryBusy(false) }

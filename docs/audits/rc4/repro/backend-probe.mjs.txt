@@ -1,0 +1,51 @@
+import {spawn} from 'node:child_process'
+import {mkdirSync,writeFileSync,readFileSync,existsSync,renameSync} from 'node:fs'
+import {resolve} from 'node:path'
+import {CdpPage,waitForPage} from './audit-cdp-utils.mjs'
+const base=resolve('src-tauri/target/audit-backend-'+Date.now())
+mkdirSync(base,{recursive:true})
+const child=spawn(resolve('src-tauri/target/codex-install-smoke/novelforge.exe'),[],{env:{...process.env,WEBVIEW2_USER_DATA_FOLDER:resolve(base,'profile'),WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:'--remote-debugging-port=9423'},windowsHide:true,stdio:'ignore'})
+const page=new CdpPage(await waitForPage('127.0.0.1:9423'))
+await page.connect()
+const call=(name,args)=>page.evaluate('window.__TAURI_INTERNALS__.invoke('+JSON.stringify(name)+','+JSON.stringify(args)+')')
+const result=[]
+try {
+ const projectPath=resolve(base,'project')
+ let p=await call('create_project',{input:{path:projectPath,title:'组合边界审计',author:'测试',genre:'',description:'',targetWords:1000}})
+ const v=p.nodes.find(n=>n.kind==='volume'), c=p.nodes.find(n=>n.kind==='chapter')
+ await call('save_document',{input:{projectPath,nodeId:c.id,content:'# 第一章\n\n正文保留。\n\n# 正文内部标题\n\n~~~text\n# CODE_SENTINEL\n~~~\n',reason:'audit'}})
+ for (const format of ['markdown','txt','html']) {
+  const path=await call('export_project',{input:{projectPath,format,includeToc:false}})
+  const text=readFileSync(path,'utf8')
+  result.push({case:'export-content',format,hasBodyHeading:text.includes('正文内部标题'),hasCodeSentinel:text.includes('CODE_SENTINEL'),path})
+ }
+ await call('delete_node',{input:{projectPath,nodeId:c.id}})
+ await call('delete_node',{input:{projectPath,nodeId:v.id}})
+ const trash=await call('list_trash',{path:projectPath})
+ const vi=trash.find(t=>t.refId===v.id),ci=trash.find(t=>t.refId===c.id)
+ let restored,error
+ try {restored=await call('restore_trash',{input:{projectPath,nodeId:vi.id}})}catch(e){error=String(e)}
+ let readError,childRestoreError
+ try{await call('get_document',{input:{projectPath,nodeId:c.id}})}catch(e){readError=String(e)}
+ try{await call('restore_trash',{input:{projectPath,nodeId:ci.id}})}catch(e){childRestoreError=String(e)}
+ result.push({case:'delete-child-delete-parent-restore-parent',restoredNodes:restored?.nodes,error,readError,childRestoreError,childTrashFileExists:existsSync(ci.trashPath)})
+ const recoveryPath=resolve(base,'recovery-project')
+ let r=await call('create_project',{input:{path:recoveryPath,title:'附件恢复审计',author:'测试',genre:'',description:'',targetWords:1000}})
+ const chapter=r.nodes.find(n=>n.kind==='chapter')
+ await call('set_node_status',{input:{projectPath:recoveryPath,nodeId:chapter.id,status:'locked'}})
+ await call('save_document',{input:{projectPath:recoveryPath,nodeId:chapter.id,content:'LOCKED_BUT_EDITED',reason:'audit'}})
+ const locked=await call('get_document',{input:{projectPath:recoveryPath,nodeId:chapter.id}})
+ result.push({case:'locked-status',status:locked.node.status,content:locked.content})
+ const source=resolve(base,'reference.txt');writeFileSync(source,'ATTACHMENT_BYTES_SENTINEL')
+ r=await call('import_attachment',{input:{projectPath:recoveryPath,sourcePath:source,description:'不可丢失的附件说明'}})
+ const attachment=r.entities.find(e=>e.kind==='attachment')
+ renameSync(resolve(recoveryPath,'.novelforge/database.sqlite'),resolve(recoveryPath,'.novelforge/database.sqlite.audit-original'))
+ r=await call('open_project',{path:recoveryPath})
+ result.push({case:'attachment-after-rebuild',beforeCount:1,afterCount:r.entities.filter(e=>e.kind==='attachment').length,originalFileExists:existsSync(resolve(recoveryPath,attachment.filePath)),recoveryPath})
+ console.log(JSON.stringify(result,null,2))
+ mkdirSync('docs/audits/rc4',{recursive:true})
+ writeFileSync('docs/audits/rc4/backend-evidence.json',JSON.stringify(result,null,2))
+ // Keep this independent process available for visual verification; never target other instances.
+ console.log('AUDIT_BACKEND_READY',base,child.pid)
+ if(process.env.NOVELFORGE_AUDIT_HOLD==='1')for(let i=0;i<600&&!existsSync(resolve(base,'stop'));i++)await new Promise(r=>setTimeout(r,1000))
+} finally { page.close();child.kill() }

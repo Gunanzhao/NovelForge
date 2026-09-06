@@ -1,0 +1,87 @@
+
+ RUN  v3.2.7 D:/NovelForge
+
+ ❯ tests/rc4-audit-repro.test.ts (4 tests | 4 failed) 172ms
+   × AUDIT-01 latest chapter selection must win when disk reads finish out of order 9ms
+     → expected 'B content' to be 'new user edits' // Object.is equality
+   × AUDIT-02 old project entity save must not replace newly opened project data 1ms
+     → expected 'p' to be 'q' // Object.is equality
+   × AUDIT-03 export must flush dirty content before reading files 2ms
+     → expected [ 'export' ] to deeply equal [ 'save', 'export' ]
+   × AUDIT-04 second save of a newly created character should update that character 158ms
+     → expected null to be 'new-character' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/rc4-audit-repro.test.ts > AUDIT-01 latest chapter selection must win when disk reads finish out of order
+AssertionError: expected 'B content' to be 'new user edits' // Object.is equality
+
+Expected: "new user edits"
+Received: "B content"
+
+ ❯ tests/rc4-audit-repro.test.ts:20:51
+     18|  const first=useAppStore.getState().selectNode('b');await useAppStore.…
+     19|  useAppStore.getState().updateContent('new user edits');slow.resolve({…
+     20|  expect(useAppStore.getState().document?.content).toBe('new user edits…
+       |                                                   ^
+     21| })
+     22| it('AUDIT-02 old project entity save must not replace newly opened pro…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/rc4-audit-repro.test.ts > AUDIT-02 old project entity save must not replace newly opened project data
+AssertionError: expected 'p' to be 'q' // Object.is equality
+
+Expected: "q"
+Received: "p"
+
+ ❯ tests/rc4-audit-repro.test.ts:26:82
+     24|  const saving=useAppStore.getState().saveEntity({projectPath:'P',kind:…
+     25|  const next={...p,project:{...p.project,id:'q',title:'Q'}};useAppStore…
+     26|  pending.resolve(p);await saving;expect(useAppStore.getState().data?.p…
+       |                                                                                  ^
+     27| })
+     28| it('AUDIT-03 export must flush dirty content before reading files',asy…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/rc4-audit-repro.test.ts > AUDIT-03 export must flush dirty content before reading files
+AssertionError: expected [ 'export' ] to deeply equal [ 'save', 'export' ]
+
+- Expected
++ Received
+
+  [
+-   "save",
+    "export",
+  ]
+
+ ❯ tests/rc4-audit-repro.test.ts:30:115
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/rc4-audit-repro.test.ts > AUDIT-04 second save of a newly created character should update that character
+AssertionError: expected null to be 'new-character' // Object.is equality
+
+- Expected:
+"new-character"
+
++ Received:
+null
+
+ ❯ tests/rc4-audit-repro.test.ts:41:47
+     39|  await act(async()=>fireEvent.click(screen.getByRole('button',{name:'保…
+     40|  await vi.waitFor(()=>expect(api.upsertEntity).toHaveBeenCalledTimes(2…
+     41|  expect(api.upsertEntity.mock.calls[1][0].id).toBe(entity.id);
+       |                                               ^
+     42| })
+     43|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  08:47:42
+   Duration  4.48s (transform 232ms, setup 47ms, collect 1.06s, tests 172ms, environment 2.16s, prepare 513ms)

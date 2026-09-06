@@ -1,0 +1,19 @@
+import {resolve} from 'node:path'
+import {mkdirSync,renameSync,writeFileSync} from 'node:fs'
+import {CdpPage,waitForPage,clickText,setField,replaceEditor} from './audit-cdp-utils.mjs'
+const page=new CdpPage(await waitForPage('127.0.0.1:9423'));await page.connect()
+const projectPath=resolve('src-tauri/target/audit-close-'+Date.now())
+await clickText(page,'新建小说')
+await setField(page,'选择项目文件夹',projectPath)
+await setField(page,'例如：雾港来信','关闭保存保护审计')
+await setField(page,'署名','合成测试')
+await clickText(page,'创建并开始写作')
+await new Promise(r=>setTimeout(r,1500))
+const target=resolve(projectPath,'manuscript/volume_001/chapter_001.md')
+renameSync(target,target+'.audit-original');mkdirSync(target)
+await replaceEditor(page,'# 第一章\n\nUNSAVED_CLOSE_SENTINEL_20260906')
+await new Promise(r=>setTimeout(r,1500))
+console.log(await page.evaluate("document.body.innerText.slice(-1400)"))
+console.log('AUTH',await page.evaluate("window.__TAURI_INTERNALS__.invoke('codex_status',{cliPath:''}).then(s=>s.authMode).catch(e=>String(e))"))
+writeFileSync('docs/audits/rc4/close-evidence.json',JSON.stringify({projectPath,target,sentinel:'UNSAVED_CLOSE_SENTINEL_20260906',stage:'failed save before native close'},null,2))
+page.close()

@@ -3,7 +3,7 @@ import { BookOpen, Clipboard, ExternalLink, FileArchive, FileText, Image, Paperc
 import { chooseFile, isDesktop, projectApi } from '../lib/api'
 import { contentText, sortChapterNodes } from '../lib/planning-data'
 import type { EntityRecord } from '../lib/types'
-import { useAppStore } from '../stores/app-store'
+import { captureProjectSession, isCurrentProjectSession, useAppStore } from '../stores/app-store'
 import type { ContextMenuItem } from '../lib/context-menu'
 import { writeClipboardText } from '../lib/clipboard'
 import { Button, Field, Panel, TextInput } from './ui'
@@ -66,7 +66,9 @@ export function AttachmentsView() {
   const currentProjectPath = projectPath
 
   async function importFile() {
+    const session = captureProjectSession()
     const sourcePath = await chooseFile()
+    if (!isCurrentProjectSession(session)) return
     if (!sourcePath) {
       if (!isDesktop) setError('附件导入需要在桌面版中选择本机文件。')
       return
@@ -74,12 +76,13 @@ export function AttachmentsView() {
     setBusy(true)
     try {
       const result = await projectApi.importAttachment({ projectPath: currentProjectPath, sourcePath, description: '' })
+      if (!isCurrentProjectSession(session)) return
       const importedName = sourcePath.split(/[\\/]/u).pop() ?? sourcePath
       const imported = result.entities.filter((entity) => entity.kind === 'attachment' && entity.title === importedName).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]
-      await useAppStore.getState().refreshData(result, true)
+      await useAppStore.getState().refreshData(result, true, session)
       setSelectedId(imported?.id ?? null)
     } catch (error) {
-      setError(error)
+      if (isCurrentProjectSession(session)) setError(error)
     } finally {
       setBusy(false)
     }
