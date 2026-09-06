@@ -2,13 +2,26 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.1.0-rc.5（预发布）**。
+当前版本：**1.1.0-rc.6（预发布）**。
 
-- [下载 Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.0-rc.5/NovelForge_1.1.0-rc.5_x64-setup.exe)
-- [Release 与 SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.5)
-- [测试报告](TEST_REPORT.md) · [rc.5 发布说明](docs/releases/v1.1.0-rc.5.md)
+- [下载 Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.0-rc.6/NovelForge_1.1.0-rc.6_x64-setup.exe)
+- [Release 与 SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.6)
+- [测试报告](TEST_REPORT.md) · [rc.6 发布说明](docs/releases/v1.1.0-rc.6.md)
 
-## rc.5：审计修复与数据保护
+## rc.6：独立审查修复
+
+- 新项目只在空目录创建，先完成暂存初始化，目标出现已有文件时中止；复制正文前先保存，失败会阻止复制。
+- 修复同屏 Checklist 等更新重置资料草稿的问题。
+- Markdown 外链通过系统浏览器打开，主工作台限制导航；Wiki 和脚注锚点保留。
+- 侧栏宽度在运行时归一化，并保证中央工作区空间；附件、时间线等详情按中央容器宽度切换布局。
+- 修复长代码块导出的结束符判断；附件关联显示在章节辅助栏，AI 可显式勾选附件说明文本，附件原文件不进入请求。
+- 附件筛选不再保留不可见条目的操作详情，规格和待办同步当前基线。
+
+本轮通过 277 项前端、100 项 Rust 常规测试、两项容量验收与完整桌面回归，并新增 66 张布局截图和问题回归。本机当前自动发现的 Codex CLI 未通过 0.149.1 版本门禁，本轮未重新通过真实订阅验收。
+
+本轮验证与具体边界见 [rc.6 验收记录](docs/audits/rc6/VALIDATION.md)。历史 rc.5 数据仅代表当时版本。
+
+## rc.5 历史：审计修复与数据保护
 
 修复 rc.4 审计确认的 11 项问题：保存失败阻止退出、章节读取与项目切换竞态、独立删除批次恢复、导出前保存及正文完整性、附件元数据重建、新资料重复保存、最小窗口布局、Temperature 零值和系统主题变化。
 
@@ -16,7 +29,7 @@ NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台�
 
 附件的说明、标签及关联保存为相邻 `.novelforge-attachment.md` 镜像。旧数据库仍有效时打开项目会补齐镜像；旧数据库已丢失且没有镜像时只能找回原文件，不能恢复原说明和关联。请备份整个项目目录。
 
-本轮通过 264 项前端、94 项 Rust 常规测试及 5 项显式集成/容量测试，并在新安装的 Windows 程序上验收完整桌面流程、三种视口和原生关闭失败保护。详见[rc.5 验收记录](docs/audits/rc5/VALIDATION.md)。Codex 接入继续保持实验性，使用条件如下。
+rc.5 当时通过 264 项前端、94 项 Rust 常规测试及 5 项显式集成/容量测试，并在新安装的 Windows 程序上验收完整桌面流程、三种视口和原生关闭失败保护。详见[rc.5 验收记录](docs/audits/rc5/VALIDATION.md)。Codex 接入继续保持实验性，使用条件如下。
 
 ## Codex 订阅接入（实验性）
 
@@ -26,7 +39,7 @@ AI 辅助新增 Codex 模式，使用本机官方 CLI 的 ChatGPT 登录和订�
 
 NovelForge 为自己的子进程固定使用官方订阅服务，生成只含模型名称和推理参数的独立文本目录，并关闭工具、MCP 和插件，不修改全局 OpenCodex 配置。生成结果需确认后应用；正文或选区已变化时会阻止覆盖。
 
-真实订阅验收使用 `gpt-5.6-luna` 和合成小说，其他模型的可用性由账号权限及 CLI 返回列表决定；这不是额外独立额度。使用步骤和边界见 [Codex 接入说明](docs/CODEX_INTEGRATION.md)。
+历史 rc.5 真实订阅验收使用 `gpt-5.6-luna` 和合成小说，其他模型的可用性由账号权限及 CLI 返回列表决定；这不是额外独立额度。使用步骤和边界见 [Codex 接入说明](docs/CODEX_INTEGRATION.md)。
 
 rc.3 的 Wiki 统计及 Markdown 边界修复继续保留；[rc.3 历史发布说明](docs/releases/v1.1.0-rc.3.md)中的数字只代表该历史版本。
 

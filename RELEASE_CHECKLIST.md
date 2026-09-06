@@ -1,5 +1,17 @@
 # NovelForge 发布清单
 
+## 1.1.0-rc.6
+
+- [x] 独立审查 10 项问题已实现修复并有对应证据；阶段 1–3 已分别本地提交。
+- [x] package.json、Cargo.toml、Cargo.lock、Tauri 配置及 EXE/NSIS 统一为 rc.6。
+- [x] 前端 277 项、Rust 100 项、原始失败用例 3 项、容量 2 项通过；类型、Lint、格式、Clippy 通过。
+- [x] 完整桌面回归、新增问题回归及 66 张布局截图通过；产物哈希记录于 [验收记录](docs/audits/rc6/VALIDATION.md)。
+- [x] README、SPEC、TODO、CHANGELOG、测试报告与 [rc.6 发布说明](docs/releases/v1.1.0-rc.6.md) 同步，明确真实订阅及原生验收边界。
+- 发布顺序：完成全部本地修复与阶段 4 提交后统一推送工作分支，等待 Frontend checks / Rust checks 成功，再快进受保护 main；保持保护规则和历史标签不变。
+- 创建独立 `v1.1.0-rc.6` 标签，上传安装包与 SHA256SUMS.txt 到草稿；校验远程附件内容后公开预发布。实时结果以 [CI](https://github.com/Gunanzhao/NovelForge/actions) 和 [Release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.6) 为准。
+
+以下为历史发布记录。
+
 ## 1.1.0-rc.4
 
 - 代码、版本、锁文件与安装包统一为 1.1.0-rc.4。
@@ -7,7 +19,7 @@
 - 工作分支通过必需 CI 后再快进 main，保持分支保护，创建独立 rc.4 标签并校验 Release 附件。
 - [rc.4 发布说明](docs/releases/v1.1.0-rc.4.md)。以下为 rc.3 历史清单。
 
-> 当前版本：`1.1.0-rc.3`（预发布候选版）。Windows x64 安装包为 `NovelForge_1.1.0-rc.3_x64-setup.exe`；下载、发布状态及 SHA-256 校验文件见 [GitHub Release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.3)。
+> 历史版本：`1.1.0-rc.3`（预发布候选版）。Windows x64 安装包为 `NovelForge_1.1.0-rc.3_x64-setup.exe`；下载、发布状态及 SHA-256 校验文件见 [GitHub Release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.3)。
 >
 > rc.1/rc.2 的测试、benchmark、CI、tag 和发布记录属于各自历史版本，不作为 rc.3 通过证据。rc.3 最终数据统一见 [测试报告](TEST_REPORT.md#rc3-validation) 与 [发布清单](RELEASE_CHECKLIST.md#rc3-checklist)；全部本地门禁已通过，源码基线 CI 已通过。
 

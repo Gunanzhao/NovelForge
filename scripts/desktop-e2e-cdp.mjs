@@ -655,10 +655,6 @@ async function run() {
     : resolve(tmpdir(), 'novelforge-desktop-e2e-project-' + process.pid)
   rmSync(projectPath, { recursive: true, force: true })
   if (nativeDialogMode) mkdirSync(projectPath, { recursive: true })
-  if (coverMode) {
-    mkdirSync(resolve(projectPath, 'attachments'), { recursive: true })
-    copyFileSync(resolve(root, 'src-tauri/icons/icon.png'), resolve(projectPath, 'attachments/cover.png'))
-  }
   const attachmentSource = resolve(tmpdir(), 'novelforge-e2e-attachment-' + process.pid + '.txt')
   rmSync(attachmentSource, { force: true })
   const providerServer = createServer((_request, response) => {
@@ -754,6 +750,10 @@ async function run() {
     await setField(page, '一句话记录这部作品想写什么。', '验证 release WebView2 交互。')
     await clickText(page, '创建并开始写作')
     await sleep(1200)
+    if (coverMode) {
+      await waitForText(page, '辅助栏')
+      copyFileSync(resolve(root, 'src-tauri/icons/icon.png'), resolve(projectPath, 'attachments/cover.png'))
+    }
     if (process.env.NOVELFORGE_E2E_VERBOSE === '1') {
       console.log('WORKSPACE_PAGE')
       console.log(await bodyText(page))

@@ -11,3 +11,13 @@ src-tauri/gen/
 *.pem
 *.key
 .DS_Store
+
+# Local audit toolchains and synthetic projects
+/tmp/
+
+# Local audit payloads are not part of the public release.
+/docs/audits/independent-2026-09-06/
+/docs/audits/rc6/screenshots/
+/docs/audits/rc6/*.txt
+/docs/audits/rc6/*.json
+/docs/audits/rc6/fence-export.html

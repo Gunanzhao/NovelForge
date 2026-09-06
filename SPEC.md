@@ -1,8 +1,16 @@
 # NovelForge 产品规格
 
-> 当前版本：`1.1.0-rc.3`（预发布候选版）。Windows x64 安装包为 `NovelForge_1.1.0-rc.3_x64-setup.exe`；下载、发布状态及 SHA-256 校验文件见 [GitHub Release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.3)。
->
-> rc.1/rc.2 的测试、benchmark、CI、tag 和发布记录属于各自历史版本，不作为 rc.3 通过证据。rc.3 最终数据统一见 [测试报告](TEST_REPORT.md#rc3-validation) 与 [发布清单](RELEASE_CHECKLIST.md#rc3-checklist)；全部本地门禁已通过，源码基线 CI 已通过。
+> 当前版本：`1.1.0-rc.6`（预发布候选）。本轮以独立审查 10 项问题为修复范围，验收记录见 [rc.6 验证](docs/audits/rc6/VALIDATION.md)，发布说明见 [rc.6](docs/releases/v1.1.0-rc.6.md)。下方 rc.1–rc.5 的测试、提交、CI 和发布信息均为历史记录。
+
+## rc.6 当前要求与状态
+
+- 新建目标必须为空，初始化失败不留下半成品；已有正文和并发写入文件不得覆盖。
+- 无关数据刷新不得丢失资料草稿；复制正文应先等待保存成功。
+- 外部链接交给系统浏览器，限制主 WebView 导航，Wiki/脚注继续可用。
+- 当前侧栏宽度与持久化规则一致；最大侧栏组合仍保留中央空间，内部详情按实际容器宽度响应。
+- 长代码围栏的结束符不短于起始符；代码区内容不变为标题。
+- 关联附件在章节及其小节辅助栏可定位，AI 只在勾选后加入说明文本；筛选不留旧详情操作。
+- 逐项实现和阶段测试见 [修复进度](docs/audits/rc6/FIX_PROGRESS.md)；最终通过范围以 rc.6 验证记录为准。
 
 ## rc.3 补充验收规格
 
@@ -104,7 +112,7 @@ AI 上下文增强、命令与存储模块边界、持续集成、10 万字单�
 - 章节 Inspector 显示完成数和百分比；Dashboard 按卷汇总检查项和定稿数；正文树可过滤未完成、未定稿和待人物一致性检查章节。
 - 项目模板镜像位于 `checklist-templates/`，章节实例位于 `checklists/`，避免数据库恢复时混淆实体类型。
 
-## rc.3 当前交付状态
+## rc.3 历史交付状态
 
 rc.3 候选源码、本地产物及三种桌面回归均已验收。发布版本为 `v1.1.0-rc.3`，附件包括 `NovelForge_1.1.0-rc.3_x64-setup.exe` 与 `SHA256SUMS.txt`；安装包 SHA-256 为 `cf5b38c3aee63e53f0791a1329cc75d072c623d43eb4d1e27d4e10228c70a92f`。既有 rc.1/rc.2 标签和历史发布资产保留。
 
