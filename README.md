@@ -2,13 +2,23 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.1.0-rc.4（预发布）**。
+当前版本：**1.1.0-rc.5（预发布）**。
 
-- [下载 Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.0-rc.4/NovelForge_1.1.0-rc.4_x64-setup.exe)
-- [Release 与 SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.4)
-- [测试报告](TEST_REPORT.md) · [rc.4 发布说明](docs/releases/v1.1.0-rc.4.md)
+- [下载 Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.0-rc.5/NovelForge_1.1.0-rc.5_x64-setup.exe)
+- [Release 与 SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.5)
+- [测试报告](TEST_REPORT.md) · [rc.5 发布说明](docs/releases/v1.1.0-rc.5.md)
 
-## rc.4：Codex 订阅接入（实验性）
+## rc.5：审计修复与数据保护
+
+修复 rc.4 审计确认的 11 项问题：保存失败阻止退出、章节读取与项目切换竞态、独立删除批次恢复、导出前保存及正文完整性、附件元数据重建、新资料重复保存、最小窗口布局、Temperature 零值和系统主题变化。
+
+“锁定”现在保护本节点及后代正文，限制编辑、格式转换、AI 结果应用和历史恢复；锁定前先保存。读取、复制、移动、回收和导出仍可用，锁定不等于加密或操作系统权限。
+
+附件的说明、标签及关联保存为相邻 `.novelforge-attachment.md` 镜像。旧数据库仍有效时打开项目会补齐镜像；旧数据库已丢失且没有镜像时只能找回原文件，不能恢复原说明和关联。请备份整个项目目录。
+
+本轮通过 264 项前端、94 项 Rust 常规测试及 5 项显式集成/容量测试，并在新安装的 Windows 程序上验收完整桌面流程、三种视口和原生关闭失败保护。详见[rc.5 验收记录](docs/audits/rc5/VALIDATION.md)。Codex 接入继续保持实验性，使用条件如下。
+
+## Codex 订阅接入（实验性）
 
 AI 辅助新增 Codex 模式，使用本机官方 CLI 的 ChatGPT 登录和订阅额度，覆盖续写、润色、分析及提示词模板；支持模型选择、推理强度、流式输出和停止生成。现有 HTTP Provider 和离线模式继续保留。
 
@@ -98,7 +108,7 @@ Markdown 预览支持 HTTP/HTTPS 远程图片，这类图片会向其托管服�
 
 ## 当前范围
 
-当前版本覆盖核心写作、资料管理、规划、多格式导出、数据恢复和 AI 辅助。rc.4 通过 233 项前端测试、83 项 Rust 常规测试及 Windows 安装后 CDP 桌面回归，并完成真实 Codex 订阅写作、取消和哨兵保护验收。rc.1/rc.2/rc.3 的其他测试与基准数字只用于历史追溯，详见 TEST_REPORT。
+当前版本覆盖核心写作、资料管理、规划、多格式导出、数据恢复和 AI 辅助。rc.5 当前验收见上方记录；rc.1 至 rc.4 的数字仅用于历史追溯，详见 TEST_REPORT。
 
 `1.1.0-rc.1` 的直连 release CDP、官方 Tauri WebDriver、原生文件选择器、恢复重启、六项新增工作流、右键菜单、AI Provider、回收站和导出验收均通过。GitHub Pre-release：[v1.1.0-rc.1](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.1)；Windows 安装包为 `NovelForge_1.1.0-rc.1_x64-setup.exe`。
 

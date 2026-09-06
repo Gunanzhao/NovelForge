@@ -1,0 +1,10 @@
+{
+  "fixture": "D:\\NovelForge\\src-tauri\\target\\rc5-close-1788661550152",
+  "target": "D:\\NovelForge\\src-tauri\\target\\rc5-close-1788661550152\\manuscript\\volume_001\\chapter_001.md",
+  "nativeCloseSent": true,
+  "lockedBodyUnchanged": true,
+  "failedClosePreservedText": true,
+  "recoveryPreserved": true,
+  "retrySavedAndExited": true,
+  "exitCode": 0
+}
