@@ -6,7 +6,7 @@ import type {
   ExportFormat, ExportInput, SaveState, SearchResult, Stats, ThemeMode, TrashItem, ViewId,
 } from '../lib/types'
 import {
-  DEFAULT_WORKSPACE_PREFERENCES, readWorkspacePreferences, writeWorkspacePreferences,
+  DEFAULT_WORKSPACE_PREFERENCES, normalizeWorkspacePreferences, readWorkspacePreferences, writeWorkspacePreferences,
 } from '../lib/workspace-preferences'
 import type { WorkspacePreferences } from '../lib/workspace-preferences'
 import { sortChapterNodes } from '../lib/planning-data'
@@ -172,7 +172,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try { localStorage.setItem('novelforge:theme', theme) } catch { /* optional preference */ }
   },
   setWorkspacePreferences: (patch) => set((state) => {
-    const next = { ...state.workspacePreferences, ...patch }
+    const next = normalizeWorkspacePreferences({ ...state.workspacePreferences, ...patch })
     writeWorkspacePreferences(next)
     return { workspacePreferences: next }
   }),

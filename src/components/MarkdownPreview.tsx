@@ -1,6 +1,7 @@
 import { useMemo, type ComponentProps } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { openMarkdownLink } from '../lib/markdown-navigation'
 import { wikiMarkdown, wikiTargetFromHref } from '../lib/markdown'
 import { isExternalMarkdownUrl, markdownUrlTransform } from '../lib/safe-url'
 import type { EntityRecord } from '../lib/types'
@@ -40,6 +41,11 @@ export function MarkdownPreview({ markdown, entities = [], onWikiLink }: Markdow
           {...anchorProps}
           href={href}
           rel={isExternalMarkdownUrl(href) ? 'noopener noreferrer' : anchorProps.rel}
+          onClick={(event) => {
+            if (href.startsWith('#')) return
+            event.preventDefault()
+            void openMarkdownLink(href)
+          }}
         >{children}</a>
       }
       const candidates = entities.filter((entity) => wikiTitleKey(entity.title) === wikiTitleKey(target))

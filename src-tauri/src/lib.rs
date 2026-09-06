@@ -20,6 +20,12 @@ async fn confirm_window_close(window: tauri::WebviewWindow) -> Result<(), String
 pub fn run() {
     let builder = tauri::Builder::default()
         .manage(commands::codex::CodexState::default())
+        .setup(|app| {
+            tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
+                .on_navigation(commands::navigation::workspace_navigation_allowed)
+                .build()?;
+            Ok(())
+        })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 use tauri::Emitter;
@@ -33,6 +39,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             confirm_window_close,
+            commands::navigation::open_external_url,
             commands::project::create_project,
             commands::project::open_project,
             commands::project::list_documents,

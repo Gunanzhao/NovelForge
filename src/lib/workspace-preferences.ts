@@ -68,3 +68,15 @@ export function writeWorkspacePreferences(preferences: WorkspacePreferences) {
     // 偏好写入失败不阻断正文编辑。
   }
 }
+
+/** Fit visible panels without losing the user's preferred widths. */
+export function fitWorkspaceColumns(preferences: WorkspacePreferences, viewportWidth: number, sidebarOpen: boolean, inspectorOpen: boolean) {
+  const normalized = normalizeWorkspacePreferences(preferences)
+  const sidebar = sidebarOpen ? normalized.sidebarWidth : 0
+  const inspector = inspectorOpen ? normalized.inspectorWidth : 0
+  const available = Math.max(0, viewportWidth - 480)
+  const total = sidebar + inspector
+  if (total <= available) return { sidebar, inspector }
+  const fittedSidebar = total ? Math.floor(sidebar / total * available) : 0
+  return { sidebar: fittedSidebar, inspector: Math.max(0, available - fittedSidebar) }
+}

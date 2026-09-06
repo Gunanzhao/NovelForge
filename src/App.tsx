@@ -3,6 +3,7 @@ import {
   BookOpen, Check, FileDown, FolderOpen, Menu, Moon, PanelRight, Plus, Search,
   Settings, Sun, Undo2, X,
 } from 'lucide-react'
+import { fitWorkspaceColumns } from './lib/workspace-preferences'
 import { isDesktop } from './lib/api'
 import type { ExportFormat, ExportInput, NodeKind, NodeRecord } from './lib/types'
 import type { ContextMenuItem, ContextMenuLocation, ContextMenuPayload } from './lib/context-menu'
@@ -93,6 +94,12 @@ function StatusBar() {
 }
 
 export default function App() {
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
+  useEffect(() => {
+    const resize = () => setViewportWidth(window.innerWidth)
+    window.addEventListener('resize', resize)
+    return () => window.removeEventListener('resize', resize)
+  }, [])
   const data = useAppStore((state) => state.data)
   const activeView = useAppStore((state) => state.activeView)
   const document = useAppStore((state) => state.document)
@@ -224,9 +231,10 @@ export default function App() {
   }, [])
 
   if (!data) return <ContextMenuProvider fallbackItems={fallbackItems} pluginItems={pluginItems}><><Welcome onProject={setProjectDialog} /><CommandPalette onNewProject={() => setProjectDialog('new')} onCloseProject={() => void closeProject()} onQuickOpen={() => undefined} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} />{error ? <div className="toast-error"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</></ContextMenuProvider>
+  const columns = fitWorkspaceColumns(workspacePreferences, viewportWidth, sidebarOpen && !focusMode, inspectorOpen && !focusMode)
   const layoutStyle = {
-    '--sidebar-width': String(workspacePreferences.sidebarWidth) + 'px',
-    '--inspector-width': String(workspacePreferences.inspectorWidth) + 'px',
+    '--sidebar-width': String(columns.sidebar) + 'px',
+    '--inspector-width': String(columns.inspector) + 'px',
     '--editor-font-family': workspacePreferences.editorFontFamily === 'sans' ? '"Noto Sans SC", "Microsoft YaHei UI", sans-serif' : '"Noto Serif SC", "Source Han Serif SC", Georgia, serif',
     '--editor-font-size': String(workspacePreferences.editorFontSize) + 'px',
     '--editor-line-height': String(workspacePreferences.editorLineHeight),
@@ -234,5 +242,5 @@ export default function App() {
     '--paragraph-spacing': String(workspacePreferences.paragraphSpacing) + 'px',
   } as CSSProperties
   const transferNode = transferDialog ? data.nodes.find((node) => node.id === transferDialog.nodeId) ?? null : null
-  return <ContextMenuProvider fallbackItems={fallbackItems} pluginItems={pluginItems}><div className={'app-shell' + (focusMode ? ' focus-mode' : '')}><QuickInboxCapture />{focusMode ? null : <TopBar onProject={setProjectDialog} onExport={() => setExportPreset({ scope: 'project' })} onCloseProject={() => void closeProject()} />}<div className={'main-layout' + (focusMode ? ' sidebar-closed inspector-closed' : '') + (sidebarOpen ? '' : ' sidebar-closed') + (inspectorOpen ? '' : ' inspector-closed')} style={layoutStyle}><div className="sidebar-region"><Sidebar onAddNode={(kind, parentId) => setNodeDialog({ kind, parentId })} onMoveNode={(node) => node.kind !== 'volume' && setTransferDialog({ mode: 'move', nodeId: node.id })} onCopyNode={(node) => setTransferDialog({ mode: 'copy', nodeId: node.id })} onExportNode={openExportForNode} /><ResizeHandle side="sidebar" width={workspacePreferences.sidebarWidth} onResize={(width) => setWorkspacePreferences({ sidebarWidth: width })} /></div><main className="workspace">{viewContent()}</main><div className="inspector-region"><Inspector /><ResizeHandle side="inspector" width={workspacePreferences.inspectorWidth} onResize={(width) => setWorkspacePreferences({ inspectorWidth: width })} /></div></div>{focusMode ? null : <StatusBar />}<CommandPalette onNewProject={() => setProjectDialog('new')} onCloseProject={() => void closeProject()} onQuickOpen={openQuickOpen} /><QuickOpen /><ExportDialog open={Boolean(exportPreset)} preset={exportPreset ?? undefined} onClose={() => setExportPreset(null)} data={data} currentNodeId={document?.node.id} onExport={exportProject} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} /><NodeDialog kind={nodeDialog?.kind ?? null} parentId={nodeDialog?.parentId ?? null} onClose={() => setNodeDialog(null)} /><NodeTransferDialog mode={transferDialog?.mode ?? null} node={transferNode} data={data} onClose={() => setTransferDialog(null)} onSubmit={async (targetParentId, title) => { if (!transferDialog) return; if (transferDialog.mode === 'move') await useAppStore.getState().moveNode(transferDialog.nodeId, targetParentId); else await useAppStore.getState().copyNode(transferDialog.nodeId, targetParentId, title) }} />{error ? <div className="toast-error"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</div></ContextMenuProvider>
+  return <ContextMenuProvider fallbackItems={fallbackItems} pluginItems={pluginItems}><div className={'app-shell' + (focusMode ? ' focus-mode' : '')}><QuickInboxCapture />{focusMode ? null : <TopBar onProject={setProjectDialog} onExport={() => setExportPreset({ scope: 'project' })} onCloseProject={() => void closeProject()} />}<div className={'main-layout' + (focusMode ? ' sidebar-closed inspector-closed' : '') + (sidebarOpen ? '' : ' sidebar-closed') + (inspectorOpen ? '' : ' inspector-closed')} style={layoutStyle}><div className="sidebar-region"><Sidebar onAddNode={(kind, parentId) => setNodeDialog({ kind, parentId })} onMoveNode={(node) => node.kind !== 'volume' && setTransferDialog({ mode: 'move', nodeId: node.id })} onCopyNode={(node) => setTransferDialog({ mode: 'copy', nodeId: node.id })} onExportNode={openExportForNode} /><ResizeHandle side="sidebar" width={columns.sidebar} onResize={(width) => setWorkspacePreferences({ sidebarWidth: width })} /></div><main className="workspace">{viewContent()}</main><div className="inspector-region"><Inspector /><ResizeHandle side="inspector" width={columns.inspector} onResize={(width) => setWorkspacePreferences({ inspectorWidth: width })} /></div></div>{focusMode ? null : <StatusBar />}<CommandPalette onNewProject={() => setProjectDialog('new')} onCloseProject={() => void closeProject()} onQuickOpen={openQuickOpen} /><QuickOpen /><ExportDialog open={Boolean(exportPreset)} preset={exportPreset ?? undefined} onClose={() => setExportPreset(null)} data={data} currentNodeId={document?.node.id} onExport={exportProject} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} /><NodeDialog kind={nodeDialog?.kind ?? null} parentId={nodeDialog?.parentId ?? null} onClose={() => setNodeDialog(null)} /><NodeTransferDialog mode={transferDialog?.mode ?? null} node={transferNode} data={data} onClose={() => setTransferDialog(null)} onSubmit={async (targetParentId, title) => { if (!transferDialog) return; if (transferDialog.mode === 'move') await useAppStore.getState().moveNode(transferDialog.nodeId, targetParentId); else await useAppStore.getState().copyNode(transferDialog.nodeId, targetParentId, title) }} />{error ? <div className="toast-error"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</div></ContextMenuProvider>
 }

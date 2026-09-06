@@ -1190,3 +1190,28 @@ code { padding: 1px 4px; border-radius: 3px; background: var(--surface-2); font-
     grid-template-columns: 1fr;
   }
 }
+
+/* Breakpoints refer to the actual work area, not the surrounding window. */
+.workspace { container-type: inline-size; container-name: workspace; }
+@container workspace (max-width: 760px) {
+  .special-layout, .attachments-layout, .planning-layout, .scene-workspace,
+  .entity-layout, .story-arc-layout, .inbox-layout, .character-statistics-layout,
+  .ai-config-row, .ai-workspace-grid, .statistics-grid, .prompt-preset-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .special-list-pane, .attachments-list-pane, .planning-list-pane, .scene-list-column,
+  .entity-list-pane { border-right: 0; border-bottom: 1px solid var(--line); }
+  .special-list, .planning-list, .entity-list, .scene-list { max-height: 240px; overflow: auto; }
+  .special-editor, .planning-editor, .scene-editor, .entity-editor { padding: 16px; }
+  .special-layout, .attachments-layout { margin-inline: 16px; }
+  .planning-section, .character-statistics-layout { padding-inline: 16px; }
+  .view-header, .planning-topbar, .planning-section-head { flex-wrap: wrap; gap: 12px; }
+  .view-header, .planning-topbar { padding-inline: 16px; }
+  .entity-actions, .view-actions, .attachments-toolbar, .special-toolbar { flex-wrap: wrap; }
+  .button { white-space: nowrap; }
+  .statistics-grid, .ai-config-row, .ai-workspace-grid { padding-inline: 16px; }
+}
+@container workspace (max-width: 540px) {
+  .field-grid, .attachment-meta-grid, .custom-field-row, .appearance-columns { grid-template-columns: minmax(0, 1fr); }
+  .planning-tabs, .editor-toolbar { flex-wrap: wrap; }
+}

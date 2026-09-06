@@ -25,6 +25,7 @@ export function chooseFile() {
 }
 
 export const projectApi = {
+  openExternalUrl: (url: string) => command<void>('open_external_url', { url }, false),
   create: (input: ProjectInput) => command<ProjectData>('create_project', { input }),
   open: (path: string) => command<ProjectData>('open_project', { path }),
   createNode: (input: NodeInput) => command<ProjectData>('create_node', { input }),
