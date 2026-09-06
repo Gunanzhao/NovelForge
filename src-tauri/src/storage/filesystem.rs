@@ -117,6 +117,17 @@ pub fn new_project_root(input: &str) -> Result<PathBuf, String> {
     if canonical.join(PROJECT_FILE).exists() {
         return Err("该文件夹已经是 NovelForge 项目".to_string());
     }
+    if fs::read_dir(&canonical)
+        .map_err(|error| format!("无法检查项目文件夹：{error}"))?
+        .next()
+        .transpose()
+        .map_err(|error| format!("无法检查项目文件夹内容：{error}"))?
+        .is_some()
+    {
+        return Err(
+            "新项目必须使用空文件夹；已有正文或资料不会被覆盖，请选择其他文件夹或打开原项目".into(),
+        );
+    }
     Ok(canonical)
 }
 

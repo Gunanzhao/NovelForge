@@ -375,8 +375,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (data.project.id !== get().data?.project.id || (session && !isCurrentProjectSession(session))) return
     const current = get().document
     const currentNode = current ? data.nodes.find((node) => node.id === current.node.id) : undefined
+    // A project mutation returns a fresh snapshot. Keep identical entity
+    // references so unrelated updates do not reset component-owned drafts.
+    const previous = new Map(get().data?.entities.map(entity => [entity.id, entity]) ?? [])
+    const entities = data.entities.map(entity => {
+      const existing = previous.get(entity.id)
+      return existing && JSON.stringify(existing) === JSON.stringify(entity) ? existing : entity
+    })
     set({
-      data,
+      data: { ...data, entities },
       error: null,
       document: current ? (currentNode ? { ...current, node: currentNode } : preserveSelection ? null : current) : null,
     })
@@ -455,6 +462,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const projectPath = get().projectPath
     if (!projectPath) return
     try {
+      if (get().document && get().saveState !== 'saved') {
+        if (!await get().saveCurrentDocument('复制节点前保存')) throw new Error('当前正文保存失败，已取消复制')
+      }
+      if (!isCurrentProjectSession(session)) return
       const data = await projectApi.copyNode({ projectPath, nodeId, targetParentId, title })
       await get().refreshData(data, true, session)
     } catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }

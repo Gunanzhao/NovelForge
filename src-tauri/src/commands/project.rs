@@ -6,6 +6,49 @@ pub fn create_project(input: ProjectInput) -> Result<ProjectData, String> {
         return Err("作品名不能为空".to_string());
     }
     let root = storage::new_project_root(&input.path)?;
+    create_project_staged(root, input, initialize_project)
+}
+
+fn create_project_staged(
+    root: PathBuf,
+    input: ProjectInput,
+    initialize: impl FnOnce(PathBuf, ProjectInput) -> Result<ProjectData, String>,
+) -> Result<ProjectData, String> {
+    let parent = root.parent().ok_or("不能在文件系统根目录创建项目")?;
+    let stage = parent.join(format!(".novelforge-init-{}", storage::new_id()));
+    fs::create_dir(&stage).map_err(|error| format!("无法创建初始化暂存目录：{error}"))?;
+    let result = initialize(stage.clone(), input);
+    let data = match result {
+        Ok(data) => data,
+        Err(error) => {
+            return match fs::remove_dir_all(&stage) {
+                Ok(()) => Err(error),
+                Err(cleanup) => Err(format!(
+                    "{error}；清理暂存目录失败（{}）：{cleanup}",
+                    stage.display()
+                )),
+            };
+        }
+    };
+    // remove_dir succeeds only for an empty destination. Never merge a new
+    // project into existing files, even if another writer populated it meanwhile.
+    if let Err(error) = fs::remove_dir(&root) {
+        let cleanup = fs::remove_dir_all(&stage);
+        return Err(format!(
+            "项目目标目录不再为空或无法访问，已取消创建：{error}；暂存清理：{cleanup:?}"
+        ));
+    }
+    if let Err(error) = fs::rename(&stage, &root) {
+        let _ = fs::create_dir(&root);
+        return Err(format!(
+            "无法完成项目创建：{error}；完整暂存项目保留于 {}",
+            stage.display()
+        ));
+    }
+    Ok(data)
+}
+
+fn initialize_project(root: PathBuf, input: ProjectInput) -> Result<ProjectData, String> {
     storage::create_project_directories(&root)?;
     let timestamp = storage::now();
     let metadata = ProjectMetadata {
@@ -165,4 +208,69 @@ pub fn update_project(input: ProjectSettingsInput) -> Result<ProjectData, String
     storage::write_project_json(&root, &metadata)?;
     let _ = storage::append_log(&root, "INFO", "project_settings_updated");
     project_data(&root, &connection)
+}
+
+#[cfg(test)]
+mod initialization_tests {
+    use super::*;
+    fn input(root: &Path) -> ProjectInput {
+        ProjectInput {
+            path: root.to_string_lossy().into(),
+            title: "初始化保护".into(),
+            author: String::new(),
+            description: String::new(),
+            genre: String::new(),
+            target_words: 1000,
+        }
+    }
+    fn fixture() -> (PathBuf, PathBuf) {
+        let base = std::env::temp_dir().join(format!("novelforge-init-test-{}", storage::new_id()));
+        let target = base.join("project");
+        fs::create_dir_all(&target).unwrap();
+        (base, target)
+    }
+    #[test]
+    fn rejects_existing_manuscript_without_writing_any_project_files() {
+        let (base, target) = fixture();
+        let manuscript = target.join("manuscript/volume_001/chapter_001.md");
+        fs::create_dir_all(manuscript.parent().unwrap()).unwrap();
+        fs::write(&manuscript, "EXISTING_MANUSCRIPT").unwrap();
+        let error = create_project(input(&target)).unwrap_err();
+        assert!(error.contains("空文件夹"));
+        assert_eq!(
+            fs::read_to_string(&manuscript).unwrap(),
+            "EXISTING_MANUSCRIPT"
+        );
+        assert!(!target.join("project.json").exists());
+        assert!(!target.join(".novelforge").exists());
+        fs::remove_dir_all(base).unwrap();
+    }
+    #[test]
+    fn initialization_failure_leaves_destination_empty_and_removes_stage() {
+        let (base, target) = fixture();
+        let error = create_project_staged(target.clone(), input(&target), |stage, _| {
+            fs::write(stage.join("partial"), "partial").unwrap();
+            Err("injected initialization failure".into())
+        })
+        .unwrap_err();
+        assert!(error.contains("injected"));
+        assert_eq!(fs::read_dir(&target).unwrap().count(), 0);
+        assert_eq!(fs::read_dir(&base).unwrap().count(), 1);
+        fs::remove_dir_all(base).unwrap();
+    }
+    #[test]
+    fn concurrent_destination_write_is_preserved_and_prevents_publish() {
+        let (base, target) = fixture();
+        let sentinel = target.join("concurrent.txt");
+        let result = create_project_staged(target.clone(), input(&target), |stage, value| {
+            let data = initialize_project(stage, value)?;
+            fs::write(&sentinel, "CONCURRENT_WRITER").unwrap();
+            Ok(data)
+        });
+        assert!(result.unwrap_err().contains("取消创建"));
+        assert_eq!(fs::read_to_string(sentinel).unwrap(), "CONCURRENT_WRITER");
+        assert!(!target.join("project.json").exists());
+        assert_eq!(fs::read_dir(&base).unwrap().count(), 1);
+        fs::remove_dir_all(base).unwrap();
+    }
 }
