@@ -14,6 +14,22 @@ const b: NodeRecord = { ...a, id: 'b', title: 'B', orderIndex: 1, filePath: 'b.m
 const c: NodeRecord = { ...a, id: 'c', title: 'C', orderIndex: 2, filePath: 'c.md' }
 const project: ProjectData = { project: { formatVersion: 1, id: 'p', title: 'P', author: '', description: '', genre: '', targetWords: 1, createdAt: '', updatedAt: '' }, nodes: [a, b, c], entities: [], recovery: [] }
 function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: Error) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no }); return { resolve, reject, promise } }
+it.each(['a', 'v'])('protects edits under lock %s, without blocking a clean close/save', async (id) => {
+  const volume: NodeRecord = { ...a, id: 'v', parentId: null, kind: 'volume' }
+  useAppStore.setState({ data: { ...project, nodes: [...project.nodes, volume].map(n => n.id === id ? { ...n, status: 'locked' } : n) } })
+  useAppStore.getState().updateContent('must not change')
+  expect(useAppStore.getState().document?.content).toBe('original')
+  expect(useAppStore.getState().error).toContain('锁定')
+  expect(await useAppStore.getState().saveCurrentDocument()).toBe(true)
+  expect(api.saveDocument).not.toHaveBeenCalled()
+})
+it('does not lock if dirty edits cannot be saved', async () => {
+  useAppStore.getState().updateContent('unsaved')
+  api.saveDocument.mockRejectedValueOnce(new Error('disk failure'))
+  await useAppStore.getState().setNodeStatus('a', 'locked')
+  expect(api.setNodeStatus).not.toHaveBeenCalled()
+  expect(useAppStore.getState().document?.content).toBe('unsaved')
+})
 beforeEach(() => {
   vi.resetAllMocks()
   useAppStore.setState({ ...useAppStore.getInitialState(), projectPath: 'P', data: project, document: { node: a, content: 'original' }, saveState: 'saved' })

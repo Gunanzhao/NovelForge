@@ -98,6 +98,7 @@ pub fn open_project(path: String) -> Result<ProjectData, String> {
     if !database_path.is_file() {
         // Do not leave a newly initialized, empty database behind when recovery fails.
         let connection = recovered_project_connection(&root)?;
+        entities::backfill_attachment_mirrors(&root, &connection)?;
         let _ = storage::append_log(&root, "INFO", "project_opened");
         return project_data(&root, &connection);
     }
@@ -119,6 +120,7 @@ pub fn open_project(path: String) -> Result<ProjectData, String> {
     if nodes_empty || entities_empty {
         rebuild_project_from_files(&root, &mut connection, nodes_empty, entities_empty)?;
     }
+    entities::backfill_attachment_mirrors(&root, &connection)?;
     storage::refresh_search_index(&root, &connection)?;
     let _ = storage::append_log(&root, "INFO", "project_opened");
     project_data(&root, &connection)

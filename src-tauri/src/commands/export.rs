@@ -1,5 +1,19 @@
 use super::*;
 
+fn without_duplicate_chapter_heading<'a>(content: &'a str, title: &str) -> &'a str {
+    let first = content.trim_start_matches(['\r', '\n']);
+    let (line, rest) = first.split_once('\n').unwrap_or((first, ""));
+    if line
+        .trim_end()
+        .strip_prefix("# ")
+        .is_some_and(|heading| heading.trim() == title.trim())
+    {
+        rest
+    } else {
+        content
+    }
+}
+
 fn export_nodes(
     root: &Path,
     nodes: &[NodeRecord],
@@ -47,11 +61,7 @@ fn export_nodes(
             let clean = if format == "txt" {
                 export_plain_text(&parse_export_document(&content))
             } else {
-                content
-                    .lines()
-                    .filter(|line| !line.trim_start().starts_with("# "))
-                    .collect::<Vec<_>>()
-                    .join("\n")
+                without_duplicate_chapter_heading(&content, &node.title).to_string()
             };
             output.push_str(clean.trim());
             output.push_str("\n\n");

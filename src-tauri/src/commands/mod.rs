@@ -140,6 +140,7 @@ fn directory_entries(path: &Path) -> Result<Vec<PathBuf>, String> {
 }
 
 const RECOVERY_DIRECTORIES: &[&str] = &[
+    "attachments",
     "manuscript",
     "characters",
     "locations",
@@ -676,6 +677,7 @@ fn rebuild_entities_from_markdown(root: &Path, connection: &Connection) -> Resul
         ("inbox", "inbox"),
         ("checklist-template", "checklist-templates"),
         ("chapter-checklist", "checklists"),
+        ("attachment", "attachments"),
     ] {
         let directory_path = storage::safe_relative(root, directory)?;
         if !directory_path.is_dir() {
@@ -685,7 +687,15 @@ fn rebuild_entities_from_markdown(root: &Path, connection: &Connection) -> Resul
         for path in directory_entries(&directory_path)?
             .into_iter()
             .filter(|path| {
-                path.is_file() && path.extension().and_then(|value| value.to_str()) == Some("md")
+                path.is_file()
+                    && if kind == "attachment" {
+                        path.file_name().is_some_and(|name| {
+                            name.to_string_lossy()
+                                .ends_with(entities::ATTACHMENT_MIRROR_SUFFIX)
+                        })
+                    } else {
+                        path.extension().and_then(|value| value.to_str()) == Some("md")
+                    }
             })
         {
             let path = storage::safe_existing_path(root, &path)?;
@@ -698,7 +708,18 @@ fn rebuild_entities_from_markdown(root: &Path, connection: &Connection) -> Resul
             if legacy {
                 legacy_count += 1;
             }
-            let relative = relative_path(root, &path)?;
+            let mirror_relative = relative_path(root, &path)?;
+            let relative = if kind == "attachment" {
+                let binary = mirror_relative
+                    .strip_suffix(entities::ATTACHMENT_MIRROR_SUFFIX)
+                    .ok_or("附件镜像文件名无效")?;
+                if !storage::safe_relative(root, binary)?.is_file() {
+                    return Err(format!("附件镜像对应的原文件不存在：{binary}"));
+                }
+                binary.to_owned()
+            } else {
+                mirror_relative
+            };
             let timestamp = storage::now();
             let created_at = metadata_timestamp(
                 metadata
@@ -726,7 +747,51 @@ fn rebuild_entities_from_markdown(root: &Path, connection: &Connection) -> Resul
             )?;
         }
     }
+    legacy_count += rebuild_legacy_attachments(root, connection)?;
     Ok(legacy_count)
+}
+
+fn rebuild_legacy_attachments(root: &Path, connection: &Connection) -> Result<usize, String> {
+    let directory = storage::safe_relative(root, "attachments")?;
+    if !directory.is_dir() {
+        return Ok(0);
+    }
+    let existing = storage::all_entities(connection, false)?;
+    let mut restored = 0;
+    for path in directory_entries(&directory)? {
+        if !path.is_file()
+            || path.file_name().is_some_and(|name| {
+                name.to_string_lossy()
+                    .ends_with(entities::ATTACHMENT_MIRROR_SUFFIX)
+            })
+        {
+            continue;
+        }
+        storage::safe_existing_path(root, &path)?;
+        let relative = relative_path(root, &path)?;
+        if existing.iter().any(|entity| entity.file_path == relative) {
+            continue;
+        }
+        let name = path
+            .file_name()
+            .ok_or("附件文件名无效")?
+            .to_string_lossy()
+            .to_string();
+        let timestamp = storage::now();
+        let content = serde_json::json!({"originalName":name,"sizeBytes":fs::metadata(&path).map_err(|e| e.to_string())?.len(),"mimeType":"application/octet-stream","description":"从附件原文件重建。原说明和章节关联没有可用的元数据镜像。"});
+        let id = storage::new_id();
+        connection.execute("INSERT INTO entities (id,kind,title,content_json,tags_json,file_path,created_at,updated_at) VALUES (?1,'attachment',?2,?3,'[\"附件\",\"恢复\"]',?4,?5,?5)", params![id,name,content.to_string(),relative,timestamp]).map_err(|e| format!("恢复旧附件失败：{e}"))?;
+        storage::index_record(
+            connection,
+            &id,
+            "attachment",
+            &name,
+            &content.to_string(),
+            &relative,
+        )?;
+        restored += 1;
+    }
+    Ok(restored)
 }
 
 fn rebuild_history_from_files(root: &Path, connection: &Connection) -> Result<usize, String> {
@@ -1257,6 +1322,7 @@ fn rewrite_node_mirror(
     parent_id: Option<&str>,
     title: &str,
     updated_at: &str,
+    rewrite_title: bool,
 ) -> Result<(), String> {
     let path = storage::safe_relative(root, file_path)?;
     if node.kind == "volume" {
@@ -1268,7 +1334,11 @@ fn rewrite_node_mirror(
         );
     }
     let raw = fs::read_to_string(&path).map_err(|error| format!("读取节点正文失败：{}", error))?;
-    let body = replace_markdown_title(&raw, title);
+    let body = if !rewrite_title {
+        storage::strip_markdown_frontmatter(&raw)
+    } else {
+        replace_markdown_title(&raw, title)
+    };
     let mirror = storage::markdown_node(
         &node.id,
         &node.kind,
@@ -1288,3 +1358,5 @@ mod recovery_regression_tests;
 pub mod codex;
 #[cfg(test)]
 mod move_regression_tests;
+#[cfg(test)]
+mod reliability_regression_tests;

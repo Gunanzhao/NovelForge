@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as R
 import CodeMirror from '@uiw/react-codemirror'
 import { redo, undo } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
-import { RangeSetBuilder } from '@codemirror/state'
+import { EditorState, RangeSetBuilder } from '@codemirror/state'
+import { isNodeLocked } from '../lib/node-lock'
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import {
   Bold, Code2, Columns3, Copy, Eye, Heading1, Image, Italic, Link, List, ListChecks, ListOrdered,
@@ -79,6 +80,7 @@ export function EditorPane() {
   const { openContextMenu } = useContextMenu()
   const editorViewRef = useRef<EditorView | null>(null)
   const [wikiResolution, setWikiResolution] = useState<{ target: string; candidates: EntityRecord[] } | null>(null)
+  const locked = isNodeLocked(data?.nodes ?? [], document?.node.id)
 
   const resolveWikiTarget = useCallback((target: string) => {
     const normalized = wikiTitleKey(target)
@@ -112,6 +114,10 @@ export function EditorPane() {
   const extensions = useMemo(() => [
     markdown(),
     EditorView.lineWrapping,
+    EditorState.transactionFilter.of((transaction) => {
+      const current = useAppStore.getState()
+      return transaction.docChanged && isNodeLocked(current.data?.nodes ?? [], current.document?.node.id) ? [] : transaction
+    }),
     ...wikiEditorExtension(resolveWikiTarget),
   ], [resolveWikiTarget])
   const applyCommand = useCallback((command: MarkdownCommand) => {
@@ -241,13 +247,13 @@ export function EditorPane() {
       </div>
     </div>
     <div className={'editor-body mode-' + editorMode}>
-      {editorMode !== 'preview' ? <div className="editor-pane" onContextMenu={openEditorContextMenu}><CodeMirror value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={(view) => { editorViewRef.current = view; reportEditorSelection({ state: view.state } as ViewUpdate) }} onUpdate={reportEditorSelection} onChange={(value) => updateContent(value)} /></div> : null}
+      {editorMode !== 'preview' ? <div className="editor-pane" onContextMenu={openEditorContextMenu}><CodeMirror key={document.node.id} readOnly={locked} editable={!locked} value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={(view) => { editorViewRef.current = view; reportEditorSelection({ state: view.state } as ViewUpdate) }} onUpdate={reportEditorSelection} onChange={(value) => updateContent(value)} /></div> : null}
       {editorMode !== 'markdown' ? <div className="editor-pane" onContextMenu={handlePreviewContextMenu}><article className="preview"><MarkdownPreview markdown={document.content} entities={data?.entities} onWikiLink={resolveWikiTarget} /></article></div> : null}
     </div>
     {wikiResolution ? <div className="wiki-resolution" role="status">
       <div className="wiki-resolution-copy"><strong>{wikiResolution.target}</strong><span>{wikiResolution.candidates.length > 1 ? '找到多个同名条目，请选择要打开的资料。' : '没有找到对应资料，可以先去搜索项目内容。'}</span></div>
       {wikiResolution.candidates.length ? <div className="wiki-resolution-candidates">{wikiResolution.candidates.map((candidate) => <button type="button" key={candidate.id} onClick={() => { setWikiResolution(null); selectEntity(candidate.kind, candidate.id) }}><strong>{candidate.title}</strong><span>{ENTITY_LABELS[candidate.kind]} · {candidate.filePath}</span></button>)}</div> : <div className="wiki-resolution-actions"><Button variant="outline" onClick={() => openWikiSearch(wikiResolution.target)}>去搜索</Button><Button variant="ghost" onClick={() => setWikiResolution(null)}>关闭</Button></div>}
     </div> : null}
-    <div className="editor-subbar"><span className={'save-indicator ' + saveState}>{saveState === 'saving' ? '正在保存…' : saveState === 'error' ? error?.includes('恢复文件已保留') ? '保存失败，恢复数据已保留' : '保存失败，请检查错误详情' : saveState === 'saved' ? '已保存' : '有未保存修改'}</span><span>{document.content.length} 字符</span><label>状态 <select className="status-select" value={document.node.status} onChange={(event) => void setNodeStatus(document.node.id, event.target.value)}>{Object.entries(NODE_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
+    <div className="editor-subbar"><span className={'save-indicator ' + saveState}>{saveState === 'saving' ? '正在保存…' : saveState === 'error' ? error?.includes('恢复文件已保留') ? '保存失败，恢复数据已保留' : '保存失败，请检查错误详情' : saveState === 'saved' ? '已保存' : '有未保存修改'}</span><span>{document.content.length} 字符{locked ? ' · 正文已锁定（含父级）' : ''}</span><label>状态 <select className="status-select" value={document.node.status} onChange={(event) => void setNodeStatus(document.node.id, event.target.value)}>{Object.entries(NODE_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
   </div>
 }

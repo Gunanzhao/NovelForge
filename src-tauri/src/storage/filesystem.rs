@@ -55,7 +55,7 @@ fn canonical_existing_ancestor(path: &Path) -> Result<PathBuf, String> {
     Err("无法找到项目路径的现有父目录".to_string())
 }
 
-fn ensure_within_root(root: &Path, candidate: &Path) -> Result<(), String> {
+pub(crate) fn ensure_within_root(root: &Path, candidate: &Path) -> Result<(), String> {
     let canonical_root = canonical_root(root)?;
     let boundary = match fs::symlink_metadata(candidate) {
         Ok(_) => {

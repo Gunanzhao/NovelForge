@@ -1,5 +1,35 @@
 use super::*;
 
+fn deletion_batch_ids(
+    connection: &Connection,
+    nodes: &[NodeRecord],
+    root: &NodeRecord,
+) -> Result<Vec<String>, String> {
+    let independent: HashSet<_> = storage::trash_items(connection)?
+        .into_iter()
+        .filter(|item| item.ref_kind == "node" && item.ref_id != root.id)
+        .map(|item| item.ref_id)
+        .collect();
+    let mut ids = vec![root.id.clone()];
+    let mut index = 0;
+    while index < ids.len() {
+        let parent = ids[index].clone();
+        for child in nodes
+            .iter()
+            .filter(|node| node.parent_id.as_deref() == Some(&parent))
+        {
+            if !independent.contains(&child.id)
+                && child.deleted_at == root.deleted_at
+                && !ids.contains(&child.id)
+            {
+                ids.push(child.id.clone());
+            }
+        }
+        index += 1;
+    }
+    Ok(ids)
+}
+
 #[tauri::command]
 pub fn list_trash(path: String) -> Result<Vec<TrashItem>, String> {
     let (_root, connection) = project_connection(&path)?;
@@ -8,7 +38,23 @@ pub fn list_trash(path: String) -> Result<Vec<TrashItem>, String> {
 
 #[tauri::command]
 pub fn empty_trash(path: String) -> Result<ProjectData, String> {
-    let items = list_trash(path.clone())?;
+    let mut items = list_trash(path.clone())?;
+    let (_, connection) = project_connection(&path)?;
+    let nodes = storage::all_nodes(&connection, true)?;
+    // Delete independently trashed descendants before their parent records.
+    let parents: HashMap<_, _> = nodes
+        .iter()
+        .map(|node| (node.id.as_str(), node.parent_id.as_deref()))
+        .collect();
+    items.sort_by_key(|item| {
+        let mut current = Some(item.ref_id.as_str());
+        let mut seen = HashSet::new();
+        while let Some(id) = current.filter(|id| seen.insert(*id)) {
+            current = parents.get(id).copied().flatten();
+        }
+        std::cmp::Reverse(seen.len())
+    });
+    drop(connection);
     for item in items {
         permanent_delete(crate::models::NodeActionInput {
             project_path: path.clone(),
@@ -28,6 +74,9 @@ pub fn restore_trash(input: crate::models::NodeActionInput) -> Result<ProjectDat
     }
     let trash_path = storage::safe_trash_path(&root, &item.trash_path)?;
     if item.ref_kind == "entity" {
+        let entity =
+            storage::entity_from_id(&connection, &item.ref_id)?.ok_or("待恢复资料不存在")?;
+        let attachment = entity.kind == "attachment";
         let destination = storage::safe_relative(&root, &item.original_path)?;
         if destination.exists() {
             return Err("原位置已有同名内容，请先处理后再恢复".to_string());
@@ -38,8 +87,10 @@ pub fn restore_trash(input: crate::models::NodeActionInput) -> Result<ProjectDat
                 .ok_or_else(|| "无法确定恢复目录".to_string())?,
         )
         .map_err(|error| format!("无法创建恢复目录：{}", error))?;
-        fs::rename(&trash_path, &destination)
-            .map_err(|error| format!("恢复文件失败：{}", error))?;
+        if attachment && !entities::attachment_mirror_path(&root, &trash_path)?.exists() {
+            entities::write_attachment_mirror(&root, &trash_path, &entity)?;
+        }
+        entities::move_entity_files(&root, &trash_path, &destination, attachment)?;
         let database_result = (|| -> Result<(), String> {
             let transaction = connection
                 .transaction()
@@ -58,7 +109,7 @@ pub fn restore_trash(input: crate::models::NodeActionInput) -> Result<ProjectDat
                 .map_err(|error| format!("提交恢复事务失败：{}", error))
         })();
         if let Err(error) = database_result {
-            return match fs::rename(&destination, &trash_path) {
+            return match entities::move_entity_files(&root, &destination, &trash_path, attachment) {
                 Ok(()) => Err(format!("{}；文件已移回回收站", error)),
                 Err(rollback_error) => Err(format!("{}；文件回滚失败：{}", error, rollback_error)),
             };
@@ -70,9 +121,10 @@ pub fn restore_trash(input: crate::models::NodeActionInput) -> Result<ProjectDat
             .find(|candidate| candidate.id == item.ref_id)
             .cloned()
             .ok_or_else(|| "待恢复节点不存在".to_string())?;
-        if node.deleted_at.is_none() {
+        if node.deleted_at.is_none() && storage::safe_relative(&root, &node.file_path)?.exists() {
             return Err("节点不在回收站".to_string());
         }
+        let node_ids = deletion_batch_ids(&connection, &all_nodes, &node)?;
         let active_nodes = storage::all_nodes(&connection, false)?;
         let parent = node
             .parent_id
@@ -84,13 +136,18 @@ pub fn restore_trash(input: crate::models::NodeActionInput) -> Result<ProjectDat
         }
         let mut ignored_ids = HashSet::new();
         ignored_ids.insert(node.id.clone());
-        let preferred_available = node_path_available(
-            &root,
-            &all_nodes,
-            &item.original_path,
-            &node.kind,
-            &ignored_ids,
-        )?;
+        let parent_matches = parent.as_ref().is_none_or(|parent| {
+            Path::new(&item.original_path).parent()
+                == Some(Path::new(node_path_prefix(parent).trim_end_matches('/')))
+        });
+        let preferred_available = parent_matches
+            && node_path_available(
+                &root,
+                &all_nodes,
+                &item.original_path,
+                &node.kind,
+                &ignored_ids,
+            )?;
         let sibling_count = active_nodes
             .iter()
             .filter(|candidate| candidate.parent_id == node.parent_id)
@@ -141,11 +198,11 @@ pub fn restore_trash(input: crate::models::NodeActionInput) -> Result<ProjectDat
             node.parent_id.as_deref(),
             &node.title,
             &timestamp,
+            false,
         ) {
             let _ = restore_node_from_trash(&trash_path, &destination, &node.kind, sidecar_moved);
             return Err(error);
         }
-        let node_ids = descendant_ids(&all_nodes, &node.id);
         let database_result = (|| -> Result<(), String> {
             let transaction = connection
                 .transaction()
@@ -210,6 +267,15 @@ pub fn permanent_delete(input: crate::models::NodeActionInput) -> Result<Project
     if item.ref_kind != "node" && item.ref_kind != "entity" {
         return Err("回收站项目类型无效".to_string());
     }
+    if item.ref_kind == "node" {
+        let nodes = storage::all_nodes(&connection, true)?;
+        let descendants = descendant_ids(&nodes, &item.ref_id);
+        if storage::trash_items(&connection)?.iter().any(|other| {
+            other.ref_kind == "node" && other.id != item.id && descendants.contains(&other.ref_id)
+        }) {
+            return Err("请先恢复或永久删除单独位于回收站的子节点，再永久删除父节点".into());
+        }
+    }
     let trash_path = storage::safe_trash_path(&root, &item.trash_path)?;
     let purge_id = storage::new_id();
     let quarantine = trash_path.with_file_name(format!(".purge-{}", purge_id));
@@ -221,11 +287,21 @@ pub fn permanent_delete(input: crate::models::NodeActionInput) -> Result<Project
     } else {
         None
     };
-    let trash_sidecar = node_kind
+    let mut trash_sidecar = node_kind
         .as_deref()
         .filter(|kind| *kind == "chapter")
         .map(|_| trash_path.with_extension(""))
         .filter(|path| path.is_dir());
+    if item.ref_kind == "entity"
+        && storage::entity_from_id(&connection, &item.ref_id)?
+            .is_some_and(|e| e.kind == "attachment")
+    {
+        let mirror = entities::attachment_mirror_path(&root, &trash_path)?;
+        trash_sidecar = mirror.exists().then_some(mirror);
+    }
+    if let Some(sidecar) = &trash_sidecar {
+        storage::ensure_within_root(&root, sidecar)?;
+    }
     let quarantine_sidecar = trash_sidecar
         .as_ref()
         .map(|_| trash_path.with_file_name(format!(".purge-{}-sidecar", purge_id)));
@@ -302,8 +378,13 @@ pub fn permanent_delete(input: crate::models::NodeActionInput) -> Result<Project
         fs::remove_file(&quarantine).map_err(|error| format!("清理永久删除文件失败：{}", error))?;
     }
     if let Some(quarantine_sidecar) = quarantine_sidecar.filter(|path| path.exists()) {
-        fs::remove_dir_all(&quarantine_sidecar)
-            .map_err(|error| format!("清理永久删除小节目录失败：{}", error))?;
+        if quarantine_sidecar.is_dir() {
+            fs::remove_dir_all(&quarantine_sidecar)
+                .map_err(|error| format!("清理永久删除小节目录失败：{}", error))?;
+        } else {
+            fs::remove_file(&quarantine_sidecar)
+                .map_err(|error| format!("清理附件元数据失败：{}", error))?;
+        }
     }
     storage::touch_project(&root)?;
     project_data(&root, &connection)

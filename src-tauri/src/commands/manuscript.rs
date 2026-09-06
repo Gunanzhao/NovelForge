@@ -1,5 +1,21 @@
 use super::*;
 
+pub(crate) fn ensure_body_unlocked(connection: &Connection, node_id: &str) -> Result<(), String> {
+    let mut id = Some(node_id.to_string());
+    let mut seen = HashSet::new();
+    while let Some(current) = id {
+        if !seen.insert(current.clone()) {
+            return Err("节点父级关系存在循环".into());
+        }
+        let node = storage::node_from_id(connection, &current)?.ok_or("节点不存在")?;
+        if node.status == "locked" {
+            return Err("正文已锁定，请先解除本节点或父级锁定。".into());
+        }
+        id = node.parent_id;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn create_node(input: NodeInput) -> Result<ProjectData, String> {
     if input.title.trim().is_empty() {
@@ -130,6 +146,7 @@ pub fn rename_node(input: crate::models::RenameNodeInput) -> Result<ProjectData,
         return Err("名称不能为空".to_string());
     }
     let (root, mut connection) = project_connection(&input.project_path)?;
+    ensure_body_unlocked(&connection, &input.node_id)?;
     let current = storage::node_from_id(&connection, &input.node_id)?
         .ok_or_else(|| "节点不存在".to_string())?;
     if current.deleted_at.is_some() {
@@ -452,6 +469,7 @@ pub fn move_node(input: MoveNodeInput) -> Result<ProjectData, String> {
         target_parent_id,
         &current.title,
         &timestamp,
+        false,
     ) {
         let rollback = rollback_node_move(
             &root,
@@ -633,6 +651,7 @@ pub fn copy_node(input: CopyNodeInput) -> Result<ProjectData, String> {
             new_parent_id.as_deref(),
             &new_title,
             &timestamp,
+            true,
         ) {
             let _ = remove_path_if_exists(&target_absolute);
             if current.kind == "chapter" {
@@ -787,6 +806,7 @@ pub(crate) fn save_document_internal(
     content: &str,
     reason: &str,
 ) -> Result<DocumentData, String> {
+    ensure_body_unlocked(connection, node_id)?;
     let node =
         storage::node_from_id(connection, node_id)?.ok_or_else(|| "章节不存在".to_string())?;
     if node.deleted_at.is_some() || node.kind == "volume" {

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { isNodeLocked } from '../lib/node-lock'
 import { projectApi } from '../lib/api'
 import type {
   DocumentData, EditorSelection, EntityInput, EntityKind, NodeRecord, ProjectData, ProjectInput,
@@ -315,10 +316,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  updateContent: (content) => set((state) => state.document ? ({ document: { ...state.document, content }, documentVersion: state.documentVersion + 1, saveState: 'idle' }) : state),
+  updateContent: (content) => set((state) => {
+    if (!state.document || state.document.content === content) return state
+    if (isNodeLocked(state.data?.nodes ?? [], state.document.node.id)) return { error: '正文已锁定，请先解除本节点或父级锁定。' }
+    return { document: { ...state.document, content }, documentVersion: state.documentVersion + 1, saveState: 'idle' }
+  }),
   setEditorSelection: (selection) => set({ editorSelection: selection }),
 
   saveCurrentDocument: async (reason = '自动保存') => {
+    const current = get()
+    if (isNodeLocked(current.data?.nodes ?? [], current.document?.node.id)) {
+      if (current.saveState === 'saved') return true
+      get().setError('正文已锁定，未保存的内容仍保留在编辑器，请先解锁。')
+      return false
+    }
     if (activeSave) return activeSave
     activeSave = (async () => {
       while (true) {
@@ -408,7 +419,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
-    try { await get().refreshData(await projectApi.setNodeStatus({ projectPath, nodeId, status }), true, session) }
+    try {
+      if (status === 'locked' && get().saveState !== 'saved' && !await get().saveCurrentDocument('锁定前保存')) throw new Error('正文保存失败，已取消锁定')
+      if (!isCurrentProjectSession(session)) return
+      await get().refreshData(await projectApi.setNodeStatus({ projectPath, nodeId, status }), true, session)
+    }
     catch (error) { if (isCurrentProjectSession(session)) get().setError(error) }
   },
 

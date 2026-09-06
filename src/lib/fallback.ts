@@ -3,6 +3,7 @@ import type {
   ProjectInput, SearchInput, SearchResult, TrashItem,
 } from './types'
 import { analyzeConsistency } from './consistency-data'
+import { isNodeLocked } from './node-lock'
 import { countWords } from './utils'
 import { parseChecklistTemplate } from './chapter-workflow'
 
@@ -346,6 +347,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   if (command === 'rename_node') {
     const current = node(store, input?.nodeId as string)
     if (!current) throw new Error('节点不存在')
+    if (isNodeLocked(store.data.nodes, current.id)) throw new Error('正文已锁定，请先解锁')
     const title = typeof input?.title === 'string' ? input.title.trim() : ''
     if (!title) throw new Error('名称不能为空')
     current.title = title
@@ -446,6 +448,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     const id = input?.nodeId as string
     const current = node(store, id)
     if (!current) throw new Error('章节不存在')
+    if (isNodeLocked(store.data.nodes, current.id)) throw new Error('正文已锁定，请先解锁')
     if (current.kind === 'volume') throw new Error('只有未删除的章节或小节可以编辑')
     if (typeof input?.content !== 'string') throw new Error('正文内容无效')
     const content = input.content
@@ -475,6 +478,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     if (!item) throw new Error('版本不存在')
     const current = node(store, item.nodeId)
     if (!current) throw new Error('章节不存在')
+    if (isNodeLocked(store.data.nodes, current.id)) throw new Error('正文已锁定，请先解锁')
     if (current.kind === 'volume') throw new Error('只有未删除的章节或小节可以编辑')
     const oldContent = store.documents[item.nodeId] ?? ''
     const now = new Date().toISOString()

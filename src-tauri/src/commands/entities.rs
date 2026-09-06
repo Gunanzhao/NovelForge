@@ -1,5 +1,88 @@
 use super::*;
 
+pub(crate) const ATTACHMENT_MIRROR_SUFFIX: &str = ".novelforge-attachment.md";
+
+pub(crate) fn attachment_mirror_path(root: &Path, binary: &Path) -> Result<PathBuf, String> {
+    storage::ensure_within_root(root, binary)?;
+    let name = binary
+        .file_name()
+        .ok_or("附件文件名无效")?
+        .to_string_lossy();
+    let path = binary.with_file_name(format!("{name}{ATTACHMENT_MIRROR_SUFFIX}"));
+    storage::ensure_within_root(root, &path)?;
+    if path.exists() && !path.is_file() {
+        return Err(format!("附件元数据路径不是文件：{}", path.display()));
+    }
+    Ok(path)
+}
+
+pub(crate) fn write_attachment_mirror(
+    root: &Path,
+    binary: &Path,
+    entity: &EntityRecord,
+) -> Result<(), String> {
+    let path = attachment_mirror_path(root, binary)?;
+    let markdown = storage::markdown_entity_with_metadata(
+        &entity.id,
+        "attachment",
+        &entity.created_at,
+        &entity.updated_at,
+        &entity.title,
+        &entity.content,
+        &entity.tags,
+    );
+    storage::atomic_write(&path, markdown.as_bytes())
+}
+
+pub(crate) fn backfill_attachment_mirrors(
+    root: &Path,
+    connection: &Connection,
+) -> Result<(), String> {
+    for entity in storage::all_entities(connection, false)?
+        .iter()
+        .filter(|e| e.kind == "attachment")
+    {
+        let binary = storage::safe_relative(root, &entity.file_path)?;
+        let mirror = attachment_mirror_path(root, &binary)?;
+        if binary.is_file() && !mirror.exists() {
+            write_attachment_mirror(root, &binary, entity)?;
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn move_entity_files(
+    root: &Path,
+    source: &Path,
+    target: &Path,
+    attachment: bool,
+) -> Result<(), String> {
+    storage::ensure_within_root(root, source)?;
+    storage::ensure_within_root(root, target)?;
+    let companion = if attachment {
+        let from = attachment_mirror_path(root, source)?;
+        let to = attachment_mirror_path(root, target)?;
+        if to.exists() {
+            return Err("目标附件元数据文件已存在".into());
+        }
+        from.exists().then_some((from, to))
+    } else {
+        None
+    };
+    fs::rename(source, target).map_err(|error| format!("移动资料文件失败：{error}"))?;
+    if let Some((from, to)) = companion {
+        if let Err(error) = fs::rename(from, to) {
+            return match fs::rename(target, source) {
+                Ok(()) => Err(format!("移动附件元数据失败：{error}；附件文件已回滚")),
+                Err(rollback) => Err(format!(
+                    "移动附件元数据失败：{error}；附件回滚失败：{rollback}"
+                )),
+            };
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
     if input.title.trim().is_empty() {
@@ -9,6 +92,9 @@ pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
     let timestamp = storage::now();
     let entity_id = input.id.clone().unwrap_or_else(storage::new_id);
     let existing = storage::entity_from_id(&connection, &entity_id)?;
+    if input.kind == "attachment" && existing.is_none() {
+        return Err("附件请通过导入文件创建".into());
+    }
     if let Some(entity) = existing.as_ref() {
         if entity.deleted_at.is_some() {
             return Err("回收站中的资料不能直接编辑，请先恢复".to_string());
@@ -33,7 +119,10 @@ pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
     let tags_json =
         serde_json::to_string(&input.tags).map_err(|error| format!("标签序列化失败：{}", error))?;
     let target = if input.kind == "attachment" {
-        None
+        Some(attachment_mirror_path(
+            &root,
+            &storage::safe_relative(&root, &file_path)?,
+        )?)
     } else {
         Some(storage::safe_relative(&root, &file_path)?)
     };
@@ -182,6 +271,22 @@ pub fn import_attachment(input: crate::models::AttachmentInput) -> Result<Projec
     let content_json = serde_json::to_string(&content)
         .map_err(|error| format!("附件信息序列化失败：{}", error))?;
     let database_result = (|| -> Result<(), String> {
+        write_attachment_mirror(
+            &root,
+            &destination,
+            &EntityRecord {
+                id: id.clone(),
+                kind: "attachment".into(),
+                title: original_name.clone(),
+                content: content.clone(),
+                tags: vec!["附件".into()],
+                file_path: relative_path.clone(),
+                created_at: timestamp.clone(),
+                updated_at: timestamp.clone(),
+                deleted_at: None,
+                deleted_path: None,
+            },
+        )?;
         connection.execute(
             "INSERT INTO entities (id, kind, title, content_json, tags_json, file_path, created_at, updated_at) VALUES (?1, 'attachment', ?2, ?3, ?4, ?5, ?6, ?7)",
             params![id, original_name, content_json, serde_json::json!(["附件"]).to_string(), relative_path, timestamp, timestamp],
@@ -199,6 +304,9 @@ pub fn import_attachment(input: crate::models::AttachmentInput) -> Result<Projec
     })();
     if let Err(error) = database_result {
         let _ = fs::remove_file(&destination);
+        if let Ok(mirror) = attachment_mirror_path(&root, &destination) {
+            let _ = fs::remove_file(mirror);
+        }
         let _ = connection.execute("DELETE FROM entities WHERE id = ?1", params![id]);
         let _ = connection.execute("DELETE FROM search_index WHERE ref_id = ?1", params![id]);
         return Err(error);
@@ -258,7 +366,22 @@ pub fn delete_entity(input: crate::models::NodeActionInput) -> Result<ProjectDat
         return Err("条目已经在回收站".to_string());
     }
     let original_absolute = storage::safe_relative(&root, &entity.file_path)?;
-    let trash_path = storage::move_to_trash(&root, &original_absolute, &entity.id)?;
+    let attachment = entity.kind == "attachment";
+    if attachment {
+        write_attachment_mirror(&root, &original_absolute, &entity)?;
+    }
+    let trash_directory = storage::safe_relative(&root, "trash/items")?;
+    fs::create_dir_all(&trash_directory).map_err(|error| format!("创建回收站目录失败：{error}"))?;
+    let trash_path = trash_directory.join(format!(
+        "{}_{}",
+        storage::new_id(),
+        original_absolute
+            .file_name()
+            .ok_or("资料文件名无效")?
+            .to_string_lossy()
+    ));
+    move_entity_files(&root, &original_absolute, &trash_path, attachment)?;
+    let trash_path = trash_path.to_string_lossy().to_string();
     let deleted_at = storage::now();
     let database_result = (|| -> Result<(), String> {
         let transaction = connection
@@ -287,7 +410,12 @@ pub fn delete_entity(input: crate::models::NodeActionInput) -> Result<ProjectDat
             .map_err(|error| format!("提交资料删除事务失败：{}", error))
     })();
     if let Err(error) = database_result {
-        return match fs::rename(Path::new(&trash_path), &original_absolute) {
+        return match move_entity_files(
+            &root,
+            Path::new(&trash_path),
+            &original_absolute,
+            attachment,
+        ) {
             Ok(()) => Err(format!("{}；资料文件已恢复到原位置", error)),
             Err(rollback_error) => Err(format!("{}；资料文件回滚失败：{}", error, rollback_error)),
         };

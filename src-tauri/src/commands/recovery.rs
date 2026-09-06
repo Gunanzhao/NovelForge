@@ -41,6 +41,7 @@ pub fn restore_recovery(input: RecoveryActionInput) -> Result<ProjectData, Strin
     let recovery_file = recovery_path(&root, &input.recovery_id)?;
     let content = fs::read_to_string(&recovery_file)
         .map_err(|error| format!("无法读取恢复内容：{}", error))?;
+    manuscript::ensure_body_unlocked(&connection, &node_id)?;
     preserve_current_revision(&root, &connection, &node_id, "恢复前自动快照")?;
     save_document_internal(&root, &mut connection, &node_id, &content, "崩溃恢复")?;
     storage::remove_file_if_exists(&recovery_file)?;
@@ -94,6 +95,7 @@ pub fn restore_history(input: RevisionActionInput) -> Result<ProjectData, String
         .map_err(|error| format!("版本不存在：{}", error))?;
     let content = fs::read_to_string(storage::safe_relative(&root, &path)?)
         .map_err(|error| format!("无法读取历史内容：{}", error))?;
+    manuscript::ensure_body_unlocked(&connection, &node_id)?;
     preserve_current_revision(&root, &connection, &node_id, "恢复前自动快照")?;
     save_document_internal(&root, &mut connection, &node_id, &content, "恢复历史版本")?;
     project_data(&root, &connection)

@@ -21,9 +21,9 @@ pub(crate) use database::{
     all_entities, all_nodes, entity_from_id, node_from_id, open_db, trash_items,
 };
 pub(crate) use filesystem::{
-    atomic_write, create_project_directories, existing_project_root, move_to_trash,
-    new_project_root, read_project_json, remove_file_if_exists, safe_existing_path, safe_relative,
-    safe_trash_path, touch_project, write_project_json,
+    atomic_write, create_project_directories, ensure_within_root, existing_project_root,
+    move_to_trash, new_project_root, read_project_json, remove_file_if_exists, safe_existing_path,
+    safe_relative, safe_trash_path, touch_project, write_project_json,
 };
 pub(crate) use history::{
     copy_history, history_items, parse_timestamp, recovery_items, write_recovery,
