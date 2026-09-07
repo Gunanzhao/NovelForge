@@ -2,13 +2,27 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.1.0-rc.6（预发布）**。
+当前版本：**1.1.0-rc.7（预发布）**。
 
-- [下载 Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.0-rc.6/NovelForge_1.1.0-rc.6_x64-setup.exe)
-- [Release 与 SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.6)
-- [测试报告](TEST_REPORT.md) · [rc.6 发布说明](docs/releases/v1.1.0-rc.6.md)
+- [下载 Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.0-rc.7/NovelForge_1.1.0-rc.7_x64-setup.exe)
+- [Release 与 SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.7)
+- [测试报告](TEST_REPORT.md) · [rc.7 发布说明](docs/releases/v1.1.0-rc.7.md)
 
-## rc.6：独立审查修复
+## rc.7：独立名字生成器与命名工作区
+
+右侧辅助栏只保留入口，点击打开独立弹窗；批量生成的结果在弹窗内滚动，不再把下面的条目挤出屏幕。
+
+- 12 种类型、8 种风格使用扩展词根组合，不再用数字补齐名字；支持指定姓氏、字数、必含字、排除字及后缀。
+- 家族辈分和统一主题命名，适合人物家族、门派、舰队及城市群；项目已有名字提示与可选避重。
+- 锁定满意结果后只刷新其余名字；收藏夹支持搜索、单个移除、复制和建档，最近生成可恢复历史结果。
+- 每部小说可保存专属姓氏、词根、禁用词和命名预设。命名偏好保存在本机，按项目区分；收藏跨项目共享。
+- 可选 Provider / Codex AI 命名：显式选择背景资料、预览请求、生成带创作解释的候选，支持取消与过期结果保护。
+
+已通过 290 项前端测试、类型检查、代码规范检查及云端 Frontend / Rust 检查；Windows 桌面回归验证了 1440×900、1100×650 窗口、30 个结果、收藏历史、模拟 Provider 和实际建档。真实付费 AI 服务未用于本轮测试，Codex 接入仍为实验性。
+
+详细操作与数据保存边界见 [名字生成器使用说明](docs/name-generator.md)。
+
+## rc.6 历史：独立审查修复
 
 - 新项目只在空目录创建，先完成暂存初始化，目标出现已有文件时中止；复制正文前先保存，失败会阻止复制。
 - 修复同屏 Checklist 等更新重置资料草稿的问题。
@@ -53,7 +67,8 @@ rc.3 的 Wiki 统计及 Markdown 边界修复继续保留；[rc.3 历史发布�
 - Wiki 双向引用格式：[[人物名]]、[[地点名]]、[[世界观条目]]。
 - SQLite FTS5 全文搜索和中文内容回退匹配。
 - 写作统计、每日目标、专注模式、浅色 / 深色 / 跟随系统主题。
-- 回收站、Markdown / TXT / HTML / DOCX / EPUB / PDF 导出；支持整本、指定卷、指定章节和元数据配置；附带本地规则名字生成器。
+- 回收站、Markdown / TXT / HTML / DOCX / EPUB / PDF 导出；支持整本、指定卷、指定章节和元数据配置。
+- 独立名字生成器：条件与系列命名、项目避重、锁定刷新、收藏、历史、专属词库/预设，以及可选 AI 命名。
 - 时间线专用工作区：按故事日期排序事件，并关联章节、人物和地点。
 - 伏笔专用清单：跟踪埋设、计划回收、实际回收和搁置状态，并可从章节引用跳转正文。
 - 人物关系图：用关系线连接人物，支持关系类型、强度、备注和人物资料跳转。
