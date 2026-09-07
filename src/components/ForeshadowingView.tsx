@@ -9,7 +9,7 @@ import type { ForeshadowingStatus } from '../lib/planning-data'
 import { useAppStore } from '../stores/app-store'
 import type { ContextMenuItem } from '../lib/context-menu'
 import { writeClipboardText } from '../lib/clipboard'
-import { Button, Field, Panel, TextInput } from './ui'
+import { RecordSaveStatus, Button, Field, Panel, TextInput } from './ui'
 import { useContextMenu } from './ContextMenu'
 import '../planning.css'
 
@@ -211,7 +211,7 @@ export function ForeshadowingView() {
             <div className="field-grid"><Field label="首次埋设章节"><TextInput value={draft.plantedIn} onChange={(event) => updateField('plantedIn', event.target.value)} placeholder="例如：第 2 章" /><ChapterReferences value={draft.plantedIn} nodes={data.nodes} onOpen={(id) => void selectNode(id)} /></Field><Field label="计划回收章节"><TextInput value={draft.plannedPayoff} onChange={(event) => updateField('plannedPayoff', event.target.value)} placeholder="例如：第 18 章" /><ChapterReferences value={draft.plannedPayoff} nodes={data.nodes} onOpen={(id) => void selectNode(id)} /></Field></div>
             <div className="field-grid"><Field label="实际回收章节"><TextInput value={draft.actualPayoff} onChange={(event) => updateField('actualPayoff', event.target.value)} placeholder="回收后填写" /><ChapterReferences value={draft.actualPayoff} nodes={data.nodes} onOpen={(id) => void selectNode(id)} /></Field><Field label="状态"><select className="select-input" value={draft.status} onChange={(event) => updateField('status', event.target.value)}>{FORESHADOWING_STATUSES.map((status) => <option key={status.id} value={status.id}>{status.label} · {status.description}</option>)}</select></Field></div>
             <Field label="备注"><textarea className="text-area compact" value={draft.notes} onChange={(event) => updateField('notes', event.target.value)} placeholder="补充写作提醒、相关人物或需要检查的章节…" /></Field>
-            <div className="entity-actions"><Button onClick={() => void save()} disabled={busy || !draft.title.trim()}><Save size={14} />{busy ? '保存中…' : '保存伏笔'}</Button>{selected && !creating ? <Button variant="danger" onClick={() => void remove()}><Trash2 size={14} />移入回收站</Button> : null}</div>
+            <div className="entity-actions"><RecordSaveStatus updatedAt={creating ? undefined : selected?.updatedAt} busy={busy} /><Button onClick={() => void save()} disabled={busy || !draft.title.trim()}><Save size={14} />{busy ? '保存中…' : '保存伏笔'}</Button>{selected && !creating ? <Button variant="danger" onClick={() => void remove()}><Trash2 size={14} />移入回收站</Button> : null}</div>
           </div>
         </> : <div className="empty-state"><GitBranch size={25} /><div><strong>选择一条伏笔</strong><span>从左侧选择伏笔，或新建一条需要后续回收的线索。</span></div></div>}</Panel>
       </section>

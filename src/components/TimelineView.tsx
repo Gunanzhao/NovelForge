@@ -5,7 +5,7 @@ import { chapterReferenceTokens, contentText, filterTimelineEntities, findChapte
 import { useAppStore } from '../stores/app-store'
 import type { ContextMenuItem } from '../lib/context-menu'
 import { writeClipboardText } from '../lib/clipboard'
-import { Button, Field, Panel, TextInput } from './ui'
+import { RecordSaveStatus, Button, Field, Panel, TextInput } from './ui'
 import { useContextMenu } from './ContextMenu'
 import '../planning.css'
 
@@ -183,7 +183,7 @@ export function TimelineView() {
             <Field label="标签" hint="多个标签用逗号分隔"><TextInput value={draft.tags} onChange={(event) => updateField('tags', event.target.value)} placeholder="例如：转折、线索、高潮" /></Field>
             <div className="special-preview-row"><span><Clock3 size={13} />{draft.date || '未定日期'}{draft.time ? ' · ' + draft.time : ''}</span><span><MapPin size={13} />{draft.location || '未定地点'}</span><span><Users size={13} />{draft.characters || '未指定人物'}</span></div>
             {!creating && selected ? <div className="special-related"><span className="field-label">正文链接</span><ChapterReferences value={draft.chapters} nodes={data.nodes} onOpen={(id) => void selectNode(id)} /></div> : null}
-            <div className="entity-actions"><Button onClick={() => void save()} disabled={busy || !draft.title.trim()}><Save size={14} />{busy ? '保存中…' : '保存事件'}</Button>{selected && !creating ? <Button variant="danger" onClick={() => void remove()}><Trash2 size={14} />移入回收站</Button> : null}</div>
+            <div className="entity-actions"><RecordSaveStatus updatedAt={creating ? undefined : selected?.updatedAt} busy={busy} /><Button onClick={() => void save()} disabled={busy || !draft.title.trim()}><Save size={14} />{busy ? '保存中…' : '保存事件'}</Button>{selected && !creating ? <Button variant="danger" onClick={() => void remove()}><Trash2 size={14} />移入回收站</Button> : null}</div>
           </div>
         </> : <div className="empty-state"><CalendarDays size={25} /><div><strong>选择一个事件</strong><span>从左侧选择事件，或新建一条时间线记录。</span></div></div>}</Panel>
       </section>

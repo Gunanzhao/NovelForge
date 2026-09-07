@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { X } from 'lucide-react'
-import { cn } from '../lib/utils'
+import { cn, formatDate } from '../lib/utils'
 
 export function Button({ className, variant = 'solid', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'solid' | 'ghost' | 'outline' | 'danger' }) {
   return <button className={cn('button', 'button-' + variant, className)} {...props} />
@@ -17,6 +17,10 @@ export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInput
 
 export function Panel({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return <section className={cn('panel', className)} {...props} />
+}
+
+export function RecordSaveStatus({ updatedAt, busy }: { updatedAt?: string; busy: boolean }) {
+  return <span className="record-save-status" role="status">{busy ? '正在保存…' : updatedAt ? '上次保存 ' + formatDate(updatedAt) : '新条目，保存后加入项目'}</span>
 }
 
 export function Modal({ open, title, onClose, children, footer }: { open: boolean; title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {

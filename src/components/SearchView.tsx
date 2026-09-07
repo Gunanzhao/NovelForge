@@ -1,3 +1,4 @@
+import { Disclosure } from './Disclosure'
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { FileSearch, Search } from 'lucide-react'
 import type { EntityKind } from '../lib/types'
@@ -6,7 +7,7 @@ import { searchSegments } from '../lib/search-data'
 import { useAppStore } from '../stores/app-store'
 import type { ContextMenuItem } from '../lib/context-menu'
 import { writeClipboardText } from '../lib/clipboard'
-import { TextInput } from './ui'
+import { Button, TextInput } from './ui'
 import { useContextMenu } from './ContextMenu'
 
 export function SearchView() {
@@ -26,6 +27,7 @@ export function SearchView() {
   const [volumePath, setVolumePath] = useState('')
   const [tag, setTag] = useState('')
   const [caseSensitive, setCaseSensitive] = useState(false)
+  const [searching, setSearching] = useState(false)
 
   useEffect(() => {
     const onScope = (event: Event) => {
@@ -56,6 +58,8 @@ export function SearchView() {
     .sort((left, right) => left.orderIndex - right.orderIndex), [data?.nodes])
 
   useEffect(() => {
+    let current = true
+    setSearching(Boolean(query.trim()))
     const timer = setTimeout(() => void runSearch(query, {
       kind: kind === 'all' ? undefined : kind,
       scope,
@@ -63,8 +67,8 @@ export function SearchView() {
       volumePath: volumePath || undefined,
       tag: tag || undefined,
       caseSensitive,
-    }), 240)
-    return () => clearTimeout(timer)
+    }).then(() => { if (current) setSearching(false) }, () => { if (current) setSearching(false) }), 240)
+    return () => { current = false; clearTimeout(timer) }
   }, [caseSensitive, document?.node.id, kind, query, runSearch, scope, tag, volumePath])
 
   function openResult(id: string, resultKind: string) {
@@ -86,9 +90,9 @@ export function SearchView() {
   }
 
   return <div className="search-view">
-    <div className="view-header" style={{ padding: 0, marginBottom: 18 }}><div><p className="eyebrow">SEARCH INDEX / FTS5</p><h1>全文搜索</h1><p>支持 FTS5 与中文内容回退匹配；可限制当前章节、卷、标签和大小写。</p></div></div>
+    <div className="view-header" style={{ padding: 0, marginBottom: 18 }}><div><p className="eyebrow">SEARCH INDEX / FTS5</p><h1>全文搜索</h1><p>查找正文和资料，也可以按章节、卷或标签缩小范围。</p></div></div>
     <div className="search-bar"><Search size={17} color="var(--muted)" style={{ marginTop: 10 }} /><TextInput autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="输入关键词，例如：雾港、林月、失踪…" /><select className="select-input" style={{ width: 130 }} value={kind} onChange={(event) => setKind(event.target.value)} aria-label="搜索类型"><option value="all">全部范围</option><option value="manuscript">正文</option>{Object.entries(ENTITY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
-    <div className="search-filters"><select className="select-input" value={scope} onChange={(event) => setScope(event.target.value as 'project' | 'current')} aria-label="搜索范围"><option value="project">全项目</option><option value="current" disabled={!document}>当前章节</option></select><select className="select-input" value={volumePath} onChange={(event) => setVolumePath(event.target.value)} aria-label="按卷筛选"><option value="">全部卷</option>{volumes.map((volume) => <option key={volume.id} value={volume.filePath}>{volume.title}</option>)}</select><TextInput value={tag} onChange={(event) => setTag(event.target.value)} placeholder="标签过滤" aria-label="按标签筛选" /><label className="search-checkbox"><input type="checkbox" checked={caseSensitive} onChange={(event) => setCaseSensitive(event.target.checked)} />区分大小写</label></div>
-    {query.trim() ? <div className="search-result-list">{results.length ? results.map((result) => <button className="search-result" key={result.id} onClick={() => openResult(result.id, result.kind)} onContextMenu={(event) => openResultMenu(event, result)}><div className="search-result-title"><strong>{result.title}</strong><span className="search-kind">{ENTITY_LABELS[result.kind as EntityKind] ?? result.kind}</span></div><p>{searchSegments(result.snippet || '匹配条目', query, caseSensitive).map((segment, index) => segment.match ? <mark key={index}>{segment.text}</mark> : <span key={index}>{segment.text}</span>)}</p><small>{result.path}</small></button>) : <div className="empty-state"><FileSearch size={24} /><div><strong>没有找到匹配内容</strong><span>试试更短的关键词，或切换搜索范围。</span></div></div>}</div> : <div className="empty-state" style={{ minHeight: 330 }}><Search size={28} /><div><strong>从一个关键词开始</strong><span>搜索结果会显示匹配条目和正文片段；点击结果即可回到编辑器或资料卡。</span></div></div>}
+    <Disclosure title="更多筛选" meta={[scope !== 'project', Boolean(volumePath), Boolean(tag), caseSensitive].filter(Boolean).length + ' 项已启用'} className="search-advanced"><div className="search-filters"><select className="select-input" value={scope} onChange={(event) => setScope(event.target.value as 'project' | 'current')} aria-label="搜索范围"><option value="project">全项目</option><option value="current" disabled={!document}>当前章节</option></select><select className="select-input" value={volumePath} onChange={(event) => setVolumePath(event.target.value)} aria-label="按卷筛选"><option value="">全部卷</option>{volumes.map((volume) => <option key={volume.id} value={volume.filePath}>{volume.title}</option>)}</select><TextInput value={tag} onChange={(event) => setTag(event.target.value)} placeholder="标签过滤" aria-label="按标签筛选" /><label className="search-checkbox"><input type="checkbox" checked={caseSensitive} onChange={(event) => setCaseSensitive(event.target.checked)} />区分大小写</label></div></Disclosure><div className="search-active-filters">{scope !== 'project' ? <span>当前章节</span> : null}{volumePath ? <span>{volumes.find(volume => volume.filePath === volumePath)?.title}</span> : null}{tag ? <span>标签：{tag}</span> : null}{caseSensitive ? <span>区分大小写</span> : null}{scope !== 'project' || volumePath || tag || caseSensitive || kind !== 'all' ? <Button variant="ghost" onClick={() => { setScope('project'); setVolumePath(''); setTag(''); setCaseSensitive(false); setKind('all') }}>清除筛选</Button> : null}</div>
+    {query.trim() ? <div className="search-result-list" aria-busy={searching}>{searching ? <div className="empty-state" role="status">正在查找匹配内容…</div> : results.length ? results.map((result) => <button className="search-result" key={result.id} onClick={() => openResult(result.id, result.kind)} onContextMenu={(event) => openResultMenu(event, result)}><div className="search-result-title"><strong>{result.title}</strong><span className="search-kind">{ENTITY_LABELS[result.kind as EntityKind] ?? result.kind}</span></div><p>{searchSegments(result.snippet || '匹配条目', query, caseSensitive).map((segment, index) => segment.match ? <mark key={index}>{segment.text}</mark> : <span key={index}>{segment.text}</span>)}</p><small>{result.path}</small></button>) : <div className="empty-state"><FileSearch size={24} /><div><strong>没有找到匹配内容</strong><span>试试更短的关键词，或切换搜索范围。</span></div></div>}</div> : <div className="empty-state" style={{ minHeight: 330 }}><Search size={28} /><div><strong>从一个关键词开始</strong><span>搜索结果会显示匹配条目和正文片段；点击结果即可回到编辑器或资料卡。</span></div></div>}
   </div>
 }

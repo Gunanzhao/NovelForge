@@ -1335,8 +1335,12 @@ async function run() {
       const format = exports[index]
       await clickExact(page, '导出')
       await waitForText(page, '导出项目')
-      if (coverMode) await setField(page, 'attachments/cover.jpg', 'attachments/cover.png')
+      if (coverMode) {
+        await page.evaluate("document.querySelector('.export-advanced')?.setAttribute('open', ''); true")
+        await setField(page, 'attachments/cover.jpg', 'attachments/cover.png')
+      }
       await clickText(page, format[0])
+      await clickExact(page, '导出 ' + format[0])
       await waitForExport(projectPath, format[1])
     }
     const exportFiles = readdirSync(resolve(projectPath, '.novelforge', 'exports'))
