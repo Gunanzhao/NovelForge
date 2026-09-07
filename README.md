@@ -2,13 +2,25 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.1.0-rc.7（预发布）**。
+当前版本：**1.1.0-rc.8（预发布）**。
 
-- [下载 Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.0-rc.7/NovelForge_1.1.0-rc.7_x64-setup.exe)
-- [Release 与 SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.7)
-- [测试报告](TEST_REPORT.md) · [rc.7 发布说明](docs/releases/v1.1.0-rc.7.md)
+- [下载 Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.0-rc.8/NovelForge_1.1.0-rc.8_x64-setup.exe)
+- [Release 与 SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.8)
+- [测试报告](TEST_REPORT.md) · [rc.8 发布说明](docs/releases/v1.1.0-rc.8.md)
 
-## rc.7：独立名字生成器与命名工作区
+## rc.8：工作区 UI 与操作反馈优化
+
+沿用现有配色、字体、圆角和图标，优化信息层级与小窗口布局，让常用操作更容易找到。
+
+- AI 模式与提示词模板重新排版，空列表更紧凑；动作类型中文化，上下文变量可点击插入，系统提示词按需展开。
+- 左侧导航分组、辅助栏模块可折叠；资料表单分区并保留草稿，保存栏随滚动保持可见，多个详情页显示保存状态与时间。
+- 概览突出继续写作，搜索支持高级条件折叠、筛选摘要和清除；附件路径按需展开。
+- 设置按用途分组，正文样式即时预览，编辑偏好可恢复默认；离线 AI 隐藏连接配置，其他模式保留配置摘要。
+- 导出先选择格式和范围，再点击确认按钮；底部显示章节数量，标题、目录和封面集中在高级选项中。
+
+已通过 48 个文件 / 293 项前端测试、TypeScript 和 ESLint 检查。Windows 桌面回归覆盖 13 个页面、1440×900 与 1100×750 窗口，以及深色模式、草稿保留、字号预览和实际 TXT 导出。详见 [UI 验证记录](docs/audits/ui-refinements-2026-09-07.md) 与 [rc.8 发布说明](docs/releases/v1.1.0-rc.8.md)。
+
+## rc.7 历史：独立名字生成器与命名工作区
 
 右侧辅助栏只保留入口，点击打开独立弹窗；批量生成的结果在弹窗内滚动，不再把下面的条目挤出屏幕。
 
