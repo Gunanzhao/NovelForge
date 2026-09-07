@@ -13,7 +13,9 @@ describe('name generator', () => {
 
   it('changes the visible names on generate and regenerate', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0)
-    const { container } = render(<NameGenerator />)
+    render(<NameGenerator />)
+    fireEvent.click(screen.getByRole('button', { name: /名字生成器/ }))
+    const container = screen.getByRole('dialog', { name: '名字生成器' })
 
     fireEvent.click(screen.getByRole('button', { name: '生成' }))
     const first = displayedNames(container)
