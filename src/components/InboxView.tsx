@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArchiveRestore, CheckCircle2, Inbox, Lightbulb, Plus, Search, Trash2 } from 'lucide-react'
+import { ArrowLeft, ArchiveRestore, CheckCircle2, Inbox, Lightbulb, Plus, Search, Trash2 } from 'lucide-react'
 import {
   appendInboxMilestone, inboxConversionInput, inboxEntityContent, INBOX_CONVERSIONS, parseInboxItem,
 } from '../lib/inbox-data'
@@ -73,6 +73,8 @@ export function InboxView() {
   const [sort, setSort] = useState<'newest' | 'oldest'>('newest')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [arcId, setArcId] = useState('')
+  const [conversionKind, setConversionKind] = useState<InboxConversionKind | 'story-arc-milestone'>('character')
+  const [detailOpen, setDetailOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const items = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'inbox').map(parseInboxItem), [data?.entities])
   const arcs = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'story-arc'), [data?.entities])
@@ -158,9 +160,52 @@ export function InboxView() {
     }
   }
 
+  const capture = () => window.dispatchEvent(new Event('novelforge:quick-inbox'))
+  const clearFilters = () => { setQuery(''); setTag(''); setDetailOpen(false) }
+  const hasFilters = Boolean(query.trim() || tag)
+  const selectedConversionLabel = selected?.processedInto?.kind === 'story-arc-milestone'
+    ? '剧情线节点'
+    : INBOX_CONVERSIONS.find((item) => item.kind === selected?.processedInto?.kind)?.label.replace('转为', '')
+
+  async function markOnly(item: InboxItem) {
+    setBusy(true)
+    try { await markProcessed(item, undefined) } catch (error) { setError(error) } finally { setBusy(false) }
+  }
+
   return <div className="workspace-view inbox-view">
-    <div className="view-header"><div><p className="eyebrow">IDEA INBOX</p><h1>灵感箱</h1><p>先捕获，再决定它属于人物、地点、场景、伏笔或剧情线。</p></div><div className="view-actions"><Button variant="outline" onClick={() => setView('trash')}><ArchiveRestore size={14} />前往回收站恢复</Button><Button onClick={() => window.dispatchEvent(new Event('novelforge:quick-inbox'))}><Plus size={14} />快速记录</Button></div></div>
-    <div className="inbox-toolbar"><div className="planning-tabs"><button className={tab === 'pending' ? 'active' : ''} onClick={() => setTab('pending')}>未整理 ({items.filter((item) => !item.processed).length})</button><button className={tab === 'processed' ? 'active' : ''} onClick={() => setTab('processed')}>已整理 ({items.filter((item) => item.processed).length})</button></div><div className="inbox-filters"><label><Search size={13} /><TextInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索灵感" /></label><select className="select-input" value={tag} onChange={(event) => setTag(event.target.value)} aria-label="灵感标签过滤"><option value="">全部标签</option>{tags.map((item) => <option key={item} value={item}>{item}</option>)}</select><select className="select-input" value={sort} onChange={(event) => setSort(event.target.value as typeof sort)} aria-label="灵感时间排序"><option value="newest">最新优先</option><option value="oldest">最早优先</option></select></div></div>
-    <div className="inbox-layout"><div className="inbox-list">{visible.length ? visible.map((item) => <button key={item.id} className={(selected?.id === item.id ? 'active' : '')} onClick={() => setSelectedId(item.id)}><span>{item.processed ? <CheckCircle2 size={13} /> : <Lightbulb size={13} />}</span><span><strong>{item.title}</strong><small>{item.tags.join(' · ') || '无标签'} · {new Date(item.createdAt).toLocaleString('zh-CN')}</small></span></button>) : <div className="empty-state"><Inbox size={24} /><span>这里还没有符合条件的灵感。</span></div>}</div><Panel className="inbox-detail">{selected ? <><div className="panel-title"><h3>{selected.title}</h3><Button variant="danger" disabled={busy} onClick={() => { if (window.confirm(`将灵感“${selected.title}”移入回收站？`)) void deleteEntity(selected.id) }}><Trash2 size={12} />删除</Button></div><div className="inbox-tags">{selected.tags.map((item) => <span key={item}>{item}</span>)}</div><pre>{selected.content}</pre>{selected.processed ? <div className="inbox-processed"><CheckCircle2 size={15} />已整理为 {selected.processedInto?.kind ?? '资料'} · {selected.processedInto?.id ?? ''}</div> : <><div className="inbox-conversions">{INBOX_CONVERSIONS.map((conversion) => <Button variant="outline" disabled={busy} key={conversion.kind} onClick={() => void convert(selected, conversion.kind)}>{conversion.label}</Button>)}</div><div className="inbox-arc-conversion"><select className="select-input" value={arcId} onChange={(event) => setArcId(event.target.value)}><option value="">选择剧情线</option>{arcs.map((arc) => <option key={arc.id} value={arc.id}>{arc.title}</option>)}</select><Button variant="outline" disabled={busy || !arcId} onClick={() => void convertToMilestone(selected)}>转为剧情线 milestone</Button></div></>}</> : <div className="empty-state"><Lightbulb size={24} /><span>选择一条灵感查看详情。</span></div>}</Panel></div>
+    <div className="view-header inbox-header">
+      <div><h1>灵感箱</h1><p>随手捕捉想法，稍后整理到故事中。</p></div>
+      <div className="view-actions"><Button variant="ghost" onClick={() => setView('trash')}><ArchiveRestore size={14} />回收站</Button><Button onClick={capture} title="快速记录灵感 · Ctrl+Shift+I"><Plus size={14} />快速记录<kbd>Ctrl+Shift+I</kbd></Button></div>
+    </div>
+    <div className="inbox-toolbar">
+      <div className="planning-tabs" aria-label="灵感状态">
+        <button aria-pressed={tab === 'pending'} className={tab === 'pending' ? 'active' : ''} onClick={() => { setTab('pending'); setDetailOpen(false) }}>未整理 ({items.filter((item) => !item.processed).length})</button>
+        <button aria-pressed={tab === 'processed'} className={tab === 'processed' ? 'active' : ''} onClick={() => { setTab('processed'); setDetailOpen(false) }}>已整理 ({items.filter((item) => item.processed).length})</button>
+      </div>
+      <div className="inbox-filters">
+        <label className="inbox-search"><Search size={15} /><TextInput aria-label="搜索灵感" value={query} onChange={(event) => { setQuery(event.target.value); setDetailOpen(false) }} placeholder="搜索灵感…" /></label>
+        <select className="select-input" value={tag} onChange={(event) => { setTag(event.target.value); setDetailOpen(false) }} aria-label="灵感标签过滤"><option value="">全部标签</option>{tags.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+        <select className="select-input" value={sort} onChange={(event) => setSort(event.target.value as typeof sort)} aria-label="灵感时间排序"><option value="newest">最新优先</option><option value="oldest">最早优先</option></select>
+      </div>
+    </div>
+    {!items.length ? <div className="inbox-empty inbox-first-empty"><div className="inbox-empty-icon"><Lightbulb size={30} /></div><h2>记下第一个灵感</h2><p>一句对白、一个人物，或一个尚未成形的转折。<br />先记下来，稍后再整理。</p><Button onClick={capture}><Plus size={14} />快速记录</Button><small>也可以按 Ctrl+Shift+I 随时记录</small></div>
+      : !visible.length ? <div className="inbox-empty"><Inbox size={30} /><h2>{hasFilters ? '没有匹配的灵感' : tab === 'processed' ? '还没有已整理的灵感' : '未整理的灵感已清空'}</h2><p>{hasFilters ? '试试其他关键词，或清除筛选查看当前分类。' : tab === 'processed' ? '将灵感整理为资料，或标记已整理后，会显示在这里。' : '想法已妥善整理，随时可以记录新的灵感。'}</p>{hasFilters ? <Button variant="outline" onClick={clearFilters}>清除筛选</Button> : <Button variant="outline" onClick={tab === 'processed' ? () => setTab('pending') : capture}>{tab === 'processed' ? '查看未整理' : '记录新灵感'}</Button>}</div>
+      : <div className={'inbox-layout' + (detailOpen && selected ? ' detail-open' : '')}>
+        <div className="inbox-list" aria-label="灵感列表">{visible.map((item) => <button key={item.id} aria-pressed={selected?.id === item.id} className={selected?.id === item.id ? 'active' : ''} onClick={() => { setSelectedId(item.id); setDetailOpen(true) }}>
+          <span className="inbox-item-heading">{item.processed ? <CheckCircle2 size={14} /> : <Lightbulb size={14} />}<strong>{item.title}</strong></span>
+          <span className="inbox-item-summary">{item.content || '暂无正文'}</span>
+          <span className="inbox-item-meta"><span>{item.tags.slice(0, 2).map((item) => '#' + item).join(' ') || '无标签'}{item.tags.length > 2 ? ` +${item.tags.length - 2}` : ''}</span><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}</time></span>
+        </button>)}</div>
+        <Panel className="inbox-detail">{selected ? <>
+          <div className="inbox-detail-header"><Button variant="ghost" className="inbox-back" onClick={() => setDetailOpen(false)}><ArrowLeft size={14} />返回列表</Button><div className="inbox-detail-title"><div><h2>{selected.title}</h2><p>创建于 {new Date(selected.createdAt).toLocaleString('zh-CN')} · 更新于 {new Date(selected.updatedAt).toLocaleString('zh-CN')}</p></div><Button variant="ghost" disabled={busy} onClick={() => { if (window.confirm(`将灵感“${selected.title}”移入回收站？`)) void deleteEntity(selected.id).catch(setError) }} aria-label="删除灵感"><Trash2 size={14} /></Button></div></div>
+          <div className="inbox-detail-scroll"><div className="inbox-reading"><p className="inbox-content">{selected.content}</p><div className="inbox-detail-tags"><h3>标签</h3><div className="inbox-tags">{selected.tags.length ? selected.tags.map((item) => <span key={item}>#{item}</span>) : <small>暂无标签</small>}</div></div></div></div>
+          <div className="inbox-detail-footer">{selected.processed ? <div className="inbox-processed"><CheckCircle2 size={15} />{selectedConversionLabel ? `已整理为${selectedConversionLabel}` : '已整理'}</div> : <>
+            <div className="inbox-organize"><select className="select-input" aria-label="整理目标" value={conversionKind} disabled={busy} onChange={(event) => setConversionKind(event.target.value as typeof conversionKind)}>{INBOX_CONVERSIONS.map((conversion) => <option key={conversion.kind} value={conversion.kind}>{conversion.label}</option>)}<option value="story-arc-milestone">转为剧情线节点</option></select>
+              {conversionKind === 'story-arc-milestone' ? <select className="select-input" aria-label="选择剧情线" value={arcId} disabled={busy} onChange={(event) => setArcId(event.target.value)}><option value="">{arcs.length ? '选择剧情线' : '请先创建剧情线'}</option>{arcs.map((arc) => <option key={arc.id} value={arc.id}>{arc.title}</option>)}</select> : null}
+              <Button variant="outline" disabled={busy || (conversionKind === 'story-arc-milestone' && !arcs.some((arc) => arc.id === arcId))} onClick={() => void (conversionKind === 'story-arc-milestone' ? convertToMilestone(selected) : convert(selected, conversionKind))}>{busy ? '整理中…' : '整理为资料'}</Button>
+            </div><Button disabled={busy} onClick={() => void markOnly(selected)}><CheckCircle2 size={14} />标记已整理</Button>
+          </>}</div>
+        </> : <div className="inbox-empty"><Lightbulb size={24} /><p>选择一条灵感查看或整理。</p></div>}</Panel>
+      </div>}
   </div>
 }

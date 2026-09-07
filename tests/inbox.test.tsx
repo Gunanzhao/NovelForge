@@ -49,7 +49,7 @@ describe('inbox integration', () => {
   it('keeps the inbox item unprocessed when target creation fails', async () => {
     api.upsertEntity.mockRejectedValueOnce(new Error('目标创建失败'))
     render(<InboxView />)
-    fireEvent.click(screen.getByRole('button', { name: '转为人物' }))
+    fireEvent.click(screen.getByRole('button', { name: '整理为资料' }))
     await waitFor(() => expect(useAppStore.getState().error).toContain('目标创建失败'))
     expect(useAppStore.getState().data?.entities.find((item) => item.id === inbox.id)?.content.processed).toBe(false)
     expect(api.upsertEntity).toHaveBeenCalledTimes(1)
@@ -64,4 +64,34 @@ describe('inbox integration', () => {
     expect(container.textContent).toContain('已归档正文')
     expect(container.textContent).not.toContain('午夜钟声。')
   })
+})
+
+it('shows one actionable first-use empty state and opens capture', () => {
+  useAppStore.setState({ projectPath: 'project', data: { ...project, entities: [] } })
+  const { container } = render(<><InboxView /><QuickInboxCapture /></>)
+  expect(screen.getByText('记下第一个灵感')).toBeTruthy()
+  expect(container.querySelector('.inbox-layout')).toBeNull()
+  fireEvent.click(screen.getAllByRole('button', { name: /快速记录/ }).at(-1)!)
+  expect(screen.getByRole('dialog', { name: '快速记录灵感' })).toBeTruthy()
+})
+
+it('clears unmatched filters without leaving stale detail actions', () => {
+  useAppStore.setState({ projectPath: 'project', data: project })
+  const { container } = render(<InboxView />)
+  fireEvent.change(screen.getByLabelText('搜索灵感'), { target: { value: '没有这个词' } })
+  expect(screen.getByText('没有匹配的灵感')).toBeTruthy()
+  expect(container.querySelector('.inbox-detail')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '清除筛选' }))
+  expect(container.querySelector('.inbox-detail')?.textContent).toContain('午夜钟声。')
+})
+
+it('marks an idea processed without creating another entity', async () => {
+  api.upsertEntity.mockReset()
+  api.upsertEntity.mockResolvedValue({ ...project, entities: [{ ...inbox, content: { ...inbox.content, processed: true } }] })
+  useAppStore.setState({ projectPath: 'project', data: project })
+  render(<InboxView />)
+  fireEvent.click(screen.getByRole('button', { name: '标记已整理' }))
+  await waitFor(() => expect(api.upsertEntity).toHaveBeenCalledTimes(1))
+  expect(api.upsertEntity).toHaveBeenCalledWith(expect.objectContaining({ id: inbox.id, kind: 'inbox', content: { content: '午夜钟声。', processed: true } }))
+  await waitFor(() => expect(screen.getByText('未整理的灵感已清空')).toBeTruthy())
 })

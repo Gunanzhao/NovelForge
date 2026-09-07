@@ -2,13 +2,24 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.1.0-rc.9（预发布）**。
+当前版本：**1.1.0-rc.10（预发布）**。
 
-- [下载 Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.0-rc.9/NovelForge_1.1.0-rc.9_x64-setup.exe)
-- [Release 与 SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.9)
-- [测试报告](TEST_REPORT.md) · [rc.9 发布说明](docs/releases/v1.1.0-rc.9.md)
+- [下载 Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.0-rc.10/NovelForge_1.1.0-rc.10_x64-setup.exe)
+- [Release 与 SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.10)
+- [测试报告](TEST_REPORT.md) · [rc.10 发布说明](docs/releases/v1.1.0-rc.10.md)
 
-## rc.9：时间线与伏笔布局优化
+## rc.10：灵感箱、设置与编辑工作台优化
+
+- 灵感箱采用统一筛选工具栏、摘要列表与详情，分别滚动；窄工作区可进入详情再返回列表，空状态提供直接记录或清除筛选入口。
+- 灵感整理目标集中到下拉框，显式执行资料转换；支持直接标记已整理，保留原有资料与剧情线节点转换。
+- 设置分为作品信息、外观与布局、编辑器、写作目标、数据与日志；分类切换保留未保存草稿，作品信息具有固定保存栏和失败重试反馈。
+- 编辑器参数支持滑块、精确数值和实时预览；外观使用主题卡片与侧栏比例示意，恢复默认按分类限定，日志展开后才读取。
+- 每次进入项目默认使用“编辑”模式；左右侧栏增加展开/收起过渡，辅助栏切换按钮移到工具栏最右侧。
+- 人物、地点和世界观资料保存区增加内边距；名字生成器移至章节完成与版本历史之间，避重复选框跟随主题强调色。
+
+本轮前端测试与桌面专项验证结果见 [rc.10 发布说明](docs/releases/v1.1.0-rc.10.md)。项目格式保持兼容，真实付费 AI 服务和全应用历史桌面回归不在本轮验收范围内。
+
+## rc.9 历史：时间线与伏笔布局优化
 
 - 空项目使用单一新建引导区，移除固定高度的双栏空白；新建首条记录时直接展示表单。
 - 搜索与筛选集中对齐，增加清除筛选入口；伏笔支持“全部”状态，窄工作区按三列排列状态按钮。

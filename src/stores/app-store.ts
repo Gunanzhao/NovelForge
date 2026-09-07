@@ -164,7 +164,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   focusMode: false,
   theme: 'system',
   workspacePreferences: { ...DEFAULT_WORKSPACE_PREFERENCES },
-  editorMode: 'split',
+  editorMode: 'markdown',
 
   setView: (view) => set({ activeView: view }),
   setTheme: (theme) => {
@@ -224,7 +224,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (get().document && get().saveState !== 'saved' && !await get().saveCurrentDocument('切换项目前保存')) throw new Error('当前正文保存失败，已保留当前项目')
       if (request !== transitionGeneration) return
       ++selectionGeneration
-      set((state) => ({ projectPath: input.path, projectSession: state.projectSession + 1, data, document: null, editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], stats: emptyStats, saveState: 'saved' }))
+      set((state) => ({ projectPath: input.path, projectSession: state.projectSession + 1, data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], stats: emptyStats, saveState: 'saved' }))
       if (checklistError) get().setError(checklistError)
       const chapter = firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
@@ -250,7 +250,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (get().document && get().saveState !== 'saved' && !await get().saveCurrentDocument('切换项目前保存')) throw new Error('当前正文保存失败，已保留当前项目')
       if (request !== transitionGeneration) return
       ++selectionGeneration
-      set((state) => ({ projectPath: path, projectSession: state.projectSession + 1, data, document: null, editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], stats: emptyStats, saveState: 'saved' }))
+      set((state) => ({ projectPath: path, projectSession: state.projectSession + 1, data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], stats: emptyStats, saveState: 'saved' }))
       const chapter = firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
       if (request !== transitionGeneration) return

@@ -1034,10 +1034,11 @@ async function run() {
     await clickExact(page, '灵感箱')
     await waitForSelector(page, '.inbox-view', '灵感箱视图')
     await clickSelectorContains(page, '.inbox-list button', '钟楼密道灵感')
-    await clickSelector(page, '.inbox-conversions button', '转为伏笔')
+    await selectValue(page, '.inbox-organize select', 'foreshadowing')
+    await clickSelector(page, '.inbox-organize button', '整理为资料')
     await waitForCondition(page, "Array.from(document.querySelectorAll('.planning-tabs button')).some((item)=>(item.textContent||'').includes('已整理 (1)'))", '灵感转换完成')
     await clickSelectorContains(page, '.planning-tabs button', '已整理')
-    await waitForText(page, '已整理为 foreshadowing')
+    await waitForText(page, '已整理为伏笔')
 
     await clickText(page, '人物')
     await waitForCondition(page, "document.querySelector('.entity-list-head h2')?.textContent?.trim() === '人物'", '人物出场统计资料页')
