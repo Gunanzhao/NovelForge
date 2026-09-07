@@ -8,6 +8,7 @@ import { nameKey, readNameWorkspace, writeNameWorkspace, type NameCandidate, typ
 import { captureProjectSession, isCurrentProjectSession, useAppStore } from '../stores/app-store'
 import { writeClipboardText } from '../lib/clipboard'
 import { Button, Field, IconButton, Modal, TextInput } from './ui'
+import { NameAiPanel } from './NameAiPanel'
 
 export function NameGenerator() {
   const projectPath = useAppStore(state => state.projectPath) ?? ''
@@ -55,7 +56,7 @@ function NameGeneratorWorkspace({ projectPath }: { projectPath: string }) {
     try { writeNameWorkspace(projectPath, next) } catch { setMessage('本地存储空间不足，本次改动仅在当前窗口保留。') }
   }
   function favorite(item: NameCandidate) {
-    const next = toggleFavoriteName(favorites, { name: item.name, category: item.category, style: item.style, createdAt: new Date().toISOString() })
+    const next = toggleFavoriteName(favorites, { name: item.name, category: item.category, style: item.style, explanation: item.explanation, createdAt: new Date().toISOString() })
     setFavorites(next); writeFavoriteNames(next)
   }
   async function copy(text: string) {
@@ -111,6 +112,7 @@ function NameGeneratorWorkspace({ projectPath }: { projectPath: string }) {
         <div className="name-checks"><label><input type="checkbox" checked={avoidExisting} onChange={event => setAvoidExisting(event.target.checked)} />避开项目已有名字</label><label><input type="checkbox" checked={avoidHistory} onChange={event => setAvoidHistory(event.target.checked)} />避开最近生成</label></div>
         {items.length ? renderItems(items, true) : <p className="field-hint">本地规则生成，无需 API Key。设置条件后生成，可锁定喜欢的名字再刷新其余结果。</p>}
         <div className="name-generator-footer"><Button variant="ghost" onClick={generate}>重新生成</Button><Button variant="ghost" disabled={!items.length} onClick={() => void copy(items.map(item => item.name).join('\n'))}>复制全部</Button><span>已锁定 {locked.length} 个</span></div>
+        <NameAiPanel key={JSON.stringify([category, style, count, rules, locked, items, workspace.surnames, workspace.roots, workspace.banned, avoidExisting, avoidHistory])} category={category} style={style} count={Math.max(0, Math.min(30, Math.round(Number(count) || 6)) - locked.length)} rules={{ ...rules, surnames: workspace.surnames, roots: workspace.roots, banned: workspace.banned }} excluded={[...items.map(item => item.name), ...(avoidExisting ? data?.entities.map(entity => entity.title) ?? [] : []), ...(avoidHistory ? workspace.history.flatMap(batch => batch.items.map(item => item.name)) : [])]} onResults={next => { acceptBatch([...items.filter(item => locked.includes(item.name)), ...next]); setMessage(`已接收 ${next.length} 个 AI 名字，解释为创作联想。`) }} />
       </> : null}
       {tab === 'favorites' ? <><TextInput aria-label="搜索收藏" placeholder="搜索名字、类型或风格" value={search} onChange={event => setSearch(event.target.value)} /><p className="field-hint">跨项目收藏，最多 100 个。点击爱心可移除单个收藏。</p>{renderItems(favorites.filter(item => `${item.name} ${NAME_CATEGORY_LABELS[item.category]} ${item.style}`.toLocaleLowerCase().includes(search.toLocaleLowerCase())))}{!favorites.length ? <p className="field-hint">尚未收藏名字。</p> : <Button variant="ghost" onClick={() => { if (window.confirm('清空全部名字收藏？')) { setFavorites([]); writeFavoriteNames([]) } }}><Trash2 size={12} />清空收藏</Button>}</> : null}
       {tab === 'history' ? <><p className="field-hint">保留本项目最近 50 批结果。</p>{workspace.history.map(batch => <div className="name-history" key={batch.id}><div className="panel-title"><span>{new Date(batch.createdAt).toLocaleString()} · {batch.items.length} 个</span><Button variant="ghost" onClick={() => { setItems(batch.items); setLocked([]); setTab('generate') }}>恢复结果</Button></div>{renderItems(batch.items)}</div>)}{!workspace.history.length ? <p className="field-hint">尚无生成记录。</p> : <Button variant="ghost" onClick={() => { if (window.confirm('清空本项目名字生成历史？')) persist({ ...workspace, history: [] }) }}>清空历史</Button>}</> : null}

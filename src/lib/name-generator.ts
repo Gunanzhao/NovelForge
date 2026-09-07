@@ -19,6 +19,7 @@ export const NAME_STYLES: NameStyle[] = ['中文现代', '中文古风', '武侠
 export const NAME_CATEGORY_LABELS = Object.fromEntries(NAME_CATEGORIES.map((item) => [item.id, item.label])) as Record<NameCategory, string>
 
 export interface FavoriteName {
+  explanation?: string
   name: string
   category: NameCategory
   style: NameStyle
@@ -74,7 +75,7 @@ export function readFavoriteNames(): FavoriteName[] {
     return raw.filter((item): item is FavoriteName => {
       if (!item || typeof item !== 'object') return false
       const value = item as Record<string, unknown>
-      return typeof value.name === 'string' && typeof value.category === 'string' && typeof value.style === 'string' && typeof value.createdAt === 'string'
+      return typeof value.name === 'string' && NAME_CATEGORIES.some(item => item.id === value.category) && NAME_STYLES.includes(value.style as NameStyle) && typeof value.createdAt === 'string' && (value.explanation === undefined || typeof value.explanation === 'string')
     }).slice(0, 100)
   } catch {
     return []

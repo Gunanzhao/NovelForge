@@ -53,7 +53,7 @@ export function matchesNameRules(name: string, rules: NameRules): boolean {
 // Exhaust a finite, natural combination pool. Never invent numbered fillers when constraints are too strict.
 export function ruleCandidates(category: NameCategory, style: NameStyle, rules: NameRules): string[] {
   const pool = rules.roots?.length ? rules.roots : roots[style]
-  const family = rules.surname?.trim() ? [rules.surname.trim()] : rules.surnames?.length ? rules.surnames : style === '日式' ? japaneseSurnames : style === '欧美' ? westernSurnames : surnames
+  const family = rules.surname?.trim() ? [rules.surname.trim()] : rules.surnames?.length ? rules.surnames : style === '日式' ? japaneseSurnames : style === '欧美' ? westernSurnames : style === '西方奇幻' ? roots[style] : surnames
   const shared = rules.shared?.trim() ?? ''
   const candidates = new Set<string>()
   const add = (value: string) => { if (matchesNameRules(value, rules)) candidates.add(value) }
@@ -63,10 +63,10 @@ export function ruleCandidates(category: NameCategory, style: NameStyle, rules: 
         for (const surname of family) {
           const familyName = rules.series === 'family' ? family[0] : surname
           if (style === '欧美') {
-            add([rules.required || pool[i], rules.series === 'family' ? shared : '', familyName].filter(Boolean).join(' '))
+            add([rules.required || pool[i], rules.series === 'family' || rules.series === 'shared' ? shared : '', familyName].filter(Boolean).join(' '))
           } else if (style === '日式') {
-            add(familyName + (rules.series === 'family' ? shared : '') + (rules.required || (rules.roots?.length ? pool[j] : japaneseGiven[j % japaneseGiven.length])))
-          } else if (style === '西方奇幻' && !rules.surname) {
+            add(familyName + (rules.series === 'family' || rules.series === 'shared' ? shared : '') + (rules.required || (rules.roots?.length ? pool[j] : japaneseGiven[j % japaneseGiven.length])))
+          } else if (style === '西方奇幻' && !rules.surname && rules.series !== 'family') {
             add((rules.series === 'shared' ? shared : '') + (rules.required || pool[i]) + pool[j])
           } else {
             const prefix = familyName + (rules.series === 'family' || rules.series === 'shared' ? shared : '')

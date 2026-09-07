@@ -11,7 +11,7 @@ const object = (value: unknown): value is Record<string, unknown> => !!value && 
 const words = (value: unknown) => Array.isArray(value) ? value.filter((word): word is string => typeof word === 'string' && !!word.trim()).map(word => word.trim().slice(0, 40)).slice(0, 80) : []
 export const nameKey = (name: string) => name.trim().normalize('NFKC').toLocaleLowerCase()
 export function validCandidate(value: unknown): value is NameCandidate {
-  return object(value) && typeof value.name === 'string' && !!value.name.trim() && value.name.length <= 100 && validCategory(value.category) && validStyle(value.style)
+  return object(value) && typeof value.name === 'string' && !!value.name.trim() && value.name.length <= 100 && validCategory(value.category) && validStyle(value.style) && (value.explanation === undefined || typeof value.explanation === 'string')
 }
 export function sanitizeRules(value: unknown): NameRules {
   if (!object(value)) return {}

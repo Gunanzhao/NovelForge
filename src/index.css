@@ -117,6 +117,8 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .name-generator-dialog .name-suggestion > span:last-child { flex-shrink: 0; }
 .name-generator-dialog .name-suggestion small { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.5; }
 .name-history { padding-block: 12px; border-bottom: 1px solid var(--line); }
+.name-ai-fields { display: grid; gap: 12px; border: 0; padding: 12px 0 0; margin: 0; min-width: 0; }
+.name-ai-context { display: grid; gap: 6px; max-height: 150px; overflow-y: auto; font-size: 11px; }
 @media (max-width: 540px) { .name-generator-dialog .field-grid { grid-template-columns: 1fr; } .name-generator-dialog .name-suggestion { flex-wrap: wrap; } }
 .sidebar-inner, .inspector-inner { width: 100%; height: 100%; overflow: auto; }
 .sidebar-head, .inspector-head { display: flex; align-items: center; justify-content: space-between; min-height: 47px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--line); }
