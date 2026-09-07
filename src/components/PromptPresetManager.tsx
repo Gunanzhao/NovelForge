@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Copy, Eye, Play, Plus, Save, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { BookOpen, Braces, Copy, Eye, Play, Plus, Save, Trash2 } from 'lucide-react'
 import {
   parsePromptPreset, promptPresetContent, resolvePromptTemplate,
 } from '../lib/prompt-preset'
@@ -18,6 +18,11 @@ interface Draft {
 }
 
 const BLANK: Draft = { name: '', description: '', prompt: '', systemPrompt: '', action: 'analyze' }
+const ACTION_LABELS: Record<PromptPresetAction, string> = { generate: '创作生成', analyze: '分析检查', rewrite: '改写润色' }
+const QUICK_VARIABLES = [
+  ['当前章节', 'currentChapter'], ['当前选区', 'selection'],
+  ['当前段落', 'currentParagraph'], ['最近 3 章', 'recentChapters:3'],
+] as const
 
 export function PromptPresetManager({ busy, onRun, defaultSystemPrompt = '你是 NovelForge 的中文小说创作助手。只处理模板中明确引用的上下文。' }: {
   defaultSystemPrompt?: string
@@ -34,6 +39,8 @@ export function PromptPresetManager({ busy, onRun, defaultSystemPrompt = '你是
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<Draft>(BLANK)
   const [saving, setSaving] = useState(false)
+  const [systemOpen, setSystemOpen] = useState(false)
+  const promptRef = useRef<HTMLTextAreaElement>(null)
   const [preview, setPreview] = useState<{ preset: PromptPreset; resolution: PromptResolution; run: boolean } | null>(null)
   const presets = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'prompt-preset').map(parsePromptPreset).sort((left, right) => left.name.localeCompare(right.name, 'zh-CN')), [data?.entities])
   const selected = presets.find((preset) => preset.id === selectedId)
@@ -41,6 +48,7 @@ export function PromptPresetManager({ busy, onRun, defaultSystemPrompt = '你是
   useEffect(() => {
     if (!selected) {
       setDraft(BLANK)
+      setSystemOpen(false)
       return
     }
     setDraft({
@@ -50,6 +58,7 @@ export function PromptPresetManager({ busy, onRun, defaultSystemPrompt = '你是
       systemPrompt: selected.systemPrompt ?? '',
       action: selected.action,
     })
+    setSystemOpen(Boolean(selected.systemPrompt))
   }, [selected])
 
   useEffect(() => {
@@ -84,6 +93,15 @@ export function PromptPresetManager({ busy, onRun, defaultSystemPrompt = '你是
       createdAt: selected?.createdAt ?? new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
+  }
+
+  function insertVariable(variable: string) {
+    const input = promptRef.current
+    const start = input?.selectionStart ?? draft.prompt.length
+    const end = input?.selectionEnd ?? start
+    const text = '{{' + variable + '}}'
+    setDraft(current => ({ ...current, prompt: current.prompt.slice(0, start) + text + current.prompt.slice(end) }))
+    window.requestAnimationFrame(() => { input?.focus(); input?.setSelectionRange(start + text.length, start + text.length) })
   }
 
   async function save(copy = false) {
@@ -141,8 +159,20 @@ export function PromptPresetManager({ busy, onRun, defaultSystemPrompt = '你是
   const budget = estimateContextBudget([{ title: 'system', kind: 'system', content: systemPrompt }, { title: 'user', kind: 'user', content: preview?.resolution.prompt ?? '' }])
 
   return <Panel className="prompt-preset-manager">
-    <div className="panel-title"><h3>我的模板</h3><Button variant="ghost" onClick={() => setSelectedId(null)}><Plus size={13} />新建</Button></div>
-    <div className="prompt-preset-layout"><div className="prompt-preset-list">{presets.length ? presets.map((preset) => <button key={preset.id} className={preset.id === selectedId ? 'active' : ''} onClick={() => setSelectedId(preset.id)}><strong>{preset.name}</strong><small>{preset.action} · {preset.description || '无说明'}</small></button>) : <span className="field-hint">还没有项目模板。</span>}</div><div className="prompt-preset-editor"><div className="field-grid"><Field label="名称"><TextInput value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="人物 OOC 检查" /></Field><Field label="类型"><select className="select-input" value={draft.action} onChange={(event) => setDraft((current) => ({ ...current, action: event.target.value as PromptPresetAction }))}><option value="generate">generate</option><option value="analyze">analyze</option><option value="rewrite">rewrite</option></select></Field></div><Field label="说明"><TextInput value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></Field><Field label="Prompt" hint="支持 selection、currentParagraph、currentChapter、recentChapters:1/3/5/10，以及 character/location/world/storyArc:名称"><textarea className="text-area prompt-template-text" value={draft.prompt} onChange={(event) => setDraft((current) => ({ ...current, prompt: event.target.value }))} placeholder="请检查 {{character:林月}} 在 {{currentChapter}} 中的行为。" /></Field><Field label="System Prompt"><textarea className="text-area compact" value={draft.systemPrompt} onChange={(event) => setDraft((current) => ({ ...current, systemPrompt: event.target.value }))} placeholder="可选" /></Field><div className="prompt-preset-actions"><Button disabled={saving || !draft.name.trim() || !draft.prompt.trim()} onClick={() => void save(false)}><Save size={13} />保存</Button>{selected ? <Button variant="outline" disabled={saving} onClick={() => void save(true)}><Copy size={13} />复制</Button> : null}<Button variant="outline" disabled={!draft.prompt.trim()} onClick={() => void previewDraft(false)}><Eye size={13} />预览</Button><Button disabled={busy || !draft.prompt.trim()} onClick={() => void previewDraft(true)}><Play size={13} />运行</Button>{selected ? <Button variant="danger" onClick={() => void remove()}><Trash2 size={13} />删除</Button> : null}</div></div></div>
+    <div className="preset-manager-head"><div className="preset-heading"><span className="preset-heading-icon"><BookOpen size={18} /></span><div><h3>我的模板 <span>{presets.length}</span></h3><p>把常用写作要求保存下来，下次直接使用。</p></div></div><Button variant="outline" onClick={() => { setSelectedId(null); setDraft(BLANK); setSystemOpen(false) }}><Plus size={13} />新建</Button></div>
+    <div className={'prompt-preset-layout' + (presets.length ? '' : ' is-empty')}>
+      <div className="prompt-preset-list">{presets.length ? presets.map(preset => <button key={preset.id} className={preset.id === selectedId ? 'active' : ''} onClick={() => setSelectedId(preset.id)}><strong>{preset.name}</strong><small>{ACTION_LABELS[preset.action]} · {preset.description || '无说明'}</small></button>) : <div className="preset-empty"><BookOpen size={20} /><div><strong>创建你的第一个模板</strong><p>例如人物一致性检查、章节润色或剧情分析。填写下方内容即可保存。</p></div></div>}</div>
+      <div className="prompt-preset-editor">
+        <div className="preset-editor-heading"><span>{selected ? '编辑模板' : '新模板'}</span><small>只有模板中引用的内容会进入请求</small></div>
+        <div className="preset-meta-grid"><Field label="名称"><TextInput value={draft.name} onChange={event => setDraft(current => ({ ...current, name: event.target.value }))} placeholder="人物 OOC 检查" /></Field><Field label="类型"><select className="select-input" value={draft.action} onChange={event => setDraft(current => ({ ...current, action: event.target.value as PromptPresetAction }))}>{Object.entries(ACTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field></div>
+        <Field label="说明（可选）"><TextInput value={draft.description} onChange={event => setDraft(current => ({ ...current, description: event.target.value }))} placeholder="简要说明这个模板适合什么场景" /></Field>
+        <Field label="写作指令（Prompt）"><textarea ref={promptRef} className="text-area prompt-template-text" value={draft.prompt} onChange={event => setDraft(current => ({ ...current, prompt: event.target.value }))} placeholder="请检查 {{character:林月}} 在 {{currentChapter}} 中的行为。" /></Field>
+        <div className="preset-variable-bar"><span><Braces size={13} />插入上下文</span>{QUICK_VARIABLES.map(([label, variable]) => <button type="button" key={variable} title={'插入 {{' + variable + '}}'} onMouseDown={event => event.preventDefault()} onClick={() => insertVariable(variable)}>{label}</button>)}<span className="preset-char-count">{draft.prompt.length} 字符</span></div>
+        <details className="preset-variable-help"><summary>更多变量与用法</summary><p>用双花括号引用资料，例如 <code>{'{{character:林月}}'}</code>。支持人物 character、地点 location、世界观 world、剧情线 storyArc，冒号后填写名称；recentChapters 支持 1 / 3 / 5 / 10 章。</p></details>
+        <details className="preset-system-settings" open={systemOpen} onToggle={event => setSystemOpen(event.currentTarget.open)}><summary>高级设置 <span>System Prompt · 可选</span></summary><Field label="System Prompt"><textarea className="text-area compact" value={draft.systemPrompt} onChange={event => setDraft(current => ({ ...current, systemPrompt: event.target.value }))} placeholder="留空使用默认小说创作助手；可在这里补充角色与全局规则" /></Field></details>
+        <div className="prompt-preset-actions"><Button disabled={saving || !draft.name.trim() || !draft.prompt.trim()} onClick={() => void save(false)}><Save size={13} />{saving ? '保存中…' : '保存'}</Button>{selected ? <><Button variant="ghost" disabled={saving} onClick={() => void save(true)}><Copy size={13} />复制</Button><Button variant="ghost" onClick={() => void remove()}><Trash2 size={13} />删除</Button></> : null}<span className="preset-action-spacer" /><Button variant="outline" disabled={!draft.name.trim() || !draft.prompt.trim()} onClick={() => void previewDraft(false)}><Eye size={13} />预览</Button><Button disabled={busy || !draft.name.trim() || !draft.prompt.trim()} onClick={() => void previewDraft(true)}><Play size={13} />运行</Button></div>
+      </div>
+    </div>
     {preview ? <Modal open title={`Prompt 预览 · ${preview.preset.name}`} onClose={() => setPreview(null)} footer={<><Button variant="outline" onClick={() => setPreview(null)}>取消</Button>{preview.run ? <Button disabled={busy} onClick={() => { const current = preview; setPreview(null); void onRun(current.preset, current.resolution) }}><Play size={13} />确认运行</Button> : null}</>}><div className="prompt-preview-meta"><span>字符数：{budget.characters.toLocaleString()}</span><span>估算 Token：{budget.estimatedTokens.toLocaleString()}</span><span>安全阈值：{budget.safeLimit.toLocaleString()} 字符{budget.overLimit ? ' · 超过安全阈值，请减少内容' : ''}</span></div><div className="prompt-preview-contexts"><strong>显式上下文项</strong>{preview.resolution.contexts.length ? preview.resolution.contexts.map((context) => <span key={context.variable}>{context.label} · {context.characters.toLocaleString()} 字符</span>) : <span>模板没有引用项目上下文。</span>}</div><h4>System Prompt</h4><pre className="prompt-preview-text">{systemPrompt}</pre><h4>User Prompt</h4><pre className="prompt-preview-text">{preview.resolution.prompt}</pre></Modal> : null}
   </Panel>
 }

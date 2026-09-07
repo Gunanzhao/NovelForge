@@ -77,4 +77,19 @@ describe('PromptPresetManager integration', () => {
     expect(screen.queryByRole('dialog', { name: /Prompt 预览/ })).toBeNull()
     expect(api.aiComplete).not.toHaveBeenCalled()
   })
+
+  it('uses a compact empty state and inserts context at the selected text', () => {
+    useAppStore.setState({ data: { ...project, entities: [] } })
+    const { container } = render(<AiAssistantView />)
+    expect(container.querySelector('.prompt-preset-layout.is-empty')).toBeTruthy()
+    expect(screen.getByRole('option', { name: '分析检查' })).toBeTruthy()
+    const prompt = screen.getByPlaceholderText('请检查 {{character:林月}} 在 {{currentChapter}} 中的行为。') as HTMLTextAreaElement
+    fireEvent.change(prompt, { target: { value: '检查这里。' } })
+    prompt.setSelectionRange(2, 4)
+    fireEvent.click(screen.getByRole('button', { name: '当前章节' }))
+    expect(prompt.value).toBe('检查{{currentChapter}}。')
+    fireEvent.click(screen.getByRole('button', { name: '新建' }))
+    expect(prompt.value).toBe('')
+    expect(container.querySelector('.preset-system-settings')?.hasAttribute('open')).toBe(false)
+  })
 })
