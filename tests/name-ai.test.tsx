@@ -48,3 +48,19 @@ it('uses configured Codex and cancels on unmount', async () => {
   expect(mocks.generate.mock.calls[0][0].model).toBe('configured-model')
   unmount(); expect(mocks.cancel).toHaveBeenCalledTimes(1)
 })
+it('keeps connection and context inputs when conditions invalidate a pending request', async () => {
+  let resolve!: (value: { content: string }) => void
+  mocks.aiComplete.mockReturnValue(new Promise(value => { resolve = value }))
+  const onResults = vi.fn()
+  const props = { category: 'character' as const, style: '中文古风' as const, count: 2, rules: {}, excluded: [], onResults }
+  const { rerender } = render(<NameAiPanel {...props} revision="before" />)
+  fireEvent.change(screen.getByLabelText('Provider 地址'), { target: { value: 'https://example.com/v1' } })
+  fireEvent.change(screen.getByLabelText('模型'), { target: { value: 'test-model' } })
+  fireEvent.change(screen.getByLabelText('世界观、人物背景与命名意象'), { target: { value: '保留背景' } })
+  fireEvent.click(screen.getByRole('button', { name: '发送并生成 AI 名字' }))
+  rerender(<NameAiPanel {...props} revision="after" />)
+  expect((screen.getByLabelText('世界观、人物背景与命名意象') as HTMLTextAreaElement).value).toBe('保留背景')
+  expect((screen.getByLabelText('Provider 地址') as HTMLInputElement).value).toBe('https://example.com/v1')
+  await act(async () => resolve({ content: '[{"name":"林舟"}]' }))
+  expect(onResults).not.toHaveBeenCalled()
+})
