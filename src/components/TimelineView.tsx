@@ -154,24 +154,25 @@ export function TimelineView() {
     openContextMenu(event, { title: item.title, location: 'workspace', payload: { location: 'workspace', projectPath: currentProjectPath, entityId: item.id, entityKind: 'timeline' }, items, trigger: event.currentTarget })
   }
 
-  return <div className="planning-special-view workspace-view">
+  return <div className="planning-special-view workspace-view ledger-view">
     <div className="view-header">
       <div><p className="eyebrow">STORY TIMELINE</p><h1>时间线</h1><p>按故事内时间整理关键事件，并把事件和正文章节、人物与地点连接起来。</p></div>
-      <div className="special-summary"><strong>{events.length}</strong><span>个事件</span></div>
+      <div className="ledger-header-actions"><Button onClick={startNew}><Plus size={14} />新建事件</Button><div className="special-summary"><strong>{events.length}</strong><span>个事件</span></div></div>
     </div>
-    <div className="special-toolbar timeline-toolbar">
-      <div className="special-search"><Search size={14} /><TextInput value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="搜索事件、人物或地点" /></div>
-      <div className="timeline-filters"><select className="select-input" value={characterFilter} onChange={(event) => setCharacterFilter(event.target.value)} aria-label="按人物筛选"><option value="">全部人物</option>{characters.map((character) => <option key={character.id} value={character.title}>{character.title}</option>)}</select><select className="select-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="按地点筛选"><option value="">全部地点</option>{locations.map((location) => <option key={location.id} value={location.title}>{location.title}</option>)}</select><select className="select-input" value={chapterFilter} onChange={(event) => setChapterFilter(event.target.value)} aria-label="按章节筛选"><option value="">全部章节</option>{chapters.map((chapter) => <option key={chapter.id} value={chapter.title}>{chapter.title}</option>)}</select></div>
-      <Button onClick={startNew}><Plus size={14} />新建事件</Button>
+    {events.length > 0 && <div className="ledger-controls"><div className="special-toolbar timeline-toolbar">
+      <div className="special-search"><Search size={14} /><TextInput value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="搜索事件、人物或地点" placeholder="搜索事件、人物或地点" /></div>
+      <div className="timeline-filters"><select className="select-input" value={characterFilter} onChange={(event) => setCharacterFilter(event.target.value)} aria-label="按人物筛选"><option value="">全部人物</option>{characters.map((character) => <option key={character.id} value={character.title}>{character.title}</option>)}</select><select className="select-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="按地点筛选"><option value="">全部地点</option>{locations.map((location) => <option key={location.id} value={location.title}>{location.title}</option>)}</select><select className="select-input" value={chapterFilter} onChange={(event) => setChapterFilter(event.target.value)} aria-label="按章节筛选"><option value="">全部章节</option>{chapters.map((chapter) => <option key={chapter.id} value={chapter.title}>{chapter.title}</option>)}</select></div>{hasFilter && <Button variant="ghost" onClick={() => { setFilter(''); setCharacterFilter(''); setLocationFilter(''); setChapterFilter('') }}>清除筛选</Button>}
+
     </div>
-    <div className="special-layout">
-      <aside className="special-list-pane">
+    </div>}
+    {!events.length && !creating ? <div className="ledger-empty"><CalendarDays size={30} /><h2>记录第一个事件</h2><p>按故事发生的顺序记录关键事件，关联人物、地点与正文章节。</p><Button onClick={startNew}><Plus size={14} />新建事件</Button></div> : <div className={'special-layout' + (!events.length ? ' ledger-create-layout' : '')}>
+      {events.length > 0 && <aside className="special-list-pane">
         <div className="special-list-head"><div className="panel-title"><h3>事件列表</h3><span>{visibleEvents.length} / {events.length}</span></div><p>已按日期、时间排序；没有日期的事件排在最后。</p></div>
         <div className="special-list">{visibleEvents.length ? visibleEvents.map((event) => <button key={event.id} type="button" className={'special-list-item' + (event.id === selectedId && !creating ? ' active' : '')} onClick={() => { setCreating(false); setSelectedId(event.id) }} onContextMenu={(contextEvent) => openEventMenu(contextEvent, event)}>
           <span className="special-list-icon"><CalendarDays size={14} /></span>
           <span className="special-list-copy"><strong>{event.title}</strong><small>{[contentText(event, 'date'), contentText(event, 'time'), contentText(event, 'location')].filter(Boolean).join(' · ') || '未填写时间信息'}</small><em>{contentText(event, 'description') || '尚未填写事件描述'}</em></span>
-        </button>) : <div className="empty-state"><CalendarDays size={24} /><div><strong>{hasFilter ? '没有匹配事件' : '还没有时间线事件'}</strong><span>{hasFilter ? '换一个筛选条件试试。' : '把故事中的关键节点记录下来，后续可以从章节直接回看。'}</span></div></div>}</div>
-      </aside>
+        </button>) : <div className="empty-state"><CalendarDays size={24} /><div><strong>{hasFilter ? '没有匹配事件' : '还没有时间线事件'}</strong><span>{hasFilter ? '调整上方筛选条件，或清除筛选查看全部事件。' : '把故事中的关键节点记录下来，后续可以从章节直接回看。'}</span></div></div>}</div>
+      </aside>}
       <section className="special-editor">
         <Panel className="special-card">{creating || selected ? <><div className="planning-card-head"><div><p className="eyebrow">EVENT DETAIL</p><h3>{creating ? '新建时间线事件' : selected?.title}</h3></div><span className="planning-state">{busy ? '保存中…' : '本地资料'}</span></div>
           <div className="planning-form">
@@ -187,6 +188,6 @@ export function TimelineView() {
           </div>
         </> : <div className="empty-state"><CalendarDays size={25} /><div><strong>选择一个事件</strong><span>从左侧选择事件，或新建一条时间线记录。</span></div></div>}</Panel>
       </section>
-    </div>
+    </div>}
   </div>
 }

@@ -2,13 +2,22 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.1.0-rc.8（预发布）**。
+当前版本：**1.1.0-rc.9（预发布）**。
 
-- [下载 Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.0-rc.8/NovelForge_1.1.0-rc.8_x64-setup.exe)
-- [Release 与 SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.8)
-- [测试报告](TEST_REPORT.md) · [rc.8 发布说明](docs/releases/v1.1.0-rc.8.md)
+- [下载 Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.0-rc.9/NovelForge_1.1.0-rc.9_x64-setup.exe)
+- [Release 与 SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.9)
+- [测试报告](TEST_REPORT.md) · [rc.9 发布说明](docs/releases/v1.1.0-rc.9.md)
 
-## rc.8：工作区 UI 与操作反馈优化
+## rc.9：时间线与伏笔布局优化
+
+- 空项目使用单一新建引导区，移除固定高度的双栏空白；新建首条记录时直接展示表单。
+- 搜索与筛选集中对齐，增加清除筛选入口；伏笔支持“全部”状态，窄工作区按三列排列状态按钮。
+- 调整列表与详情比例，减少嵌套边框和留白；窄窗口改为上下排列，日期与时间输入框对齐。
+- 沿用现有视觉风格，保留记录、章节关联和保存功能。
+
+已通过 12 项相关测试及类型、代码规范检查；桌面回归覆盖空状态、新建保存、筛选清除、1648×900 / 1100×900 布局及深色模式。详见 [rc.9 发布说明](docs/releases/v1.1.0-rc.9.md)。
+
+## rc.8 历史：工作区 UI 与操作反馈优化
 
 沿用现有配色、字体、圆角和图标，优化信息层级与小窗口布局，让常用操作更容易找到。
 

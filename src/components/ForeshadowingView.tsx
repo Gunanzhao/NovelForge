@@ -181,18 +181,19 @@ export function ForeshadowingView() {
     openContextMenu(event, { title: item.title, location: 'workspace', payload: { location: 'workspace', projectPath: currentProjectPath, entityId: item.id, entityKind: 'foreshadowing' }, items, trigger: event.currentTarget })
   }
 
-  return <div className="planning-special-view workspace-view">
+  return <div className="planning-special-view workspace-view ledger-view">
     <div className="view-header">
       <div><p className="eyebrow">FORESHADOWING LEDGER</p><h1>伏笔</h1><p>记录伏笔的埋设、计划回收和实际回收，写作时快速检查仍未闭合的线索。</p></div>
-      <div className="special-summary"><strong>{entries.filter((entry) => isOpenForeshadowingStatus(contentText(entry, 'status'))).length}</strong><span>条待跟进</span></div>
+      <div className="ledger-header-actions"><Button onClick={startNew}><Plus size={14} />新建伏笔</Button><div className="special-summary"><strong>{entries.filter((entry) => isOpenForeshadowingStatus(contentText(entry, 'status'))).length}</strong><span>条待跟进</span></div></div>
     </div>
-    <div className="foreshadowing-status-bar">{FORESHADOWING_STATUSES.map((status) => <button key={status.id} type="button" className={'foreshadowing-status-chip ' + (statusFilter === status.id ? 'active ' : '') + status.id} onClick={() => setStatusFilter(statusFilter === status.id ? 'all' : status.id)}><span>{status.label}</span><strong>{counts[status.id]}</strong></button>)}</div>
+    {entries.length > 0 && <div className="ledger-controls"><div className="foreshadowing-status-bar"><button type="button" className={'foreshadowing-status-chip' + (statusFilter === 'all' ? ' active' : '')} aria-pressed={statusFilter === 'all'} onClick={() => setStatusFilter('all')}><span>全部</span><strong>{entries.length}</strong></button>{FORESHADOWING_STATUSES.map((status) => <button key={status.id} type="button" className={'foreshadowing-status-chip ' + (statusFilter === status.id ? 'active ' : '') + status.id} aria-pressed={statusFilter === status.id} onClick={() => setStatusFilter(statusFilter === status.id ? 'all' : status.id)}><span>{status.label}</span><strong>{counts[status.id]}</strong></button>)}</div>
     <div className="special-toolbar">
-      <div className="special-search"><Search size={14} /><TextInput value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="搜索伏笔、章节或说明" /></div>
-      <Button onClick={startNew}><Plus size={14} />新建伏笔</Button>
+      <div className="special-search"><Search size={14} /><TextInput value={filter} onChange={(event) => setFilter(event.target.value)} aria-label="搜索伏笔、章节或说明" placeholder="搜索伏笔、章节或说明" /></div>{(filter || statusFilter !== 'all') && <Button variant="ghost" onClick={() => { setFilter(''); setStatusFilter('all') }}>清除筛选</Button>}
+
     </div>
-    <div className="special-layout">
-      <aside className="special-list-pane">
+    </div>}
+    {!entries.length && !creating ? <div className="ledger-empty"><GitBranch size={30} /><h2>记录第一条伏笔</h2><p>记录埋下的线索、计划回收的章节，让每一处铺垫都有迹可循。</p><Button onClick={startNew}><Plus size={14} />新建伏笔</Button></div> : <div className={'special-layout' + (!entries.length ? ' ledger-create-layout' : '')}>
+      {entries.length > 0 && <aside className="special-list-pane">
         <div className="special-list-head"><div className="panel-title"><h3>伏笔清单</h3><span>{visibleEntries.length} / {entries.length}</span></div><p>点击状态徽标可筛选；列表按最近修改排序。</p></div>
         <div className="special-list">{visibleEntries.length ? visibleEntries.slice().sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).map((entry) => {
           const status = normalizeForeshadowingStatus(contentText(entry, 'status'))
@@ -202,7 +203,7 @@ export function ForeshadowingView() {
             <select className={'foreshadowing-status-select ' + status} value={status} disabled={busy} aria-label={entry.title + '状态'} onClick={(event) => event.stopPropagation()} onChange={(event) => void updateStatus(entry, event.target.value as ForeshadowingStatus)}>{FORESHADOWING_STATUSES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
           </div>
         }) : <div className="empty-state"><GitBranch size={24} /><div><strong>{filter || statusFilter !== 'all' ? '没有匹配伏笔' : '还没有伏笔记录'}</strong><span>{filter || statusFilter !== 'all' ? '换一个关键词或状态试试。' : '把需要在后文回应的线索记录下来，避免长篇写作中遗忘。'}</span></div></div>}</div>
-      </aside>
+      </aside>}
       <section className="special-editor">
         <Panel className="special-card">{creating || selected ? <><div className="planning-card-head"><div><p className="eyebrow">THREAD DETAIL</p><h3>{creating ? '新建伏笔' : selected?.title}</h3></div><span className={'planning-state ' + draft.status}>{busy ? '保存中…' : foreshadowingStatusLabel(draft.status)}</span></div>
           <div className="planning-form">
@@ -215,6 +216,6 @@ export function ForeshadowingView() {
           </div>
         </> : <div className="empty-state"><GitBranch size={25} /><div><strong>选择一条伏笔</strong><span>从左侧选择伏笔，或新建一条需要后续回收的线索。</span></div></div>}</Panel>
       </section>
-    </div>
+    </div>}
   </div>
 }
