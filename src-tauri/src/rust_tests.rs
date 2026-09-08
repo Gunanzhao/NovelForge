@@ -2516,8 +2516,11 @@ fn ai_provider_parses_openai_compatible_response() {
             .write_all(response.as_bytes())
             .expect("mock AI response");
     });
-    let result = super::commands::ai_complete(ai_input(format!("http://{}/v1", address)))
-        .expect("AI response");
+    let result = tauri::async_runtime::block_on(super::commands::ai_complete(ai_input(format!(
+        "http://{}/v1",
+        address
+    ))))
+    .expect("AI response");
     handle.join().expect("mock AI thread");
     assert_eq!(result.content, "生成结果");
     assert_eq!(result.model, "mock-model");
@@ -2535,8 +2538,11 @@ fn ai_provider_rejects_redirects() {
             .write_all(b"HTTP/1.1 302 Found\r\nLocation: http://example.com/\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
             .expect("mock redirect");
     });
-    let error = super::commands::ai_complete(ai_input(format!("http://{}/v1", address)))
-        .expect_err("redirect must be rejected");
+    let error = tauri::async_runtime::block_on(super::commands::ai_complete(ai_input(format!(
+        "http://{}/v1",
+        address
+    ))))
+    .expect_err("redirect must be rejected");
     handle.join().expect("mock AI thread");
     assert!(error.contains("重定向"));
 }
@@ -2553,8 +2559,11 @@ fn ai_provider_rejects_oversized_response_from_content_length() {
             .write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2097153\r\nConnection: close\r\n\r\n")
             .expect("mock oversized response");
     });
-    let error = super::commands::ai_complete(ai_input(format!("http://{}/v1", address)))
-        .expect_err("oversized response must be rejected");
+    let error = tauri::async_runtime::block_on(super::commands::ai_complete(ai_input(format!(
+        "http://{}/v1",
+        address
+    ))))
+    .expect_err("oversized response must be rejected");
     handle.join().expect("mock AI thread");
     assert!(error.contains("2 MiB"));
 }
@@ -2576,8 +2585,11 @@ fn ai_provider_rejects_oversized_stream_without_content_length() {
             .write_all(&vec![b'a'; 2_097_153])
             .expect("mock oversized response body");
     });
-    let error = super::commands::ai_complete(ai_input(format!("http://{}/v1", address)))
-        .expect_err("oversized streamed response must be rejected");
+    let error = tauri::async_runtime::block_on(super::commands::ai_complete(ai_input(format!(
+        "http://{}/v1",
+        address
+    ))))
+    .expect_err("oversized streamed response must be rejected");
     handle.join().expect("mock AI thread");
     assert!(error.contains("2 MiB"));
 }

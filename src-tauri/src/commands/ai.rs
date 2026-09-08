@@ -25,7 +25,7 @@ mod tests {
                 temperature: None,
                 max_tokens: None,
             };
-            let error = ai_complete(input).unwrap_err();
+            let error = tauri::async_runtime::block_on(ai_complete(input)).unwrap_err();
             assert_eq!(
                 error,
                 if too_long {
@@ -67,7 +67,13 @@ pub(crate) fn normalize_ai_endpoint(endpoint: &str) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn ai_complete(input: AiCompletionInput) -> Result<AiCompletionResult, String> {
+pub async fn ai_complete(input: AiCompletionInput) -> Result<AiCompletionResult, String> {
+    tauri::async_runtime::spawn_blocking(move || complete_blocking(input))
+        .await
+        .map_err(|_| "AI Provider 后台任务异常，请重试".to_string())?
+}
+
+fn complete_blocking(input: AiCompletionInput) -> Result<AiCompletionResult, String> {
     if input.model.trim().is_empty() {
         return Err("AI Provider 模型不能为空".to_string());
     }
