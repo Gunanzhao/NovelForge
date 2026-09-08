@@ -55,8 +55,12 @@ jobs:
           $testCliRoot = Join-Path $env:RUNNER_TEMP 'novelforge-cli'
           npm install --prefix $testCliRoot --ignore-scripts --no-audit --no-fund "@openai/codex@$env:TEST_CLI_VERSION"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $testCliBinary = Join-Path $testCliRoot 'node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe'
-          if (!(Test-Path -LiteralPath $testCliBinary)) { throw 'Native CLI binary not found' }
+          $testCliCandidates = @(
+            (Join-Path $testCliRoot 'node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe'),
+            (Join-Path $testCliRoot 'node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe')
+          )
+          $testCliBinary = $testCliCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+          if (!$testCliBinary) { throw 'Native CLI binary not found in hoisted or nested npm package' }
           "NOVELFORGE_TEST_CODEX=$testCliBinary" >> $env:GITHUB_ENV
       - name: Verify schema, no-tools, streaming, failure and cancellation
         if: matrix.cli != ''
