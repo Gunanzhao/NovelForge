@@ -1,3 +1,4 @@
+import { saveWorkspace } from '../lib/draft-guard'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Command, Keyboard, RotateCcw, Search, X } from 'lucide-react'
 import {
@@ -20,7 +21,6 @@ interface RegisteredCommand extends CommandDescriptor {
 
 export function CommandPalette({ onNewProject, onCloseProject, onQuickOpen }: CommandPaletteProps) {
   const setView = useAppStore((state) => state.setView)
-  const saveCurrentDocument = useAppStore((state) => state.saveCurrentDocument)
   const toggleFocusMode = useAppStore((state) => state.toggleFocusMode)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -50,7 +50,7 @@ export function CommandPalette({ onNewProject, onCloseProject, onQuickOpen }: Co
     } else if (id === 'quick-open') {
       onQuickOpen()
     } else if (id === 'save-document') {
-      void saveCurrentDocument('命令面板保存')
+      void saveWorkspace('命令面板保存')
     } else if (id === 'toggle-focus') {
       toggleFocusMode()
     } else if (id === 'toggle-bold' || id === 'toggle-italic') {
@@ -67,7 +67,7 @@ export function CommandPalette({ onNewProject, onCloseProject, onQuickOpen }: Co
     }
     setOpen(false)
     setRecording(null)
-  }, [onCloseProject, onNewProject, onQuickOpen, saveCurrentDocument, setView, toggleFocusMode])
+  }, [onCloseProject, onNewProject, onQuickOpen, setView, toggleFocusMode])
 
   const commands = useMemo<RegisteredCommand[]>(() => COMMANDS.map((command) => ({ ...command, run: () => runCommand(command.id) })), [runCommand])
   const visibleCommands = useMemo(() => {

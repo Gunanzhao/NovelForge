@@ -1,3 +1,5 @@
+import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
+import { markDraftSaved, runGuarded } from '../lib/draft-guard'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BookOpen, Braces, Copy, Eye, Play, Plus, Save, Trash2 } from 'lucide-react'
 import {
@@ -38,26 +40,33 @@ export function PromptPresetManager({ busy, onRun, defaultSystemPrompt = '你是
   const setError = useAppStore((state) => state.setError)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<Draft>(BLANK)
+  const [baseline, setBaseline] = useState(() => JSON.stringify(BLANK))
+  const draftId = 'prompt-preset:' + projectPath
+  useUnsavedDraft(draftId, 'AI 模板', JSON.stringify(draft) !== baseline, () => save(), () => setDraft(JSON.parse(baseline) as Draft))
   const [saving, setSaving] = useState(false)
   const [systemOpen, setSystemOpen] = useState(false)
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const [preview, setPreview] = useState<{ preset: PromptPreset; resolution: PromptResolution; run: boolean } | null>(null)
   const presets = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'prompt-preset').map(parsePromptPreset).sort((left, right) => left.name.localeCompare(right.name, 'zh-CN')), [data?.entities])
-  const selected = presets.find((preset) => preset.id === selectedId)
+  const selectedJson = JSON.stringify(presets.find((preset) => preset.id === selectedId) ?? null)
+  const selected = useMemo(() => JSON.parse(selectedJson) as PromptPreset | null, [selectedJson])
 
   useEffect(() => {
     if (!selected) {
+      setBaseline(JSON.stringify(BLANK))
       setDraft(BLANK)
       setSystemOpen(false)
       return
     }
-    setDraft({
+    const next: Draft = {
       name: selected.name,
       description: selected.description,
       prompt: selected.prompt,
       systemPrompt: selected.systemPrompt ?? '',
       action: selected.action,
-    })
+    }
+    setDraft(next)
+    setBaseline(JSON.stringify(next))
     setSystemOpen(Boolean(selected.systemPrompt))
   }, [selected])
 
@@ -105,7 +114,7 @@ export function PromptPresetManager({ busy, onRun, defaultSystemPrompt = '你是
   }
 
   async function save(copy = false) {
-    if (!draft.name.trim() || !draft.prompt.trim()) return
+    if (!draft.name.trim() || !draft.prompt.trim()) return false
     const preset = draftPreset(copy ? '' : selected?.id)
     setSaving(true)
     try {
@@ -118,8 +127,11 @@ export function PromptPresetManager({ busy, onRun, defaultSystemPrompt = '你是
         tags: ['AI 模板', preset.action],
       })
       if (copy) setSelectedId(null)
+      setBaseline(JSON.stringify(draft))
+      markDraftSaved(draftId)
+      return true
     } catch (error) {
-      setError(error)
+      setError(error); return false
     } finally {
       setSaving(false)
     }
@@ -161,7 +173,7 @@ export function PromptPresetManager({ busy, onRun, defaultSystemPrompt = '你是
   return <Panel className="prompt-preset-manager">
     <div className="preset-manager-head"><div className="preset-heading"><span className="preset-heading-icon"><BookOpen size={18} /></span><div><h3>我的模板 <span>{presets.length}</span></h3><p>把常用写作要求保存下来，下次直接使用。</p></div></div><Button variant="outline" onClick={() => { setSelectedId(null); setDraft(BLANK); setSystemOpen(false) }}><Plus size={13} />新建</Button></div>
     <div className={'prompt-preset-layout' + (presets.length ? '' : ' is-empty')}>
-      <div className="prompt-preset-list">{presets.length ? presets.map(preset => <button key={preset.id} className={preset.id === selectedId ? 'active' : ''} onClick={() => setSelectedId(preset.id)}><strong>{preset.name}</strong><small>{ACTION_LABELS[preset.action]} · {preset.description || '无说明'}</small></button>) : <div className="preset-empty"><BookOpen size={20} /><div><strong>创建你的第一个模板</strong><p>例如人物一致性检查、章节润色或剧情分析。填写下方内容即可保存。</p></div></div>}</div>
+      <div className="prompt-preset-list">{presets.length ? presets.map(preset => <button key={preset.id} className={preset.id === selectedId ? 'active' : ''} onClick={() => runGuarded(() => setSelectedId(preset.id))}><strong>{preset.name}</strong><small>{ACTION_LABELS[preset.action]} · {preset.description || '无说明'}</small></button>) : <div className="preset-empty"><BookOpen size={20} /><div><strong>创建你的第一个模板</strong><p>例如人物一致性检查、章节润色或剧情分析。填写下方内容即可保存。</p></div></div>}</div>
       <div className="prompt-preset-editor">
         <div className="preset-editor-heading"><span>{selected ? '编辑模板' : '新模板'}</span><small>只有模板中引用的内容会进入请求</small></div>
         <div className="preset-meta-grid"><Field label="名称"><TextInput value={draft.name} onChange={event => setDraft(current => ({ ...current, name: event.target.value }))} placeholder="人物 OOC 检查" /></Field><Field label="类型"><select className="select-input" value={draft.action} onChange={event => setDraft(current => ({ ...current, action: event.target.value as PromptPresetAction }))}>{Object.entries(ACTION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field></div>

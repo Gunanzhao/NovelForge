@@ -1,3 +1,4 @@
+import { confirmDraftNavigation, dirtyDrafts, runGuarded } from '../lib/draft-guard'
 import { create } from 'zustand'
 import { isNodeLocked } from '../lib/node-lock'
 import { projectApi } from '../lib/api'
@@ -175,7 +176,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   preferenceError: null,
   editorMode: 'markdown',
 
-  setView: (view) => set({ activeView: view }),
+  setView: (view) => { if (view === get().activeView) return; runGuarded(() => set({ activeView: view })) },
   setTheme: (theme) => {
     set({ theme, preferenceError: persistPreferences(get().workspacePreferences, theme) })
   },
@@ -195,7 +196,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   }),
   toggleFocusMode: () => set((state) => ({ focusMode: !state.focusMode })),
   setEditorMode: (editorMode) => set({ editorMode }),
-  openAiAssistant: (action) => set({ activeView: 'ai', requestedAiAction: action ?? null }),
+  openAiAssistant: (action) => runGuarded(() => set({ activeView: 'ai', requestedAiAction: action ?? null })),
   consumeAiAction: () => set({ requestedAiAction: null }),
   clearError: () => set({ error: null }),
   setError: (error) => set({ error: error instanceof Error ? error.message : String(error) }),
@@ -211,6 +212,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   createProject: async (input) => {
+    if (dirtyDrafts().length && !await confirmDraftNavigation()) return
     const request = ++transitionGeneration
     try {
       if (get().document && get().saveState !== 'saved') {
@@ -243,6 +245,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   openProject: async (path) => {
+    if (dirtyDrafts().length && !await confirmDraftNavigation()) return
     const request = ++transitionGeneration
     try {
       if (get().document && get().saveState !== 'saved') {
@@ -268,6 +271,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   closeProject: async () => {
+    if (dirtyDrafts().length && !await confirmDraftNavigation()) return false
     const request = ++transitionGeneration
     if (get().document && get().saveState !== 'saved') {
       const saved = await get().saveCurrentDocument('关闭项目前保存')
@@ -295,6 +299,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   selectNode: async (nodeId, reload = false) => {
+    if (dirtyDrafts().length && !await confirmDraftNavigation()) return
     const request = ++selectionGeneration
     const session = captureProjectSession()
     const path = get().projectPath
@@ -495,7 +500,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
   },
 
-  selectEntity: (kind, entityId = null) => set({ activeView: kind, selectedEntityId: entityId }),
+  selectEntity: (kind, entityId = null) => { if (get().activeView === kind && get().selectedEntityId === entityId) return; runGuarded(() => set({ activeView: kind, selectedEntityId: entityId })) },
 
   saveEntity: async (input) => {
     const session = captureProjectSession()

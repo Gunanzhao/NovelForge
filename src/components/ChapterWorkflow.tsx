@@ -1,3 +1,5 @@
+import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
+import { markDraftSaved } from '../lib/draft-guard'
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, ListChecks, RefreshCw, Save } from 'lucide-react'
 import {
@@ -14,7 +16,10 @@ export function ChecklistTemplateSettings() {
   const saveEntity = useAppStore((state) => state.saveEntity)
   const setError = useAppStore((state) => state.setError)
   const templateEntity = data?.entities.find((entity) => entity.kind === 'checklist-template')
-  const [text, setText] = useState('')
+  const savedText = parseChecklistTemplate(templateEntity).items.map(item => item.label).join('\n')
+  const [text, setText] = useState(savedText)
+  const draftId = 'checklist-template:' + projectPath
+  useUnsavedDraft(draftId, '章节完成模板', text !== savedText, save, () => setText(savedText))
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     setText(parseChecklistTemplate(templateEntity).items.map((item) => item.label).join('\n'))
@@ -23,7 +28,7 @@ export function ChecklistTemplateSettings() {
   const currentProjectPath = projectPath
   async function save() {
     const labels = text.split(/\r?\n/u).map((item) => item.trim()).filter(Boolean)
-    if (!labels.length) { setError('Checklist 模板至少需要一个检查项。'); return }
+    if (!labels.length) { setError('Checklist 模板至少需要一个检查项。'); return false }
     setBusy(true)
     try {
       await saveEntity({
@@ -34,8 +39,9 @@ export function ChecklistTemplateSettings() {
         content: { items: labels.map((label, index) => ({ id: `custom-${index + 1}`, label })) },
         tags: ['章节流程模板'],
       })
+      markDraftSaved(draftId); return true
     } catch (error) {
-      setError(error)
+      setError(error); return false
     } finally {
       setBusy(false)
     }

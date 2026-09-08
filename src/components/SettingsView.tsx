@@ -1,3 +1,5 @@
+import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
+import { markDraftSaved } from '../lib/draft-guard'
 import { useEffect, useRef, useState } from 'react'
 import { Check, Copy, FileText, HardDrive, Monitor, Moon, RefreshCw, Save, ShieldCheck, Sun } from 'lucide-react'
 import { DEFAULT_WORKSPACE_PREFERENCES } from '../lib/workspace-preferences'
@@ -70,20 +72,22 @@ function ProjectSettings({ projectPath, initialProject }: { projectPath: string;
   const [logsOpen, setLogsOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const dirty = JSON.stringify(draft) !== JSON.stringify(baseline)
+  const draftId = 'settings:' + projectPath
+  useUnsavedDraft(draftId, '作品信息', dirty, submit, () => { setDraft(baseline); setSaveError('') })
   const defaults = DEFAULT_WORKSPACE_PREFERENCES
   const updateDraft = (key: keyof typeof draft, value: string) => { setDraft(current => ({ ...current, [key]: value })); setSaveError('') }
   function changeSection(next: Section) { setSection(next); scrollRef.current?.scrollTo?.({ top: 0 }) }
   function preference<K extends keyof WorkspacePreferences>(key: K, value: WorkspacePreferences[K]) { setPreferences({ [key]: value } as Partial<WorkspacePreferences>) }
   async function submit() {
-    if (!draft.title.trim()) { setSaveError('请输入作品名。'); return }
+    if (!draft.title.trim()) { setSaveError('请输入作品名。'); return false }
     const target = Number(draft.targetWords)
-    if (!draft.targetWords.trim() || !Number.isSafeInteger(target) || target < 0) { setSaveError('目标字数需为不小于 0 的整数。'); return }
+    if (!draft.targetWords.trim() || !Number.isSafeInteger(target) || target < 0) { setSaveError('目标字数需为不小于 0 的整数。'); return false }
     setBusy(true); setSaveError('')
     try {
       const saved = { ...draft, title: draft.title.trim(), targetWords: String(target) }
       await updateProject({ ...saved, targetWords: target })
-      setDraft(saved); setBaseline(saved)
-    } catch (error) { setSaveError(error instanceof Error ? error.message : String(error)) }
+      setDraft(saved); setBaseline(saved); markDraftSaved(draftId); return true
+    } catch (error) { setSaveError(error instanceof Error ? error.message : String(error)); return false }
     finally { setBusy(false) }
   }
   function resetEditor() {

@@ -1,3 +1,5 @@
+import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
+import { markDraftSaved, runGuarded } from '../lib/draft-guard'
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { BookOpen, CalendarDays, Clock3, MapPin, Plus, Save, Search, Trash2, Users } from 'lucide-react'
 import type { EntityRecord, NodeRecord } from '../lib/types'
@@ -69,6 +71,9 @@ export function TimelineView() {
   const [chapterFilter, setChapterFilter] = useState('')
   const [draft, setDraft] = useState<TimelineDraft>(blankDraft)
   const [busy, setBusy] = useState(false)
+  const [baseline, setBaseline] = useState(() => JSON.stringify(blankDraft()))
+  const draftId = 'TimelineView:' + projectPath
+  useUnsavedDraft(draftId, '时间线', JSON.stringify(draft) !== baseline, save, () => setDraft(JSON.parse(baseline) as TimelineDraft))
 
   const chapters = useMemo(() => sortChapterNodes(data?.nodes ?? []), [data?.nodes])
   const events = useMemo(() => sortTimelineEntities((data?.entities ?? []).filter((entity) => entity.kind === 'timeline')), [data?.entities])
@@ -84,7 +89,9 @@ export function TimelineView() {
   }, [creating, events, selected, selectedId])
 
   useEffect(() => {
-    setDraft(creating ? blankDraft() : toDraft(selected))
+    const next = creating ? blankDraft() : toDraft(selected)
+    setDraft(next)
+    setBaseline(JSON.stringify(next))
   }, [creating, selected])
 
   if (!data || !projectPath) return null
@@ -95,12 +102,11 @@ export function TimelineView() {
   }
 
   function startNew() {
-    setCreating(true)
-    setSelectedId(null)
+    runGuarded(() => { setCreating(true); setSelectedId(null) })
   }
 
   async function save() {
-    if (!draft.title.trim()) return
+    if (!draft.title.trim()) return false
     setBusy(true)
     try {
       await saveEntity({
@@ -125,8 +131,11 @@ export function TimelineView() {
         : selected
       setCreating(false)
       setSelectedId(saved?.id ?? null)
+      setBaseline(JSON.stringify(draft))
+      markDraftSaved(draftId)
+      return true
     } catch (error) {
-      setError(error)
+      setError(error); return false
     } finally {
       setBusy(false)
     }
@@ -144,7 +153,7 @@ export function TimelineView() {
 
   function openEventMenu(event: ReactMouseEvent<HTMLButtonElement>, item: EntityRecord) {
     const items: ContextMenuItem[] = [
-      { type: 'item', id: 'timeline-open', label: '打开／编辑', onSelect: () => { setCreating(false); setSelectedId(item.id) } },
+      { type: 'item', id: 'timeline-open', label: '打开／编辑', onSelect: () => runGuarded(() => { setCreating(false); setSelectedId(item.id) }) },
       { type: 'item', id: 'timeline-new', label: '新建同类资料', icon: Plus, onSelect: startNew },
       { type: 'item', id: 'timeline-copy-title', label: '复制标题', onSelect: async () => { if (!await writeClipboardText(item.title)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
       { type: 'item', id: 'timeline-copy-path', label: '复制 Markdown 路径', onSelect: async () => { if (!await writeClipboardText(item.filePath)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
@@ -168,7 +177,7 @@ export function TimelineView() {
     {!events.length && !creating ? <div className="ledger-empty"><CalendarDays size={30} /><h2>记录第一个事件</h2><p>按故事发生的顺序记录关键事件，关联人物、地点与正文章节。</p><Button onClick={startNew}><Plus size={14} />新建事件</Button></div> : <div className={'special-layout' + (!events.length ? ' ledger-create-layout' : '')}>
       {events.length > 0 && <aside className="special-list-pane">
         <div className="special-list-head"><div className="panel-title"><h3>事件列表</h3><span>{visibleEvents.length} / {events.length}</span></div><p>已按日期、时间排序；没有日期的事件排在最后。</p></div>
-        <div className="special-list">{visibleEvents.length ? visibleEvents.map((event) => <button key={event.id} type="button" className={'special-list-item' + (event.id === selectedId && !creating ? ' active' : '')} onClick={() => { setCreating(false); setSelectedId(event.id) }} onContextMenu={(contextEvent) => openEventMenu(contextEvent, event)}>
+        <div className="special-list">{visibleEvents.length ? visibleEvents.map((event) => <button key={event.id} type="button" className={'special-list-item' + (event.id === selectedId && !creating ? ' active' : '')} onClick={() => runGuarded(() => { setCreating(false); setSelectedId(event.id) })} onContextMenu={(contextEvent) => openEventMenu(contextEvent, event)}>
           <span className="special-list-icon"><CalendarDays size={14} /></span>
           <span className="special-list-copy"><strong>{event.title}</strong><small>{[contentText(event, 'date'), contentText(event, 'time'), contentText(event, 'location')].filter(Boolean).join(' · ') || '未填写时间信息'}</small><em>{contentText(event, 'description') || '尚未填写事件描述'}</em></span>
         </button>) : <div className="empty-state"><CalendarDays size={24} /><div><strong>{hasFilter ? '没有匹配事件' : '还没有时间线事件'}</strong><span>{hasFilter ? '调整上方筛选条件，或清除筛选查看全部事件。' : '把故事中的关键节点记录下来，后续可以从章节直接回看。'}</span></div></div>}</div>

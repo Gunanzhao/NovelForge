@@ -40,7 +40,7 @@ export interface CommandDescriptor {
 
 export const COMMANDS: CommandDescriptor[] = [
   { id: 'open-palette', label: '打开命令面板', description: '搜索并执行工作台命令', keywords: ['命令', 'command', 'palette'], defaultShortcut: 'Ctrl+Shift+P' },
-  { id: 'save-document', label: '保存当前正文', description: '立即保存正在编辑的章节', keywords: ['保存', '正文', 'save'], defaultShortcut: 'Ctrl+S' },
+  { id: 'save-document', label: '保存当前修改', description: '保存当前表单；无表单修改时保存正文', keywords: ['保存', '正文', 'save'], defaultShortcut: 'Ctrl+S' },
   { id: 'new-project', label: '新建小说项目', description: '打开新建项目对话框', keywords: ['新建', '项目', '小说'], defaultShortcut: 'Ctrl+N' },
   { id: 'close-project', label: '关闭当前项目', description: '保存后返回项目欢迎页', keywords: ['关闭', '项目', 'close'], defaultShortcut: 'Ctrl+W' },
   { id: 'open-search', label: '当前文档搜索', description: '在当前章节中搜索关键词', keywords: ['搜索', '查找', '当前', 'find'], defaultShortcut: 'Ctrl+F' },

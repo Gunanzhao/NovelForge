@@ -1,3 +1,5 @@
+import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
+import { markDraftSaved } from '../lib/draft-guard'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, Flag, GripVertical, Plus, Save, Trash2 } from 'lucide-react'
 import {
@@ -28,6 +30,9 @@ export function StoryArcView() {
   const [title, setTitle] = useState('')
   const [draft, setDraft] = useState<StoryArcContent>(blankArc)
   const [busy, setBusy] = useState(false)
+  const [baseline, setBaseline] = useState(() => JSON.stringify({ title: '', draft: blankArc() }))
+  const draftId = 'story-arc:' + projectPath
+  useUnsavedDraft(draftId, '剧情线', JSON.stringify({ title, draft }) !== baseline, save, () => { const saved = JSON.parse(baseline); setTitle(saved.title); setDraft(saved.draft) })
   const [dragging, setDragging] = useState<string | null>(null)
   const arcs = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'story-arc')
     .sort((left, right) => parseStoryArc(right).priority - parseStoryArc(left).priority || left.title.localeCompare(right.title, 'zh-CN')), [data?.entities])
@@ -35,6 +40,7 @@ export function StoryArcView() {
   const chapters = useMemo(() => sortChapterNodes(data?.nodes ?? []), [data?.nodes])
 
   useEffect(() => {
+    setBaseline(JSON.stringify({ title: selected?.title ?? '', draft: selected ? parseStoryArc(selected) : blankArc() }))
     setTitle(selected?.title ?? '')
     setDraft(selected ? parseStoryArc(selected) : blankArc())
   }, [selected])
@@ -60,7 +66,7 @@ export function StoryArcView() {
   }
 
   async function save() {
-    if (!title.trim()) return
+    if (!title.trim()) return false
     setBusy(true)
     try {
       await saveEntity({
@@ -71,8 +77,11 @@ export function StoryArcView() {
         content: storyArcEntityInputContent(draft),
         tags: ['剧情线', draft.status],
       })
+      setBaseline(JSON.stringify({ title, draft }))
+      markDraftSaved(draftId)
+      return true
     } catch (error) {
-      setError(error)
+      setError(error); return false
     } finally {
       setBusy(false)
     }

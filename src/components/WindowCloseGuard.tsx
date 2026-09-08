@@ -1,3 +1,4 @@
+import { confirmDraftNavigation, dirtyDrafts } from '../lib/draft-guard'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
@@ -18,6 +19,7 @@ export function WindowCloseGuard() {
     closing.current = true
     setBusy(true)
     try {
+      if (!await confirmDraftNavigation()) return
       const store = useAppStore.getState()
       if (store.document && store.saveState !== 'saved' && !await store.saveCurrentDocument('关闭窗口前保存')) {
         setFailed(true)
@@ -34,7 +36,7 @@ export function WindowCloseGuard() {
     if (!isDesktop) {
       const beforeUnload = (event: BeforeUnloadEvent) => {
         const store = useAppStore.getState()
-        if (store.document && store.saveState !== 'saved') { event.preventDefault(); event.returnValue = '' }
+        if (dirtyDrafts().length || (store.document && store.saveState !== 'saved')) { event.preventDefault(); event.returnValue = '' }
       }
       window.addEventListener('beforeunload', beforeUnload)
       return () => window.removeEventListener('beforeunload', beforeUnload)

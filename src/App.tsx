@@ -1,3 +1,4 @@
+import { dirtyDrafts, saveWorkspace, useDraftGuard } from './lib/draft-guard'
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   BookOpen, Check, FileDown, FolderOpen, Menu, Moon, PanelRight, Plus, Search,
@@ -77,20 +78,21 @@ function TopBar({ onProject, onExport, onCloseProject }: { onProject: (mode: 'ne
   const inspectorOpen = useAppStore((state) => state.inspectorOpen)
   const toggleSidebar = useAppStore((state) => state.toggleSidebar)
   const toggleInspector = useAppStore((state) => state.toggleInspector)
-  const saveCurrentDocument = useAppStore((state) => state.saveCurrentDocument)
   const setView = useAppStore((state) => state.setView)
   const theme = useAppStore((state) => state.theme)
   const setTheme = useAppStore((state) => state.setTheme)
 
-  return <header className="topbar"><IconButton icon={Menu} label={sidebarOpen ? '收起左栏' : '展开左栏'} onClick={toggleSidebar} /><div className="brand"><span className="brand-mark">N</span><span className="brand-name">NovelForge</span><span className="brand-subtitle">写作工作台</span></div><div className="topbar-title"><strong>{data?.project.title ?? '未打开项目'}</strong><span>{projectPath ?? '本地优先 · Markdown first'}</span></div><div className="topbar-actions"><Button variant="ghost" onClick={() => onProject('new')}><Plus size={14} />新建</Button><Button variant="ghost" onClick={() => onProject('open')}><FolderOpen size={14} />打开</Button>{data ? <><span className="topbar-divider" /><Button variant="ghost" onClick={() => void saveCurrentDocument('手动保存')}><Check size={14} color={saveState === 'saved' ? 'var(--green)' : undefined} />保存</Button><Button variant="ghost" onClick={() => setView('search')}><Search size={14} />搜索</Button><Button variant="ghost" onClick={onExport}><FileDown size={14} />导出</Button><Button variant="ghost" onClick={onCloseProject}><X size={14} />关闭</Button><span className="topbar-divider" /><IconButton icon={theme === 'dark' ? Sun : Moon} label="切换主题" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} /><IconButton icon={Settings} label="项目设置" onClick={() => setView('settings')} /><IconButton icon={PanelRight} label={inspectorOpen ? '收起辅助栏' : '展开辅助栏'} onClick={toggleInspector} className={inspectorOpen ? 'active' : ''} /></> : null}</div></header>
+  return <header className="topbar"><IconButton icon={Menu} label={sidebarOpen ? '收起左栏' : '展开左栏'} onClick={toggleSidebar} /><div className="brand"><span className="brand-mark">N</span><span className="brand-name">NovelForge</span><span className="brand-subtitle">写作工作台</span></div><div className="topbar-title"><strong>{data?.project.title ?? '未打开项目'}</strong><span>{projectPath ?? '本地优先 · Markdown first'}</span></div><div className="topbar-actions"><Button variant="ghost" onClick={() => onProject('new')}><Plus size={14} />新建</Button><Button variant="ghost" onClick={() => onProject('open')}><FolderOpen size={14} />打开</Button>{data ? <><span className="topbar-divider" /><Button variant="ghost" onClick={() => void saveWorkspace('手动保存')}><Check size={14} color={saveState === 'saved' ? 'var(--green)' : undefined} />保存</Button><Button variant="ghost" onClick={() => setView('search')}><Search size={14} />搜索</Button><Button variant="ghost" onClick={onExport}><FileDown size={14} />导出</Button><Button variant="ghost" onClick={onCloseProject}><X size={14} />关闭</Button><span className="topbar-divider" /><IconButton icon={theme === 'dark' ? Sun : Moon} label="切换主题" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} /><IconButton icon={Settings} label="项目设置" onClick={() => setView('settings')} /><IconButton icon={PanelRight} label={inspectorOpen ? '收起辅助栏' : '展开辅助栏'} onClick={toggleInspector} className={inspectorOpen ? 'active' : ''} /></> : null}</div></header>
 }
 
 function StatusBar() {
+  useDraftGuard(state => state.revision)
+  const pendingDrafts = dirtyDrafts()
   const document = useAppStore((state) => state.document)
   const stats = useAppStore((state) => state.stats)
   const saveState = useAppStore((state) => state.saveState)
   const toggleFocusMode = useAppStore((state) => state.toggleFocusMode)
-  return <footer className="statusbar"><span>{document ? <><BookOpen size={12} />{document.node.title}</> : '未选择章节'}</span><span>{document ? formatNumber([...document.content].filter((character) => !/\s/u.test(character)).length) + ' 字' : '0 字'}</span><span>今日 +{formatNumber(stats.todayWords)}</span><span className="status-spacer" /><span className={'save-indicator ' + saveState}>{saveState === 'saving' ? '正在保存…' : saveState === 'error' ? '保存失败' : saveState === 'saved' ? '已保存' : document ? '有未保存修改' : '就绪'}</span><button className="status-focus" onClick={toggleFocusMode}>F11 专注模式</button></footer>
+  return <footer className="statusbar"><span>{document ? <><BookOpen size={12} />{document.node.title}</> : '未选择章节'}</span><span>{document ? formatNumber([...document.content].filter((character) => !/\s/u.test(character)).length) + ' 字' : '0 字'}</span><span>今日 +{formatNumber(stats.todayWords)}</span><span className="status-spacer" /><span className={'save-indicator ' + saveState}>{pendingDrafts.length ? pendingDrafts.map(draft => draft.label).join('、') + ' · 未保存' : saveState === 'saving' ? '正文正在保存…' : saveState === 'error' ? '正文保存失败' : saveState === 'saved' ? '正文已保存' : document ? '有未保存修改' : '就绪'}</span><button className="status-focus" onClick={toggleFocusMode}>F11 专注模式</button></footer>
 }
 
 export default function App() {
@@ -202,7 +204,7 @@ export default function App() {
       ]
     }
     return [
-      { type: 'item', id: 'workspace-save', label: '保存当前正文', icon: Check, shortcut: 'Ctrl+S', disabled: !document, onSelect: () => { void saveCurrentDocument('右键菜单保存') } },
+      { type: 'item', id: 'workspace-save', label: '保存当前修改', icon: Check, shortcut: 'Ctrl+S', disabled: !document, onSelect: () => { void saveWorkspace('右键菜单保存') } },
       { type: 'item', id: 'workspace-quick-open', label: '快速打开', shortcut: 'Ctrl+P', onSelect: openQuickOpen },
       { type: 'separator' },
       { type: 'item', id: 'workspace-search', label: '当前章节搜索', icon: Search, shortcut: 'Ctrl+F', onSelect: () => dispatchCommand('open-search') },
@@ -223,7 +225,7 @@ export default function App() {
       },
       { type: 'item', id: 'workspace-settings', label: '项目设置', icon: Settings, onSelect: () => useAppStore.getState().setView('settings') },
     ]
-  }, [data, document, openQuickOpen, saveCurrentDocument, setTheme, theme, toggleFocusMode])
+  }, [data, document, openQuickOpen, setTheme, theme, toggleFocusMode])
 
   const openExportForNode = useCallback((node: NodeRecord) => {
     if (node.kind === 'volume') setExportPreset({ scope: 'volume', volumePath: node.filePath })

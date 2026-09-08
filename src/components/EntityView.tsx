@@ -1,3 +1,5 @@
+import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
+import { markDraftSaved } from '../lib/draft-guard'
 import { Disclosure } from './Disclosure'
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { Copy, Plus, Save, Search, Trash2 } from 'lucide-react'
@@ -94,6 +96,10 @@ export function EntityView({ kind }: { kind: EntityKind }) {
   const [filter, setFilter] = useState('')
   const [sortMode, setSortMode] = useState<'created' | 'title' | 'updated'>('created')
   const [customFields, setCustomFields] = useState<Array<{ key: string; value: string }>>([])
+  const [baseline, setBaseline] = useState(() => JSON.stringify({ draft: blankDraft(kind), customFields: [] }))
+  const draftId = 'entity:' + projectPath + ':' + kind
+  const dirty = JSON.stringify({ draft, customFields }) !== baseline
+  useUnsavedDraft(draftId, ENTITY_LABELS[kind] + '资料', dirty, submit, () => { const saved = JSON.parse(baseline) as { draft: EntityDraft; customFields: Array<{ key: string; value: string }> }; setDraft(saved.draft); setCustomFields(saved.customFields) })
   const [busy, setBusy] = useState(false)
   const saving = useRef(false)
   const newEntityId = useRef<string | null>(null)
@@ -141,11 +147,13 @@ export function EntityView({ kind }: { kind: EntityKind }) {
     setDraft(next)
     const builtInKeys = new Set(ENTITY_FIELDS[kind].map((field) => field.key))
     if (kind === 'location') builtInKeys.add('parent')
-    setCustomFields(selected
+    const nextCustomFields = selected
       ? Object.entries(selected.content)
         .filter(([key]) => !builtInKeys.has(key))
         .map(([key, value]) => ({ key, value: getObjectString(value) }))
-      : [])
+      : []
+    setCustomFields(nextCustomFields)
+    setBaseline(JSON.stringify({ draft: next, customFields: nextCustomFields }))
   }, [kind, selectedEntityId, selected])
 
   const visibleEntities = useMemo(() => {
@@ -175,7 +183,7 @@ export function EntityView({ kind }: { kind: EntityKind }) {
   }
 
   async function submit() {
-    if (!draft.title.trim() || saving.current) return
+    if (!draft.title.trim() || saving.current) return false
     saving.current = true
     const session = captureProjectSession()
     const view = useAppStore.getState().activeView
@@ -195,9 +203,11 @@ export function EntityView({ kind }: { kind: EntityKind }) {
         },
         tags: draft.tags.split(/[,，]/u).map((tag) => tag.trim()).filter(Boolean),
       })
+      setBaseline(JSON.stringify({ draft, customFields })); markDraftSaved(draftId)
       const current = useAppStore.getState()
       if (isCurrentProjectSession(session) && current.activeView === view && current.selectedEntityId === selectedEntityId) selectEntity(kind, id)
-    } catch (error) { if (isCurrentProjectSession(session)) setError(error) } finally { saving.current = false; setBusy(false) }
+      return true
+    } catch (error) { if (isCurrentProjectSession(session)) setError(error); return false } finally { saving.current = false; setBusy(false) }
   }
 
   async function remove() {

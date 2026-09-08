@@ -1,3 +1,5 @@
+import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
+import { markDraftSaved, runGuarded } from '../lib/draft-guard'
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { BookOpen, CheckCircle2, CircleDashed, GitBranch, Plus, Save, Search, Trash2 } from 'lucide-react'
 import type { EntityRecord, NodeRecord } from '../lib/types'
@@ -75,6 +77,9 @@ export function ForeshadowingView() {
   const [statusFilter, setStatusFilter] = useState<ForeshadowingStatus | 'all'>('all')
   const [draft, setDraft] = useState<ForeshadowingDraft>(blankDraft)
   const [busy, setBusy] = useState(false)
+  const [baseline, setBaseline] = useState(() => JSON.stringify(blankDraft()))
+  const draftId = 'ForeshadowingView:' + projectPath
+  useUnsavedDraft(draftId, '伏笔', JSON.stringify(draft) !== baseline, save, () => setDraft(JSON.parse(baseline) as ForeshadowingDraft))
 
   const entries = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'foreshadowing'), [data?.entities])
   const visibleEntries = useMemo(() => {
@@ -97,7 +102,9 @@ export function ForeshadowingView() {
   }, [creating, entries, selected, selectedId])
 
   useEffect(() => {
-    setDraft(creating ? blankDraft() : toDraft(selected))
+    const next = creating ? blankDraft() : toDraft(selected)
+    setDraft(next)
+    setBaseline(JSON.stringify(next))
   }, [creating, selected])
 
   if (!data || !projectPath) return null
@@ -108,12 +115,11 @@ export function ForeshadowingView() {
   }
 
   function startNew() {
-    setCreating(true)
-    setSelectedId(null)
+    runGuarded(() => { setCreating(true); setSelectedId(null) })
   }
 
   async function save() {
-    if (!draft.title.trim()) return
+    if (!draft.title.trim()) return false
     setBusy(true)
     try {
       await saveEntity({
@@ -137,8 +143,11 @@ export function ForeshadowingView() {
         : selected
       setCreating(false)
       setSelectedId(saved?.id ?? null)
+      setBaseline(JSON.stringify(draft))
+      markDraftSaved(draftId)
+      return true
     } catch (error) {
-      setError(error)
+      setError(error); return false
     } finally {
       setBusy(false)
     }
@@ -171,7 +180,7 @@ export function ForeshadowingView() {
 
   function openForeshadowingMenu(event: ReactMouseEvent<HTMLDivElement>, item: EntityRecord) {
     const items: ContextMenuItem[] = [
-      { type: 'item', id: 'foreshadowing-open', label: '打开／编辑', onSelect: () => { setCreating(false); setSelectedId(item.id) } },
+      { type: 'item', id: 'foreshadowing-open', label: '打开／编辑', onSelect: () => runGuarded(() => { setCreating(false); setSelectedId(item.id) }) },
       { type: 'item', id: 'foreshadowing-new', label: '新建同类资料', icon: Plus, onSelect: startNew },
       { type: 'item', id: 'foreshadowing-copy-title', label: '复制标题', onSelect: async () => { if (!await writeClipboardText(item.title)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
       { type: 'item', id: 'foreshadowing-copy-path', label: '复制 Markdown 路径', onSelect: async () => { if (!await writeClipboardText(item.filePath)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
@@ -199,7 +208,7 @@ export function ForeshadowingView() {
           const status = normalizeForeshadowingStatus(contentText(entry, 'status'))
           const Icon = statusIcon(status)
           return <div key={entry.id} className={'special-list-item foreshadowing-item' + (entry.id === selectedId && !creating ? ' active' : '')} onContextMenu={(event) => openForeshadowingMenu(event, entry)}>
-            <button type="button" className="special-list-main" onClick={() => { setCreating(false); setSelectedId(entry.id) }}><span className={'special-list-icon ' + status}><Icon size={14} /></span><span className="special-list-copy"><strong>{entry.title}</strong><small>{foreshadowingStatusLabel(status)} · 首次：{contentText(entry, 'plantedIn') || '未填写'}</small><em>{contentText(entry, 'description') || '尚未填写说明'}</em></span></button>
+            <button type="button" className="special-list-main" onClick={() => runGuarded(() => { setCreating(false); setSelectedId(entry.id) })}><span className={'special-list-icon ' + status}><Icon size={14} /></span><span className="special-list-copy"><strong>{entry.title}</strong><small>{foreshadowingStatusLabel(status)} · 首次：{contentText(entry, 'plantedIn') || '未填写'}</small><em>{contentText(entry, 'description') || '尚未填写说明'}</em></span></button>
             <select className={'foreshadowing-status-select ' + status} value={status} disabled={busy} aria-label={entry.title + '状态'} onClick={(event) => event.stopPropagation()} onChange={(event) => void updateStatus(entry, event.target.value as ForeshadowingStatus)}>{FORESHADOWING_STATUSES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
           </div>
         }) : <div className="empty-state"><GitBranch size={24} /><div><strong>{filter || statusFilter !== 'all' ? '没有匹配伏笔' : '还没有伏笔记录'}</strong><span>{filter || statusFilter !== 'all' ? '换一个关键词或状态试试。' : '把需要在后文回应的线索记录下来，避免长篇写作中遗忘。'}</span></div></div>}</div>
