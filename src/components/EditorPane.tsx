@@ -1,5 +1,5 @@
 import { clampEditorPosition, readEditorSession, rememberEditor } from '../lib/editor-session'
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { redo, undo } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
@@ -81,7 +81,7 @@ export function EditorPane() {
   const { openContextMenu } = useContextMenu()
   const editorViewRef = useRef<EditorView | null>(null)
   const positionCleanup = useRef<(() => void) | null>(null)
-  useEffect(() => () => { positionCleanup.current?.(); positionCleanup.current = null }, [])
+  useLayoutEffect(() => () => { positionCleanup.current?.(); positionCleanup.current = null }, [])
   function createEditor(view: EditorView) {
     positionCleanup.current?.()
     editorViewRef.current = view
@@ -93,6 +93,7 @@ export function EditorPane() {
       const frame = window.requestAnimationFrame(() => { view.scrollDOM.scrollTop = position.scrollTop; view.scrollDOM.scrollLeft = position.scrollLeft })
       let timer: number | undefined
       const persist = () => {
+        if (!view.dom.isConnected) return
         const selection = view.state.selection.main
         rememberEditor(path, nodeId, { anchor: selection.anchor, head: selection.head, scrollTop: view.scrollDOM.scrollTop, scrollLeft: view.scrollDOM.scrollLeft })
       }
@@ -272,7 +273,7 @@ export function EditorPane() {
       </div>
     </div>
     <div className={'editor-body mode-' + editorMode}>
-      {editorMode !== 'preview' ? <div className="editor-pane" onContextMenu={openEditorContextMenu}><CodeMirror key={document.node.id} readOnly={locked} editable={!locked} value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={createEditor} onUpdate={reportEditorSelection} onChange={(value) => updateContent(value)} /></div> : null}
+      {editorMode !== 'preview' ? <div className="editor-pane" onContextMenu={openEditorContextMenu}><CodeMirror className="editor-codemirror" key={document.node.id} readOnly={locked} editable={!locked} value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={createEditor} onUpdate={reportEditorSelection} onChange={(value) => updateContent(value)} /></div> : null}
       {editorMode !== 'markdown' ? <div className="editor-pane" onContextMenu={handlePreviewContextMenu}><article className="preview"><MarkdownPreview markdown={document.content} entities={data?.entities} onWikiLink={resolveWikiTarget} /></article></div> : null}
     </div>
     {wikiResolution ? <div className="wiki-resolution" role="status">
