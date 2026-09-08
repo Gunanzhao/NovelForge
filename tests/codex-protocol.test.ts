@@ -32,4 +32,21 @@ describe('Codex event lifecycle', () => {
     await expect(codexApi.generate(input, vi.fn())).rejects.toThrow('额度不足')
     expect(mocks.unlisten).toHaveBeenCalledTimes(1)
   })
+  it('filters check progress and never starts a cancelled subscription setup', async () => {
+    let receive!: (event: unknown) => void
+    mocks.listen.mockImplementation(async (_name, fn) => { receive = fn; return mocks.unlisten })
+    const progress = vi.fn()
+    mocks.invoke.mockImplementation(async () => {
+      receive({ payload: { requestId: 'old', stage: 'verification' } })
+      receive({ payload: { requestId: 'check', stage: 'protocol' } })
+      return { ready: false }
+    })
+    await codexApi.status('', { requestId: 'check', onProgress: progress })
+    expect(progress).toHaveBeenCalledExactlyOnceWith('protocol')
+    receive({ payload: { requestId: 'check', stage: 'complete' } })
+    expect(progress).toHaveBeenCalledTimes(1)
+    mocks.invoke.mockClear()
+    await expect(codexApi.status('', { isCancelled: () => true })).rejects.toThrow('已取消')
+    expect(mocks.invoke).not.toHaveBeenCalled()
+  })
 })

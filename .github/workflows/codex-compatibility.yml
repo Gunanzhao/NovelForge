@@ -1,0 +1,64 @@
+name: Codex CLI compatibility
+
+on:
+  pull_request:
+    paths: ['src-tauri/src/commands/codex/**', 'src-tauri/src/commands/codex.rs', 'src-tauri/Cargo.*', 'tests/fixtures/codex-server.mjs', '.github/workflows/codex-compatibility.yml']
+  push:
+    paths: ['src-tauri/src/commands/codex/**', 'src-tauri/src/commands/codex.rs', 'src-tauri/Cargo.*', 'tests/fixtures/codex-server.mjs', '.github/workflows/codex-compatibility.yml']
+  workflow_dispatch:
+    inputs:
+      cli_version:
+        description: Additional exact CLI version to test (leave empty for baselines)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    name: Windows CLI ${{ matrix.cli }}
+    runs-on: windows-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        cli: ['0.149.1', '0.153.4', '${{ inputs.cli_version }}']
+    steps:
+      - name: Checkout
+        if: matrix.cli != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Setup Node
+        if: matrix.cli != ''
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+      - name: Setup Rust
+        if: matrix.cli != ''
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+      - name: Cache Rust dependencies
+        if: matrix.cli != ''
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: windows-codex-${{ matrix.cli }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+      - name: Install isolated test CLI
+        if: matrix.cli != ''
+        shell: pwsh
+        env:
+          TEST_CLI_VERSION: ${{ matrix.cli }}
+        run: |
+          if ($env:TEST_CLI_VERSION -notmatch '^\d+\.\d+\.\d+(-[A-Za-z0-9.-]+)?$') { throw 'An exact CLI version is required' }
+          $testCliRoot = Join-Path $env:RUNNER_TEMP 'novelforge-cli'
+          npm install --prefix $testCliRoot --ignore-scripts --no-audit --no-fund "@openai/codex@$env:TEST_CLI_VERSION"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $testCliBinary = Join-Path $testCliRoot 'node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe'
+          if (!(Test-Path -LiteralPath $testCliBinary)) { throw 'Native CLI binary not found' }
+          "NOVELFORGE_TEST_CODEX=$testCliBinary" >> $env:GITHUB_ENV
+      - name: Verify schema, no-tools, streaming, failure and cancellation
+        if: matrix.cli != ''
+        shell: pwsh
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked installed_cli_compatibility_probe -- --ignored --nocapture

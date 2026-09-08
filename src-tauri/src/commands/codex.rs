@@ -13,6 +13,9 @@ use std::{
     time::{Duration, Instant},
 };
 use tauri::{Emitter, Manager};
+mod compatibility;
+mod status;
+mod verification;
 
 const CONTROL_TIMEOUT: Duration = Duration::from_secs(30);
 const GENERATION_TIMEOUT: Duration = Duration::from_secs(600);
@@ -30,6 +33,10 @@ struct Client {
     cancel: AtomicBool,
     closed: AtomicBool,
     active: Mutex<Option<String>>,
+    checking: Mutex<Option<String>>,
+    check_cancel: AtomicBool,
+    check_deadline: Mutex<Option<Instant>>,
+    cancelled_checks: Mutex<VecDeque<String>>,
 }
 
 struct Rpc {
@@ -42,6 +49,11 @@ struct Rpc {
     login_id: Option<String>,
     notifications: VecDeque<Value>,
     catalog: Option<CatalogFile>,
+    version: String,
+    fingerprint: String,
+    verified_key: Option<String>,
+    diagnostics: Arc<Mutex<String>>,
+    owns_cwd: bool,
 }
 
 struct CatalogFile(PathBuf);
@@ -147,6 +159,9 @@ impl Drop for Rpc {
             let _ = self.child.kill();
         }
         let _ = self.child.wait();
+        if self.owns_cwd {
+            let _ = std::fs::remove_dir_all(&self.cwd);
+        }
     }
 }
 
@@ -317,8 +332,8 @@ fn mcp_overrides(config: &Value) -> Result<Vec<String>, String> {
 }
 
 impl Rpc {
-    fn spawn(path: PathBuf, cwd: PathBuf, extra: &[String]) -> Result<Self, String> {
-        let mut command = Command::new(&path);
+    fn command(path: &std::path::Path, extra: &[String]) -> Command {
+        let mut command = Command::new(path);
         command.args(["app-server", "--listen", "stdio://"]);
         for value in overrides().iter().chain(extra) {
             command.arg("-c").arg(value);
@@ -329,9 +344,15 @@ impl Rpc {
             "OPENAI_BASE_URL",
             "CODEX_API_KEY",
             "OPENCODEX_API_AUTH_TOKEN",
+            "CODEX_CHATGPT_ACCESS_TOKEN",
         ] {
             command.env_remove(key);
         }
+        command
+    }
+
+    fn spawn(path: PathBuf, cwd: PathBuf, extra: &[String]) -> Result<Self, String> {
+        let command = Self::command(&path, extra);
         Self::spawn_command(command, path, cwd)
     }
 
@@ -340,9 +361,23 @@ impl Rpc {
             .current_dir(&cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
             .map_err(|_| "无法启动 Codex CLI".to_string())?;
+        let diagnostics = Arc::new(Mutex::new(String::new()));
+        if let Some(stderr) = child.stderr.take() {
+            let sink = diagnostics.clone();
+            std::thread::spawn(move || {
+                // Drain a bounded prefix only; never expose raw stderr or user configuration.
+                let mut bytes = Vec::new();
+                let _ = stderr.take(65536).read_to_end(&mut bytes);
+                if !bytes.is_empty() {
+                    if let Ok(mut value) = sink.lock() {
+                        *value = compatibility::safe_error(&String::from_utf8_lossy(&bytes));
+                    }
+                }
+            });
+        }
         let mut stdin = child.stdin.take().ok_or("无法连接 Codex 输入")?;
         let (input, writes) = mpsc::sync_channel::<String>(8);
         // A blocked pipe must not block the controller's timeout/cancel path.
@@ -388,6 +423,11 @@ impl Rpc {
             login_id: None,
             notifications: VecDeque::new(),
             catalog: None,
+            version: String::new(),
+            fingerprint: String::new(),
+            verified_key: None,
+            diagnostics,
+            owns_cwd: false,
         })
     }
 
@@ -416,6 +456,7 @@ impl Rpc {
 
     fn receive(&mut self, deadline: Instant, owner: &Client) -> Result<Value, String> {
         loop {
+            compatibility::check_stop(owner)?;
             if owner.closed.load(Ordering::SeqCst) {
                 return Err("窗口已关闭".into());
             }
@@ -434,10 +475,14 @@ impl Rpc {
                 Ok(Err(e)) => {
                     if let Ok(Some(status)) = self.child.try_wait() {
                         return Err(format!(
-                            "{e}（退出码：{}）",
+                            "{e}（退出码：{}；{}）",
                             status
                                 .code()
-                                .map_or_else(|| "unknown".to_owned(), |code| code.to_string())
+                                .map_or_else(|| "unknown".to_owned(), |code| code.to_string()),
+                            self.diagnostics
+                                .lock()
+                                .map(|v| v.clone())
+                                .unwrap_or_default()
                         ));
                     }
                     return Err(e);
@@ -445,6 +490,22 @@ impl Rpc {
                 Err(mpsc::RecvTimeoutError::Timeout) => continue,
                 Err(_) => return Err("Codex 连接已关闭".into()),
             }
+        }
+    }
+
+    fn read_call(&mut self, method: &str, params: Value, owner: &Client) -> Result<Value, String> {
+        if !matches!(
+            method,
+            "account/read" | "account/rateLimits/read" | "model/list" | "config/read"
+        ) {
+            return Err("仅只读查询允许重试".into());
+        }
+        match self.call(method, params.clone(), owner) {
+            Err(error) if error == "Codex 请求超时" => {
+                compatibility::check_stop(owner)?;
+                self.call(method, params, owner)
+            }
+            result => result,
         }
     }
 
@@ -473,6 +534,12 @@ impl Rpc {
             };
             if v["id"] == id {
                 if v.get("error").is_some() {
+                    if v["error"]["code"] == -32601 {
+                        return Err(format!("Codex 不支持 {method} 方法"));
+                    }
+                    if v["error"]["code"] == -32602 {
+                        return Err(format!("Codex {method} 参数协议不兼容"));
+                    }
                     return Err(format!("Codex {method} 失败，请检查登录、额度和版本兼容性"));
                 }
                 return v.get("result").cloned().ok_or("Codex 响应缺少结果".into());
@@ -490,14 +557,14 @@ impl Rpc {
     }
 
     fn initialize(&mut self, owner: &Client) -> Result<Value, String> {
-        let result = self.call("initialize", json!({"clientInfo":{"name":"novelforge","version":env!("CARGO_PKG_VERSION")},"capabilities":{"experimentalApi":true}}), owner)?;
+        let result = self.call("initialize", json!({"clientInfo":{"name":"novelforge","version":env!("CARGO_PKG_VERSION")},"capabilities":{"experimentalApi":false}}), owner)?;
         let agent = result["userAgent"].as_str().unwrap_or("");
-        // Unknown releases stay closed until their tool catalog has passed the security fixture.
-        if !agent.contains("/0.149.1 ") {
-            return Err("Codex 版本尚未通过工具隔离验证；当前支持 0.149.1".into());
+        // Compatibility is verified separately before enabling a generation session.
+        if agent.is_empty() {
+            return Err("Codex 初始化缺少版本信息".into());
         }
         self.write("{\"method\":\"initialized\"}".into())?;
-        self.call("config/read", json!({"includeLayers":false}), owner)
+        self.read_call("config/read", json!({"includeLayers":false}), owner)
             .map(|v| v["config"].clone())
     }
 
@@ -532,7 +599,7 @@ impl Rpc {
         let mut models = Vec::new();
         let mut cursor = Value::Null;
         for _ in 0..10 {
-            let page = self.call(
+            let page = self.read_call(
                 "model/list",
                 json!({"limit":100,"cursor":cursor,"includeHidden":false}),
                 owner,
@@ -614,16 +681,27 @@ fn with_rpc<T>(
         .try_lock()
         .map_err(|_| "Codex 正在处理任务，请稍候")?;
     let path = resolve_cli(path)?;
-    if slot.as_ref().is_none_or(|rpc| rpc.path != path) {
+    let fingerprint = compatibility::file_hash(&path, &owner)?;
+    if slot
+        .as_ref()
+        .is_none_or(|rpc| rpc.path != path || rpc.fingerprint != fingerprint)
+    {
         *slot = None;
         let cwd = window
             .path()
             .app_cache_dir()
             .map_err(|_| "无法获取应用缓存目录")?
-            .join("codex-work")
-            .join(uuid::Uuid::new_v4().to_string());
-        std::fs::create_dir_all(&cwd).map_err(|_| "无法创建 Codex 空工作目录")?;
-        *slot = Some(Rpc::connect(path, cwd, &owner)?);
+            .join("codex-work");
+        let scratch = compatibility::Scratch::new(&cwd)?;
+        let cwd = scratch.0.clone();
+        let version = compatibility::version(&path, &owner)?;
+        let mut rpc = Rpc::spawn(path, cwd, &[])?;
+        rpc.initialize(&owner)?;
+        rpc.version = version;
+        rpc.fingerprint = fingerprint;
+        rpc.owns_cwd = true;
+        let _ = scratch.into_path();
+        *slot = Some(rpc);
     }
     let result = action(slot.as_mut().unwrap(), &owner);
     if result.is_err() {
@@ -633,13 +711,48 @@ fn with_rpc<T>(
 }
 
 #[tauri::command]
-pub async fn codex_status(window: tauri::WebviewWindow, cli_path: String) -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(move || with_rpc(&window, &cli_path, |rpc, owner| {
-        let account = rpc.call("account/read", json!({"refreshToken":false}), owner)?;
-        let auth = account.pointer("/account/type").and_then(Value::as_str).unwrap_or("none");
-        let limits = if auth == "chatgpt" { rpc.call("account/rateLimits/read", json!({}), owner).ok() } else { None };
-        Ok(json!({"version":"0.149.1","cliPath":rpc.path,"authMode":auth,"planType":account.pointer("/account/planType"),"rateLimits":limits,"ready":auth=="chatgpt"}))
-    })).await.map_err(|_| "Codex 后台任务失败")?
+pub async fn codex_status(
+    window: tauri::WebviewWindow,
+    cli_path: String,
+    request_id: String,
+    model: Option<String>,
+    effort: Option<String>,
+    force: Option<bool>,
+) -> Result<Value, String> {
+    let owner = client(&window)?;
+    let guard = status::CheckGuard::start(owner.clone(), &request_id)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = guard;
+        status::check(
+            &window,
+            &cli_path,
+            &request_id,
+            model.as_deref().unwrap_or(""),
+            effort.as_deref().unwrap_or(""),
+            force.unwrap_or(false),
+        )
+    })
+    .await
+    .map_err(|_| "Codex 兼容检查后台任务失败".to_owned())
+}
+
+#[tauri::command]
+pub fn codex_check_cancel(window: tauri::WebviewWindow, request_id: String) -> Result<(), String> {
+    let owner = client(&window)?;
+    let checking = owner.checking.lock().map_err(|_| "Codex 检查状态不可用")?;
+    if checking.as_deref() == Some(&request_id) {
+        owner.check_cancel.store(true, Ordering::SeqCst);
+    } else if !request_id.is_empty() && request_id.len() <= 160 {
+        let mut cancelled = owner
+            .cancelled_checks
+            .lock()
+            .map_err(|_| "检查取消状态不可用")?;
+        if cancelled.len() >= 64 {
+            cancelled.pop_front();
+        }
+        cancelled.push_back(request_id);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -770,6 +883,12 @@ pub async fn codex_generate(
     }
     tauri::async_runtime::spawn_blocking(move || {
         let result = with_rpc(&window, &input.cli_path, |rpc, owner| {
+            let guard = status::CheckGuard::generation(
+                client(&window)?,
+                &format!("generate-{}", input.request_id),
+            )?;
+            status::prepare(rpc, owner, &input.model, &input.effort, false, |_| {})?;
+            drop(guard);
             generate(rpc, owner, &input, |delta| {
                 let _ = window.emit(
                     "codex-generation",
@@ -788,6 +907,24 @@ pub async fn codex_generate(
     })
     .await
     .map_err(|_| "Codex 后台任务失败")?
+}
+
+fn thread_params(model: &str, cwd: &std::path::Path, instructions: &str, provider: &str) -> Value {
+    json!({"model":model,"modelProvider":provider,"ephemeral":true,"cwd":cwd,"sandbox":"read-only","approvalPolicy":"never","approvalsReviewer":"user","baseInstructions":instructions,"developerInstructions":"Return only the requested writing or analysis as text.","config":{"instructions":"","developer_instructions":"","personality":"none"}})
+}
+
+fn validate_permissions(response: &Value, provider: &str) -> Result<(), String> {
+    if response["modelProvider"] != provider
+        || response["sandbox"]["type"] != "readOnly"
+        || response["sandbox"]["networkAccess"] != false
+        || response["approvalPolicy"] != "never"
+        || response["instructionSources"]
+            .as_array()
+            .is_some_and(|sources| !sources.is_empty())
+    {
+        return Err("Codex 未应用要求的权限或指令隔离配置".into());
+    }
+    Ok(())
 }
 
 fn generate(
@@ -829,14 +966,12 @@ fn generate(
     {
         return Err("所选推理强度不受该模型支持".into());
     }
-    let response = rpc.call("thread/start", json!({"model":input.model,"modelProvider":"openai","ephemeral":true,"cwd":rpc.cwd,"sandbox":"read-only","approvalPolicy":"never","approvalsReviewer":"user","baseInstructions":input.system_prompt,"developerInstructions":"Return only the requested writing or analysis as text.","config":{"instructions":"","developer_instructions":"","personality":"none"}}), owner)?;
-    if response["modelProvider"] != "openai"
-        || response["sandbox"]["type"] != "readOnly"
-        || response["sandbox"]["networkAccess"] != false
-        || response["approvalPolicy"] != "never"
-    {
-        return Err("Codex 未应用要求的权限配置".into());
-    }
+    let response = rpc.call(
+        "thread/start",
+        thread_params(&input.model, &rpc.cwd, &input.system_prompt, "openai"),
+        owner,
+    )?;
+    validate_permissions(&response, "openai")?;
     let thread = response["thread"]["id"]
         .as_str()
         .ok_or("Codex 未返回会话 ID")?

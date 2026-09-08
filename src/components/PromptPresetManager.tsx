@@ -26,8 +26,9 @@ const QUICK_VARIABLES = [
   ['当前段落', 'currentParagraph'], ['最近 3 章', 'recentChapters:3'],
 ] as const
 
-export function PromptPresetManager({ busy, onRun, defaultSystemPrompt = '你是 NovelForge 的中文小说创作助手。只处理模板中明确引用的上下文。' }: {
+export function PromptPresetManager({ busy, onRun, presentation = 'panel', defaultSystemPrompt = '你是 NovelForge 的中文小说创作助手。只处理模板中明确引用的上下文。' }: {
   defaultSystemPrompt?: string
+  presentation?: 'panel' | 'launcher'
   busy: boolean
   onRun: (preset: PromptPreset, resolution: PromptResolution) => Promise<void>
 }) {
@@ -39,6 +40,7 @@ export function PromptPresetManager({ busy, onRun, defaultSystemPrompt = '你是
   const deleteEntity = useAppStore((state) => state.deleteEntity)
   const setError = useAppStore((state) => state.setError)
   const newEntityId = useRef<string | null>(null)
+  const [visible, setVisible] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [draft, setDraft] = useState<Draft>(BLANK)
   const [baseline, setBaseline] = useState(() => JSON.stringify(BLANK))
@@ -72,7 +74,7 @@ export function PromptPresetManager({ busy, onRun, defaultSystemPrompt = '你是
   }, [selected])
 
   useEffect(() => {
-    const open = () => globalThis.document.querySelector('.prompt-preset-manager')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const open = () => { setVisible(true); window.requestAnimationFrame(() => globalThis.document.querySelector('.prompt-preset-manager')?.scrollIntoView({ block: 'nearest' })) }
     const run = () => {
       open()
       const preset = presets[0]
@@ -174,7 +176,7 @@ export function PromptPresetManager({ busy, onRun, defaultSystemPrompt = '你是
   const systemPrompt = preview?.preset.systemPrompt ?? defaultSystemPrompt
   const budget = estimateContextBudget([{ title: 'system', kind: 'system', content: systemPrompt }, { title: 'user', kind: 'user', content: preview?.resolution.prompt ?? '' }])
 
-  return <Panel className="prompt-preset-manager">
+  const content = <Panel className="prompt-preset-manager">
     <div className="preset-manager-head"><div className="preset-heading"><span className="preset-heading-icon"><BookOpen size={18} /></span><div><h3>我的模板 <span>{presets.length}</span></h3><p>把常用写作要求保存下来，下次直接使用。</p></div></div><Button variant="outline" onClick={() => runGuarded(() => { newEntityId.current = null; setSelectedId(null); setDraft(BLANK); setBaseline(JSON.stringify(BLANK)); setSystemOpen(false) })}><Plus size={13} />新建</Button></div>
     <div className={'prompt-preset-layout' + (presets.length ? '' : ' is-empty')}>
       <div className="prompt-preset-list">{presets.length ? presets.map(preset => <button key={preset.id} className={preset.id === selectedId ? 'active' : ''} onClick={() => runGuarded(() => setSelectedId(preset.id))}><strong>{preset.name}</strong><small>{ACTION_LABELS[preset.action]} · {preset.description || '无说明'}</small></button>) : <div className="preset-empty"><BookOpen size={20} /><div><strong>创建你的第一个模板</strong><p>例如人物一致性检查、章节润色或剧情分析。填写下方内容即可保存。</p></div></div>}</div>
@@ -189,6 +191,8 @@ export function PromptPresetManager({ busy, onRun, defaultSystemPrompt = '你是
         <div className="prompt-preset-actions"><Button disabled={saving || !draft.name.trim() || !draft.prompt.trim()} onClick={() => void save(false)}><Save size={13} />{saving ? '保存中…' : '保存'}</Button>{selected ? <><Button variant="ghost" disabled={saving} onClick={() => void save(true)}><Copy size={13} />复制</Button><Button variant="ghost" onClick={() => void remove()}><Trash2 size={13} />删除</Button></> : null}<span className="preset-action-spacer" /><Button variant="outline" disabled={!draft.name.trim() || !draft.prompt.trim()} onClick={() => void previewDraft(false)}><Eye size={13} />预览</Button><Button disabled={busy || !draft.name.trim() || !draft.prompt.trim()} onClick={() => void previewDraft(true)}><Play size={13} />运行</Button></div>
       </div>
     </div>
-    {preview ? <Modal open title={`Prompt 预览 · ${preview.preset.name}`} onClose={() => setPreview(null)} footer={<><Button variant="outline" onClick={() => setPreview(null)}>取消</Button>{preview.run ? <Button disabled={busy} onClick={() => { const current = preview; setPreview(null); void onRun(current.preset, current.resolution) }}><Play size={13} />确认运行</Button> : null}</>}><div className="prompt-preview-meta"><span>字符数：{budget.characters.toLocaleString()}</span><span>估算 Token：{budget.estimatedTokens.toLocaleString()}</span><span>安全阈值：{budget.safeLimit.toLocaleString()} 字符{budget.overLimit ? ' · 超过安全阈值，请减少内容' : ''}</span></div><div className="prompt-preview-contexts"><strong>显式上下文项</strong>{preview.resolution.contexts.length ? preview.resolution.contexts.map((context) => <span key={context.variable}>{context.label} · {context.characters.toLocaleString()} 字符</span>) : <span>模板没有引用项目上下文。</span>}</div><h4>System Prompt</h4><pre className="prompt-preview-text">{systemPrompt}</pre><h4>User Prompt</h4><pre className="prompt-preview-text">{preview.resolution.prompt}</pre></Modal> : null}
+    {preview ? <Modal open title={`Prompt 预览 · ${preview.preset.name}`} onClose={() => setPreview(null)} footer={<><Button variant="outline" onClick={() => setPreview(null)}>取消</Button>{preview.run ? <Button disabled={busy} onClick={() => { const current = preview; setPreview(null); setVisible(false); void onRun(current.preset, current.resolution) }}><Play size={13} />确认运行</Button> : null}</>}><div className="prompt-preview-meta"><span>字符数：{budget.characters.toLocaleString()}</span><span>估算 Token：{budget.estimatedTokens.toLocaleString()}</span><span>安全阈值：{budget.safeLimit.toLocaleString()} 字符{budget.overLimit ? ' · 超过安全阈值，请减少内容' : ''}</span></div><div className="prompt-preview-contexts"><strong>显式上下文项</strong>{preview.resolution.contexts.length ? preview.resolution.contexts.map((context) => <span key={context.variable}>{context.label} · {context.characters.toLocaleString()} 字符</span>) : <span>模板没有引用项目上下文。</span>}</div><h4>System Prompt</h4><pre className="prompt-preview-text">{systemPrompt}</pre><h4>User Prompt</h4><pre className="prompt-preview-text">{preview.resolution.prompt}</pre></Modal> : null}
   </Panel>
+  if (presentation === 'panel') return content
+  return <><Button variant="outline" className="ai-template-launcher" onClick={() => setVisible(true)}><BookOpen size={14} />使用模板</Button><div className="ai-template-dialog"><Modal open={visible} title="写作模板" onClose={() => setVisible(false)}>{content}</Modal></div></>
 }

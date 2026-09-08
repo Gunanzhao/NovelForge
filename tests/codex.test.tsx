@@ -1,3 +1,4 @@
+import { useCodexSession } from '../src/stores/codex-session'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NodeRecord, ProjectData, AiCompletionResult } from '../src/lib/types'
@@ -15,8 +16,8 @@ const chapter: NodeRecord = { id: 'chapter', title: '第一章', kind: 'chapter'
 const data: ProjectData = { project: { id: 'project', title: '测试', author: '', description: '', genre: '', targetWords: 1000, formatVersion: 1, createdAt: '', updatedAt: '' }, nodes: [chapter], entities: [], recovery: [] }
 
 beforeEach(() => {
-  vi.resetAllMocks()
-  mocks.status.mockResolvedValue({ ready: true, version: '0.149.1', authMode: 'chatgpt', planType: 'plus', rateLimits: null })
+  useCodexSession.setState(useCodexSession.getInitialState(), true); vi.resetAllMocks()
+  mocks.status.mockResolvedValue({ ready: true, version: '0.153.4', authMode: 'chatgpt', planType: 'plus', rateLimits: [], compatibility: { state: 'passed' }, selectedModel: 'writer', selectedEffort: 'low', models: [{ model: 'writer', displayName: 'Writer', defaultReasoningEffort: 'low', supportedReasoningEfforts: [{ reasoningEffort: 'low' }] }] })
   mocks.models.mockResolvedValue([{ model: 'writer', displayName: 'Writer', defaultReasoningEffort: 'low', supportedReasoningEfforts: [{ reasoningEffort: 'low' }] }])
   mocks.cancel.mockResolvedValue(undefined)
   writeAiPreferences({ endpoint: 'https://example.org', model: 'http-model', mode: 'codex' })
@@ -74,6 +75,8 @@ describe('Codex writing integration', () => {
     mocks.status.mockResolvedValue({ ready: false, version: '0.149.1', authMode: 'apiKey' })
     render(<AiAssistantView />)
     fireEvent.click(screen.getByRole('button', { name: '检查连接 / 刷新登录' }))
+    await waitFor(() => expect(mocks.status).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('button', { name: '连接设置' }))
     await screen.findByText(/当前不是 ChatGPT 订阅登录/)
     expect((screen.getByRole('button', { name: '运行辅助' }) as HTMLButtonElement).disabled).toBe(true)
     expect(mocks.generate).not.toHaveBeenCalled()
@@ -84,6 +87,8 @@ describe('Codex writing integration', () => {
     mocks.login.mockResolvedValue(null)
     render(<AiAssistantView />)
     fireEvent.click(screen.getByRole('button', { name: '检查连接 / 刷新登录' }))
+    await screen.findByText('待登录')
+    fireEvent.click(screen.getByRole('button', { name: '连接设置' }))
     fireEvent.click(await screen.findByRole('button', { name: '登录 ChatGPT' }))
     fireEvent.click(await screen.findByRole('button', { name: '取消登录' }))
     await waitFor(() => expect(mocks.login).toHaveBeenLastCalledWith('', true))
@@ -92,6 +97,7 @@ describe('Codex writing integration', () => {
     useAppStore.setState({ data: { ...data, entities: [{ id: 'preset', kind: 'prompt-preset', title: '剧情分析', content: { prompt: '分析 {{currentChapter}}', action: 'analyze', defaultContexts: [] }, tags: [], filePath: 'prompts/test.md', createdAt: '', updatedAt: '' }] } })
     mocks.generate.mockResolvedValue({ content: '分析结果', model: 'writer' })
     await ready()
+    fireEvent.click(screen.getByRole('button', { name: '使用模板' }))
     fireEvent.click(screen.getByRole('button', { name: /剧情分析/ }))
     fireEvent.click(await screen.findByRole('button', { name: '运行' }))
     fireEvent.click(await screen.findByRole('button', { name: '确认运行' }))
@@ -103,7 +109,7 @@ describe('Codex writing integration', () => {
     useAppStore.setState({ editorSelection: { nodeId: 'chapter', from: 0, to: 2, text: '雨夜' } })
     mocks.generate.mockResolvedValue({ content: '细雨长夜', model: 'writer' })
     await ready()
-    fireEvent.change(screen.getByLabelText('任务'), { target: { value: 'polish' } })
+    fireEvent.click(screen.getByRole('button', { name: '润色' }))
     fireEvent.click(screen.getByRole('button', { name: '运行辅助' }))
     await screen.findByDisplayValue('细雨长夜')
     act(() => useAppStore.setState({ editorSelection: { nodeId: 'chapter', from: 1, to: 2, text: '夜' } }))
@@ -118,4 +124,27 @@ describe('Codex writing integration', () => {
     await screen.findByRole('alert')
     expect((screen.getByRole('button', { name: '运行辅助' }) as HTMLButtonElement).disabled).toBe(true)
   })
+})
+
+it('retains generation readiness after leaving the AI page and after switching modes', async () => {
+  const view = render(<AiAssistantView />)
+  fireEvent.click(screen.getByRole('button', { name: '检查连接 / 刷新登录' }))
+  await screen.findByText('已连接')
+  view.unmount()
+  render(<AiAssistantView />)
+  await waitFor(() => expect(screen.getByRole('button', { name: '运行辅助' })).toHaveProperty('disabled', false))
+  fireEvent.change(screen.getByLabelText('AI 模式'), { target: { value: 'offline' } })
+  fireEvent.change(screen.getByLabelText('AI 模式'), { target: { value: 'codex' } })
+  await waitFor(() => expect(screen.getByRole('button', { name: '运行辅助' })).toHaveProperty('disabled', false))
+  expect(mocks.status).toHaveBeenCalledTimes(1)
+  mocks.generate.mockResolvedValue({ content: '切回后生成的正文', model: 'writer' })
+  fireEvent.click(screen.getByRole('button', { name: '运行辅助' }))
+  await screen.findByDisplayValue('切回后生成的正文')
+})
+it('marks a failed generation connection unavailable until checked again', async () => {
+  await ready()
+  mocks.generate.mockRejectedValue(new Error('登录已失效'))
+  fireEvent.click(screen.getByRole('button', { name: '运行辅助' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: '运行辅助' })).toHaveProperty('disabled', true))
+  expect(await screen.findByText(/生成连接未通过/)).toBeTruthy()
 })

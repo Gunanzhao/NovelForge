@@ -2,11 +2,31 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.1.0-rc.11（预发布）**。
+当前版本：**1.1.1-rc.1（预发布）**。整合 Codex CLI 自动兼容、AI 双栏工作台和窗口内连接状态保持。
 
-- [下载 Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.0-rc.11/NovelForge_1.1.0-rc.11_x64-setup.exe)
-- [Release 与 SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.0-rc.11)
-- [测试报告](TEST_REPORT.md) · [rc.11 发布说明](docs/releases/v1.1.0-rc.11.md)
+- [下载 Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.1/NovelForge_1.1.1-rc.1_x64-setup.exe)
+- [Release 与 SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.1.1-rc.1)
+- [测试报告](TEST_REPORT.md) · [1.1.1-rc.1 发布说明](docs/releases/v1.1.1-rc.1.md)
+
+## 本版改进：保持 Codex 连接状态
+
+- 同一软件窗口内，检查成功后切换页面或 AI 模式再回来，可直接复用连接状态与模型列表。
+- 检查中离开页面会继续检查；取消、路径或参数变化会使旧结果失效，生成前仍核验实际环境。
+- 连接状态仅保留在内存中，关闭窗口后清理；验收记录见 [连接状态保持](docs/audits/codex-session-2026-09-08.md)。
+
+## 本版改进：AI 辅助工作台
+
+- 左侧集中写作任务、要求和参考资料，右侧展示可编辑结果，两侧独立滚动，运行与应用操作固定在底部。
+- 顶部紧凑显示模式、模型及连接状态；连接设置、写作模板、请求预览按需打开。
+- 关闭模板编辑或连接设置后保留当前草稿和连接状态，沿用正文及选区变化保护。
+- 验证与本地构建记录见 [AI 工作台验收](docs/audits/ai-workbench-2026-09-08.md)。
+
+## 本版改进：Codex CLI 自动兼容
+
+- 按实际协议和本地无工具行为验证新 CLI，显示真实版本、登录状态和分阶段诊断。
+- 支持取消检查、重新验证及七天缓存；CLI、模型或配置变化时重新检查，失效模型需明确重选。
+- 兼容新版额度桶，保留订阅计费边界；不自动升级用户 CLI，不自动回退至 API。
+- 已完成的本地验证及限制见 [Codex 兼容验收记录](docs/audits/codex-compatibility-2026-09-08.md)。
 
 ## rc.11：保存可靠性与项目恢复
 
@@ -24,7 +44,7 @@ NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台�
 
 AI 辅助新增 Codex 模式，使用本机官方 CLI 的 ChatGPT 登录和订阅额度，覆盖续写、润色、分析及提示词模板；支持模型选择、推理强度、流式输出和停止生成。现有 HTTP Provider 和离线模式继续保留。
 
-在“AI 辅助”选择“Codex 订阅”，点击“检查连接 / 刷新登录”；未登录时可通过官方浏览器流程登录。首个验证 CLI 版本为 **0.149.1**，CLI 不随安装包分发。
+在“AI 辅助”选择“Codex 订阅”，点击“检查连接 / 刷新登录”；未登录时可通过官方浏览器流程登录。当前验证基线为 **0.149.1 / 0.153.4**，CLI 不随安装包分发。
 
 NovelForge 为自己的子进程固定使用官方订阅服务，生成只含模型名称和推理参数的独立文本目录，并关闭工具、MCP 和插件，不修改全局 OpenCodex 配置。生成结果需确认后应用；正文或选区已变化时会阻止覆盖。
 

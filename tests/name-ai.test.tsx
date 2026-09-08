@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-const mocks = vi.hoisted(() => ({ aiComplete: vi.fn(), status: vi.fn(), generate: vi.fn(), cancel: vi.fn(async () => {}) }))
+const mocks = vi.hoisted(() => ({ aiComplete: vi.fn(), status: vi.fn(), cancelCheck: vi.fn(async () => {}), generate: vi.fn(), cancel: vi.fn(async () => {}) }))
 vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: { aiComplete: mocks.aiComplete } }))
 vi.mock('../src/lib/codex', () => ({ codexApi: mocks }))
 import { NameAiPanel } from '../src/components/NameAiPanel'
@@ -40,7 +40,7 @@ it('discards a provider reply after cancellation', async () => {
   expect(onResults).not.toHaveBeenCalled()
 })
 it('uses configured Codex and cancels on unmount', async () => {
-  mocks.status.mockResolvedValue({ ready: true }); mocks.generate.mockReturnValue(new Promise(() => {}))
+  mocks.status.mockResolvedValue({ ready: true, selectedModel: 'configured-model', selectedEffort: 'low' }); mocks.generate.mockReturnValue(new Promise(() => {}))
   localStorage.setItem('novelforge:ai-preferences:v1', JSON.stringify({ mode: 'codex', codexPath: 'custom-codex', codexModel: 'configured-model' }))
   const { unmount } = render(<NameAiPanel category="character" style="中文古风" count={2} rules={{}} excluded={[]} onResults={vi.fn()} />)
   fireEvent.click(screen.getByRole('button', { name: '发送并生成 AI 名字' }))

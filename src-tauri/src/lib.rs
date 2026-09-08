@@ -82,6 +82,7 @@ pub fn run() {
             commands::codex::codex_login,
             commands::codex::codex_generate,
             commands::codex::codex_cancel,
+            commands::codex::codex_check_cancel,
             commands::statistics::get_statistics,
             commands::export::export_project,
             commands::project::read_logs,

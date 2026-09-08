@@ -1,0 +1,613 @@
+{
+  "v2/ThreadStartParams.json": {
+    "request": true,
+    "allowedRequired": [
+      "approvalPolicy",
+      "approvalsReviewer",
+      "baseInstructions",
+      "config",
+      "cwd",
+      "developerInstructions",
+      "ephemeral",
+      "model",
+      "modelProvider",
+      "sandbox"
+    ],
+    "properties": {
+      "approvalPolicy": {
+        "anyOf": [
+          {
+            "oneOf": [
+              {
+                "enum": [
+                  "untrusted",
+                  "on-request",
+                  "never"
+                ],
+                "type": "string"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "granular": {
+                    "properties": {
+                      "mcp_elicitations": {
+                        "type": "boolean"
+                      },
+                      "request_permissions": {
+                        "type": "boolean"
+                      },
+                      "rules": {
+                        "type": "boolean"
+                      },
+                      "sandbox_approval": {
+                        "type": "boolean"
+                      },
+                      "skill_approval": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "mcp_elicitations",
+                      "rules",
+                      "sandbox_approval"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "granular"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "approvalsReviewer": {
+        "anyOf": [
+          {
+            "enum": [
+              "user",
+              "auto_review",
+              "guardian_subagent"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "baseInstructions": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "config": {
+        "additionalProperties": true,
+        "type": [
+          "object",
+          "null"
+        ]
+      },
+      "cwd": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "developerInstructions": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "ephemeral": {
+        "type": [
+          "boolean",
+          "null"
+        ]
+      },
+      "model": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "modelProvider": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "sandbox": {
+        "anyOf": [
+          {
+            "enum": [
+              "read-only",
+              "workspace-write",
+              "danger-full-access"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    }
+  },
+  "v2/ThreadStartResponse.json": {
+    "request": false,
+    "allowedRequired": [
+      "model",
+      "modelProvider",
+      "approvalPolicy",
+      "sandbox"
+    ],
+    "properties": {
+      "model": {
+        "type": "string"
+      },
+      "modelProvider": {
+        "type": "string"
+      },
+      "approvalPolicy": {
+        "oneOf": [
+          {
+            "enum": [
+              "untrusted",
+              "on-request",
+              "never"
+            ],
+            "type": "string"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "granular": {
+                "properties": {
+                  "mcp_elicitations": {
+                    "type": "boolean"
+                  },
+                  "request_permissions": {
+                    "type": "boolean"
+                  },
+                  "rules": {
+                    "type": "boolean"
+                  },
+                  "sandbox_approval": {
+                    "type": "boolean"
+                  },
+                  "skill_approval": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "mcp_elicitations",
+                  "rules",
+                  "sandbox_approval"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "granular"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "sandbox": {
+        "allOf": [
+          {
+            "oneOf": [
+              {
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "dangerFullAccess"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "networkAccess": {
+                    "type": "boolean"
+                  },
+                  "type": {
+                    "enum": [
+                      "readOnly"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "networkAccess": {
+                    "allOf": [
+                      {
+                        "enum": [
+                          "restricted",
+                          "enabled"
+                        ],
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "type": {
+                    "enum": [
+                      "externalSandbox"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "excludeSlashTmp": {
+                    "type": "boolean"
+                  },
+                  "excludeTmpdirEnvVar": {
+                    "type": "boolean"
+                  },
+                  "networkAccess": {
+                    "type": "boolean"
+                  },
+                  "type": {
+                    "enum": [
+                      "workspaceWrite"
+                    ],
+                    "type": "string"
+                  },
+                  "writableRoots": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "v2/TurnStartParams.json": {
+    "request": true,
+    "allowedRequired": [
+      "threadId",
+      "effort",
+      "input"
+    ],
+    "properties": {
+      "threadId": {
+        "type": "string"
+      },
+      "effort": {
+        "anyOf": [
+          {
+            "minLength": 1,
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "input": {
+        "items": {
+          "oneOf": [
+            {
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "text_elements": {
+                  "items": {
+                    "properties": {
+                      "byteRange": {
+                        "allOf": [
+                          {
+                            "properties": {
+                              "end": {
+                                "format": "uint",
+                                "minimum": 0.0,
+                                "type": "integer"
+                              },
+                              "start": {
+                                "format": "uint",
+                                "minimum": 0.0,
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "end",
+                              "start"
+                            ],
+                            "type": "object"
+                          }
+                        ]
+                      },
+                      "placeholder": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "byteRange"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "type": {
+                  "enum": [
+                    "text"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "text",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "detail": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "auto",
+                        "low",
+                        "high",
+                        "original"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": {
+                  "enum": [
+                    "image"
+                  ],
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "url"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "detail": {
+                  "anyOf": [
+                    {
+                      "enum": [
+                        "auto",
+                        "low",
+                        "high",
+                        "original"
+                      ],
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "localImage"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "audio"
+                  ],
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "url"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "localAudio"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "skill"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "path",
+                "type"
+              ],
+              "type": "object"
+            },
+            {
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "mention"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "path",
+                "type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "type": "array"
+      }
+    }
+  },
+  "v2/TurnInterruptParams.json": {
+    "request": true,
+    "allowedRequired": [
+      "threadId",
+      "turnId"
+    ],
+    "properties": {
+      "threadId": {
+        "type": "string"
+      },
+      "turnId": {
+        "type": "string"
+      }
+    }
+  },
+  "v2/GetAccountParams.json": {
+    "request": true,
+    "allowedRequired": [
+      "refreshToken"
+    ],
+    "properties": {
+      "refreshToken": {
+        "type": "boolean"
+      }
+    }
+  },
+  "v2/ModelListParams.json": {
+    "request": true,
+    "allowedRequired": [
+      "limit",
+      "cursor",
+      "includeHidden"
+    ],
+    "properties": {
+      "limit": {
+        "format": "uint32",
+        "minimum": 0.0,
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "cursor": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "includeHidden": {
+        "type": [
+          "boolean",
+          "null"
+        ]
+      }
+    }
+  },
+  "v2/AgentMessageDeltaNotification.json": {
+    "request": false,
+    "allowedRequired": [
+      "threadId",
+      "turnId",
+      "delta"
+    ],
+    "properties": {
+      "threadId": {
+        "type": "string"
+      },
+      "turnId": {
+        "type": "string"
+      },
+      "delta": {
+        "type": "string"
+      }
+    }
+  }
+}

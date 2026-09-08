@@ -83,7 +83,9 @@ describe('AiAssistantView insecure HTTP confirmation', () => {
     await waitFor(() => expect(aiComplete).toHaveBeenCalledTimes(2))
     expect(confirm).toHaveBeenCalledTimes(1)
 
+    fireEvent.click(screen.getByRole('button', { name: '连接设置' }))
     fireEvent.change(screen.getByPlaceholderText('留空使用本地离线模式'), { target: { value: 'http://other.example/v1' } })
+    fireEvent.click(screen.getByRole('button', { name: '关闭' }))
     await user.click(screen.getByRole('button', { name: '运行辅助' }))
     await waitFor(() => expect(aiComplete).toHaveBeenCalledTimes(3))
     expect(confirm).toHaveBeenCalledTimes(2)

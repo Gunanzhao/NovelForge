@@ -57,6 +57,7 @@ describe('PromptPresetManager integration', () => {
 
   it('shows the final prompt before running a local preset', async () => {
     render(<AiAssistantView />)
+    fireEvent.click(screen.getByRole('button', { name: '使用模板' }))
     fireEvent.click(screen.getByRole('button', { name: /OOC 检查/ }))
     await waitFor(() => expect(screen.getByDisplayValue('分析 {{currentChapter}}')).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: '运行' }))
@@ -71,6 +72,7 @@ describe('PromptPresetManager integration', () => {
 
   it('blocks rewrite execution when the required selection is missing', async () => {
     render(<AiAssistantView />)
+    fireEvent.click(screen.getByRole('button', { name: '使用模板' }))
     fireEvent.click(screen.getByRole('button', { name: /选区改写/ }))
     await waitFor(() => expect(screen.getByDisplayValue('改写 {{selection}}')).toBeTruthy())
     fireEvent.click(screen.getByRole('button', { name: '运行' }))
@@ -82,6 +84,7 @@ describe('PromptPresetManager integration', () => {
   it('uses a compact empty state and inserts context at the selected text', async () => {
     useAppStore.setState({ data: { ...project, entities: [] } })
     const { container } = render(<AiAssistantView />)
+    fireEvent.click(screen.getByRole('button', { name: '使用模板' }))
     expect(container.querySelector('.prompt-preset-layout.is-empty')).toBeTruthy()
     expect(screen.getByRole('option', { name: '分析检查' })).toBeTruthy()
     const prompt = screen.getByPlaceholderText('请检查 {{character:林月}} 在 {{currentChapter}} 中的行为。') as HTMLTextAreaElement

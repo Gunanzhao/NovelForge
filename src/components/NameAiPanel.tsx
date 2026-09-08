@@ -25,7 +25,7 @@ export function NameAiPanel({ category, style, count, rules, excluded, onResults
   useEffect(() => () => {
     const request = active.current
     active.current = null
-    if (request?.mode === 'codex') void codexApi.cancel(request.id).catch(() => {})
+    if (request?.mode === 'codex') void Promise.allSettled([codexApi.cancel(request.id), codexApi.cancelCheck(request.id)])
   }, [])
   useEffect(() => {
     const request = active.current
@@ -33,7 +33,7 @@ export function NameAiPanel({ category, style, count, rules, excluded, onResults
     active.current = null
     setBusy(false)
     setError('条件或结果已更新，已停止接收旧请求。')
-    if (request.mode === 'codex') void codexApi.cancel(request.id).catch(() => {})
+    if (request.mode === 'codex') void Promise.allSettled([codexApi.cancel(request.id), codexApi.cancelCheck(request.id)])
   }, [revision])
   const available = data?.entities.filter(entity => ['character', 'location', 'world'].includes(entity.kind)) ?? []
   const context = available.filter(entity => selected.includes(entity.id)).map(entity => ({ title: entity.title, content: entity.content }))
@@ -51,11 +51,11 @@ export function NameAiPanel({ category, style, count, rules, excluded, onResults
     try {
       let content: string
       if (mode === 'codex') {
-        const cliPath = preferences.codexPath || 'codex'
-        const status = await codexApi.status(cliPath)
+        const cliPath = preferences.codexPath || ''
+        const status = await codexApi.status(cliPath, { requestId: id, model: preferences.codexModel, effort: preferences.codexEffort, isCancelled: () => active.current?.id !== id })
         if (active.current?.id !== id || !isCurrentProjectSession(session)) return
-        if (!status.ready) throw new Error('Codex 尚未登录，请在 AI 辅助设置中检查连接并登录。')
-        content = (await codexApi.generate({ cliPath, requestId: id, model: preferences.codexModel || '', effort: preferences.codexEffort || 'medium', systemPrompt, prompt }, () => {}, () => active.current?.id !== id)).content
+        if (!status.ready) throw new Error(status.compatibility?.diagnostic?.message ?? 'Codex 尚未就绪，请在 AI 辅助设置中检查连接并登录。')
+        content = (await codexApi.generate({ cliPath, requestId: id, model: status.selectedModel, effort: status.selectedEffort, systemPrompt, prompt }, () => {}, () => active.current?.id !== id)).content
       } else {
         content = (await projectApi.aiComplete({ endpoint, model, apiKey, systemPrompt, prompt, temperature: preferences.temperature ?? 0.8, maxTokens: 4000 })).content
       }
@@ -72,7 +72,7 @@ export function NameAiPanel({ category, style, count, rules, excluded, onResults
   }
   function cancel() {
     const request = active.current; active.current = null; setBusy(false); setError('已停止接收本次结果。')
-    if (request?.mode === 'codex') void codexApi.cancel(request.id).catch(reason => setError(String(reason)))
+    if (request?.mode === 'codex') void Promise.allSettled([codexApi.cancel(request.id), codexApi.cancelCheck(request.id)])
   }
   return <details className="name-options"><summary>可选 AI 命名</summary><fieldset disabled={busy} className="name-ai-fields">
     <p className="field-hint">使用 AI 辅助中已保存的连接设置。仅发送下方背景、勾选资料和命名条件（含避重名单）；不会自动发送正文。API Key 仅用于本次打开的面板。</p>
