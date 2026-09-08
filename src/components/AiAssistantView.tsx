@@ -195,7 +195,7 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
     return context
   }
 
-  async function runAssistant() {
+  async function runAssistant(outputLimit?: number) {
     if (busy || !canSend()) return
     if (!selectedItems.length) { setError('请至少选择一项上下文，再运行 AI 辅助。'); return }
     try {
@@ -206,7 +206,9 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
         const context = await loadSelectedContext()
         const prompt = buildAiPrompt(action, context, instruction)
         const local = localAssist(action, context, instruction)
-        return request(SYSTEM_PROMPT, prompt, { content: local.localContent, model: local.model })
+        const prepared = request(SYSTEM_PROMPT, prompt, { content: local.localContent, model: local.model })
+        if (outputLimit) prepared.preferences.maxTokens = outputLimit
+        return prepared
       })
     } catch (error) { setError(error) }
   }
@@ -272,7 +274,8 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
         </div>
       </Panel>
       <Panel className="ai-output-panel" aria-label="AI 结果工作区">
-        <div className="panel-title ai-output-heading"><h3>AI 结果</h3><span role="status">{result ? `${result.model} · ${resultStatus}` : '尚未运行'}</span></div>
+        {!result && task.error ? <div className="ai-task-error" role="alert"><p>{task.error}</p><Button variant="outline" disabled={busy} onClick={() => setConnectionOpen(true)}>调整连接设置</Button>{mode === 'provider' && resultApplication === 'builtin' && task.error.includes('输出上限耗尽') && Number(maxTokens) < 32000 ? <Button disabled={busy} onClick={() => { const next = Math.min(32000, Math.max(4096, (Number.parseInt(maxTokens, 10) || 4000) * 2)); setMaxTokens(String(next)); void runAssistant(next) }}>提高上限至 {Math.min(32000, Math.max(4096, (Number.parseInt(maxTokens, 10) || 4000) * 2))} 并重试</Button> : null}</div> : null}
+        <div className="panel-title ai-output-heading"><h3>AI 结果</h3><span role="status">{result ? `${result.model} · ${resultStatus}` : task.phase === 'idle' ? '尚未运行' : resultStatus}</span></div>
         {result ? <>
           {selectionAction && resultComplete ? <div className="ai-result-tabs"><Button variant="ghost" aria-pressed={!reviewOpen} onClick={() => setReviewOpen(false)}>生成结果</Button><Button variant="ghost" aria-pressed={reviewOpen} onClick={() => setReviewOpen(true)}>修改对比 · {task.edits.length}</Button></div> : null}
           {reviewOpen && selectionAction && resultComplete ? <AiReview /> : <textarea aria-label="AI 结果" readOnly={!resultComplete || task.edits.some(edit => edit.state === 'accepted')} className="text-area ai-result-text" value={result.content} onChange={(event) => task.editResult(event.target.value)} />}
@@ -285,7 +288,7 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
             <Button variant="outline" disabled={busy} onClick={task.clear}>取消</Button>
             {document && resultComplete && !busy ? selectionAction ? <><Button variant="outline" disabled={!targetCurrent || task.target?.conflict} onClick={() => task.insert('after')}>插入选区后</Button><Button disabled={!targetCurrent || !task.edits.some(edit => edit.state === 'pending') || task.edits.some(edit => edit.state === 'pending' && edit.conflict)} onClick={() => task.accept()}>替换选区</Button></> : task.application === 'analyze' ? null : <><Button disabled={!targetCurrent} onClick={() => applyResult('append')}>{task.target?.kind === 'cursor' ? '插入原光标处' : resultApplication === 'generate' ? '插入后方' : '追加到正文'}</Button>{resultApplication === 'builtin' && task.target?.kind === 'chapter' ? <Button variant="outline" disabled={!targetCurrent} onClick={() => applyResult('replace')}>替换当前正文</Button> : null}</> : null}
           </div>
-        </> : <div className="ai-result-empty"><Sparkles size={26} /><strong>等待一次辅助任务</strong><span>在左侧选择任务和参考资料，结果将在这里显示。完成后可以编辑、复制或应用到正文。</span></div>}
+        </> : <div className="ai-result-empty"><Sparkles size={26} /><strong>{task.phase === 'failed' ? '本次生成失败' : busy ? '正在等待模型返回正文' : task.phase === 'cancelled' ? '已停止接收结果' : '等待一次辅助任务'}</strong><span>{busy ? '可以继续编辑正文或切换页面；思考模型可能需要较长时间。' : task.phase === 'failed' ? '请按上方提示调整后重试，原文未被覆盖。' : '在左侧选择任务和参考资料，结果将在这里显示。完成后可以编辑、复制或应用到正文。'}</span></div>}
       </Panel>
     </div>
     <div className="ai-connection-dialog"><Modal open={connectionOpen} title="Provider 连接设置" onClose={() => setConnectionOpen(false)}>

@@ -147,21 +147,7 @@ fn complete_blocking(input: AiCompletionInput) -> Result<AiCompletionResult, Str
     }
     let body = serde_json::from_slice::<serde_json::Value>(&body_bytes)
         .map_err(|_| "AI Provider 返回了无法解析的响应".to_string())?;
-    let content = body
-        .get("choices")
-        .and_then(|choices| choices.get(0))
-        .and_then(|choice| choice.get("message"))
-        .and_then(|message| message.get("content"))
-        .and_then(serde_json::Value::as_str)
-        .or_else(|| {
-            body.get("choices")
-                .and_then(|choices| choices.get(0))
-                .and_then(|choice| choice.get("text"))
-                .and_then(serde_json::Value::as_str)
-        })
-        .map(str::trim)
-        .filter(|content| !content.is_empty())
-        .ok_or_else(|| "AI Provider 返回中没有可用内容".to_string())?;
+    let content = response_content(&body)?;
     let model = body
         .get("model")
         .and_then(serde_json::Value::as_str)
@@ -171,4 +157,132 @@ fn complete_blocking(input: AiCompletionInput) -> Result<AiCompletionResult, Str
         content: content.to_string(),
         model,
     })
+}
+
+fn response_content(body: &serde_json::Value) -> Result<String, String> {
+    let choice = &body["choices"][0];
+    let message = &choice["message"];
+    let raw = match &message["content"] {
+        serde_json::Value::String(text) => text.clone(),
+        serde_json::Value::Array(parts) => parts
+            .iter()
+            .filter(|part| part["type"] == "text" || part["type"] == "output_text")
+            .filter_map(|part| part["text"].as_str())
+            .collect::<Vec<_>>()
+            .join(""),
+        _ => String::new(),
+    };
+    let raw = if raw.trim().is_empty() {
+        choice["text"].as_str().unwrap_or("")
+    } else {
+        &raw
+    };
+    let mut content = raw.trim();
+    while let Some(thinking) = content.strip_prefix("<think>") {
+        content = thinking
+            .split_once("</think>")
+            .map(|(_, text)| text.trim())
+            .unwrap_or("");
+    }
+    if !content.is_empty() {
+        return Ok(content.to_string());
+    }
+    if choice["finish_reason"] == "length" {
+        let used = body["usage"]["completion_tokens"].as_u64();
+        let reasoning = body["usage"]["completion_tokens_details"]["reasoning_tokens"].as_u64();
+        let usage = match (used, reasoning) {
+            (Some(total), Some(thought)) => {
+                format!("已生成 {total} Token，其中思考 {thought} Token。")
+            }
+            (Some(total), None) => format!("已生成 {total} Token。"),
+            _ => String::new(),
+        };
+        return Err(format!("AI 输出上限耗尽，尚未生成正文。{usage}请提高 Max Tokens 后重试，或在模型服务中关闭/降低思考；这会增加生成时间。"));
+    }
+    if message["refusal"]
+        .as_str()
+        .is_some_and(|text| !text.trim().is_empty())
+        || choice["finish_reason"] == "content_filter"
+    {
+        return Err("AI 服务拒绝了本次请求，未返回正文。请调整请求后重试。".to_string());
+    }
+    if message["tool_calls"]
+        .as_array()
+        .is_some_and(|calls| !calls.is_empty())
+    {
+        return Err(
+            "AI 返回了工具调用而非正文；当前写作模式不执行工具，请让模型直接输出文本。".to_string(),
+        );
+    }
+    let thinking = ["reasoning_content", "reasoning"].iter().any(|key| {
+        message[key]
+            .as_str()
+            .is_some_and(|text| !text.trim().is_empty())
+    }) || raw.contains("<think>");
+    if thinking {
+        return Err(
+            "AI 仅返回了思考内容，未返回正文。请调整模型的思考设置或输出上限后重试。".to_string(),
+        );
+    }
+    Err(
+        "AI Provider 返回中没有可用正文。请检查模型是否支持文本对话及服务响应格式，然后重试。"
+            .to_string(),
+    )
+}
+
+#[cfg(test)]
+mod response_tests {
+    use super::response_content;
+    use serde_json::json;
+    #[test]
+    fn parses_text_blocks_and_legacy_fallback() {
+        assert_eq!(response_content(&json!({"choices":[{"message":{"content":[{"type":"text","text":"正文"},{"type":"reasoning","text":"private"},{"type":"text","text":"结束"}]}}]})).unwrap(), "正文结束");
+        assert_eq!(
+            response_content(&json!({"choices":[{"message":{"content":" "},"text":"旧格式正文"}]}))
+                .unwrap(),
+            "旧格式正文"
+        );
+    }
+    #[test]
+    fn exhausted_reasoning_budget_is_actionable_without_exposing_thoughts() {
+        let error = response_content(&json!({"choices":[{"finish_reason":"length","message":{"content":"","reasoning_content":"private thoughts"}}],"usage":{"completion_tokens":1024,"completion_tokens_details":{"reasoning_tokens":1024}}})).unwrap_err();
+        assert!(
+            error.contains("输出上限耗尽") && error.contains("1024") && !error.contains("private")
+        );
+    }
+    #[test]
+    fn thinking_is_never_used_as_manuscript() {
+        assert!(response_content(
+            &json!({"choices":[{"message":{"content":null,"reasoning":"private"}}]})
+        )
+        .unwrap_err()
+        .contains("仅返回了思考"));
+        assert_eq!(
+            response_content(
+                &json!({"choices":[{"message":{"content":"<think>private</think>正文"}}]})
+            )
+            .unwrap(),
+            "正文"
+        );
+        assert!(
+            response_content(&json!({"choices":[{"message":{"content":"<think>private"}}]}))
+                .is_err()
+        );
+    }
+    #[test]
+    fn distinguishes_refusal_tools_and_invalid_choices() {
+        for (body, expected) in [
+            (
+                json!({"choices":[{"message":{"refusal":"private"}}]}),
+                "拒绝",
+            ),
+            (
+                json!({"choices":[{"message":{"tool_calls":[{}]}}]}),
+                "工具调用",
+            ),
+            (json!({"choices":[]}), "没有可用正文"),
+        ] {
+            assert!(response_content(&body).unwrap_err().contains(expected));
+        }
+    }
 }

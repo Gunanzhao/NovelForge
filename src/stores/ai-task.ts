@@ -86,6 +86,7 @@ export const useAiTask = create<AiTask>((set, get) => ({
   token: '', id: null, phase: 'idle', result: null, error: '', target: null, source: '', mapping: null, edits: [], application: 'generate', transport: 'offline',
   async start(target, application, prepare) {
     if (get().id) return
+    if (get().error && useAppStore.getState().error === get().error) useAppStore.getState().clearError()
     const id = crypto.randomUUID()
     set({ token: id, id, phase: 'preparing', result: null, error: '', target, source: target.originalContent, mapping: ChangeSet.empty(target.originalContent.length).desc, edits: [], application, transport: 'offline' })
     const valid = () => get().id === id && isCurrent(target)
