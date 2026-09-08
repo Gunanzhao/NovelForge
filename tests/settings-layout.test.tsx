@@ -7,8 +7,8 @@ import { SettingsView } from '../src/components/SettingsView'
 import { useAppStore } from '../src/stores/app-store'
 import { DEFAULT_WORKSPACE_PREFERENCES } from '../src/lib/workspace-preferences'
 const data: ProjectData = { project: { id: 'p', title: '旧作品', author: '', description: '', genre: '', targetWords: 1000, formatVersion: 1, createdAt: '2026-09-07T00:00:00Z', updatedAt: '2026-09-07T00:00:00Z' }, nodes: [], entities: [], recovery: [] }
-beforeEach(() => { vi.clearAllMocks(); api.readLogs.mockResolvedValue('操作记录'); localStorage.clear(); useAppStore.setState({ data, projectPath: 'project', document: null, workspacePreferences: { ...DEFAULT_WORKSPACE_PREFERENCES }, theme: 'system', error: null }) })
-afterEach(cleanup)
+beforeEach(() => { vi.clearAllMocks(); api.readLogs.mockResolvedValue('操作记录'); localStorage.clear(); useAppStore.setState({ data, projectPath: 'project', document: null, workspacePreferences: { ...DEFAULT_WORKSPACE_PREFERENCES }, theme: 'system', error: null, preferenceError: null }) })
+afterEach(() => { cleanup(); vi.restoreAllMocks() })
 const tab = (name: string) => fireEvent.click(screen.getByRole('tab', { name: new RegExp('^' + name) }))
 it('retains project and checklist drafts across categories and unrelated data refreshes', () => {
   render(<SettingsView />)
@@ -56,4 +56,23 @@ it('resets the form when switching projects', () => {
   fireEvent.change(screen.getByLabelText('作品名'), { target: { value: '前一个项目的草稿' } })
   act(() => useAppStore.setState({ projectPath: 'other', data: { ...data, project: { ...data.project, id: 'other', title: '另一个项目' } } }))
   expect((screen.getByLabelText('作品名') as HTMLInputElement).value).toBe('另一个项目')
+})
+it('reports preference write failure and retries without losing the live value', () => {
+  const failing = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota') })
+  render(<SettingsView />); tab('编辑器')
+  fireEvent.change(screen.getByLabelText('编辑字号'), { target: { value: '18' } })
+  expect(screen.getByRole('alert').textContent).toContain('偏好未保存')
+  expect(useAppStore.getState().workspacePreferences.editorFontSize).toBe(18)
+  failing.mockRestore()
+  fireEvent.click(screen.getByRole('button', { name: '重试保存偏好' }))
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(JSON.parse(localStorage.getItem('novelforge:workspace-preferences:v1')!).editorFontSize).toBe(18)
+})
+
+it('normalizes a fractional integer input even when the persisted value is unchanged', () => {
+  render(<SettingsView />); tab('编辑器')
+  const input = screen.getByLabelText('编辑字号数值') as HTMLInputElement
+  fireEvent.change(input, { target: { value: '14.4' } }); fireEvent.blur(input)
+  expect(input.value).toBe('14')
+  expect(useAppStore.getState().workspacePreferences.editorFontSize).toBe(14)
 })

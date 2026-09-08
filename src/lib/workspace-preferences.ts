@@ -61,11 +61,12 @@ export function readWorkspacePreferences(): WorkspacePreferences {
 }
 
 export function writeWorkspacePreferences(preferences: WorkspacePreferences) {
-  if (typeof localStorage === 'undefined') return
+  if (typeof localStorage === 'undefined') return false
   try {
     localStorage.setItem(WORKSPACE_PREFERENCES_STORAGE_KEY, JSON.stringify(normalizeWorkspacePreferences(preferences)))
+    return true
   } catch {
-    // 偏好写入失败不阻断正文编辑。
+    return false
   }
 }
 

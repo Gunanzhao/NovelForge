@@ -19,6 +19,13 @@ export interface RecentProject {
   updatedAt: string
 }
 
+function persistPreferences(preferences: WorkspacePreferences, theme: ThemeMode) {
+  const saved = writeWorkspacePreferences(preferences)
+  try {
+    localStorage.setItem('novelforge:theme', theme)
+    return saved ? null : '偏好未保存到本机；本次窗口内仍生效。'
+  } catch { return '偏好未保存到本机；本次窗口内仍生效。' }
+}
 const RECENT_KEY = 'novelforge:recent-projects'
 let searchGeneration = 0
 let selectionGeneration = 0
@@ -98,6 +105,7 @@ interface AppState {
   inspectorOpen: boolean
   focusMode: boolean
   theme: ThemeMode
+  preferenceError: string | null
   workspacePreferences: WorkspacePreferences
   editorMode: 'markdown' | 'preview' | 'split'
   setView: (view: ViewId) => void
@@ -164,29 +172,26 @@ export const useAppStore = create<AppState>((set, get) => ({
   focusMode: false,
   theme: 'system',
   workspacePreferences: { ...DEFAULT_WORKSPACE_PREFERENCES },
+  preferenceError: null,
   editorMode: 'markdown',
 
   setView: (view) => set({ activeView: view }),
   setTheme: (theme) => {
-    set({ theme })
-    try { localStorage.setItem('novelforge:theme', theme) } catch { /* optional preference */ }
+    set({ theme, preferenceError: persistPreferences(get().workspacePreferences, theme) })
   },
   setWorkspacePreferences: (patch) => set((state) => {
     const next = normalizeWorkspacePreferences({ ...state.workspacePreferences, ...patch })
-    writeWorkspacePreferences(next)
-    return { workspacePreferences: next }
+    return { workspacePreferences: next, preferenceError: persistPreferences(next, state.theme) }
   }),
   toggleSidebar: () => set((state) => {
     const sidebarOpen = !state.sidebarOpen
     const workspacePreferences = { ...state.workspacePreferences, sidebarOpen }
-    writeWorkspacePreferences(workspacePreferences)
-    return { sidebarOpen, workspacePreferences }
+    return { sidebarOpen, workspacePreferences, preferenceError: persistPreferences(workspacePreferences, state.theme) }
   }),
   toggleInspector: () => set((state) => {
     const inspectorOpen = !state.inspectorOpen
     const workspacePreferences = { ...state.workspacePreferences, inspectorOpen }
-    writeWorkspacePreferences(workspacePreferences)
-    return { inspectorOpen, workspacePreferences }
+    return { inspectorOpen, workspacePreferences, preferenceError: persistPreferences(workspacePreferences, state.theme) }
   }),
   toggleFocusMode: () => set((state) => ({ focusMode: !state.focusMode })),
   setEditorMode: (editorMode) => set({ editorMode }),

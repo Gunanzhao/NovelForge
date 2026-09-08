@@ -1427,3 +1427,5 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
   .settings-project-path { align-items: flex-start; flex-direction: column; }
 }
 .name-checks input[type=checkbox] { accent-color: var(--accent); }
+
+.settings-preference-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--danger); border-radius: 6px; color: var(--danger); font-size: 12px; }

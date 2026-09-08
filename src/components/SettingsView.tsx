@@ -23,7 +23,8 @@ function NumberSetting({ label, value, min, max, step = 1, unit = '', onChange }
   useEffect(() => setDraft(String(value)), [value])
   function commit() {
     const parsed = Number(draft)
-    const next = draft.trim() && Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : value
+    const bounded = draft.trim() && Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : value
+    const next = step >= 1 ? Math.round(bounded) : Math.round(bounded * 100) / 100
     setDraft(String(next))
     onChange(next)
   }
@@ -54,6 +55,7 @@ export function SettingsView() {
 }
 
 function ProjectSettings({ projectPath, initialProject }: { projectPath: string; initialProject: ProjectData['project'] }) {
+  const preferenceError = useAppStore(state => state.preferenceError)
   const theme = useAppStore(state => state.theme)
   const setTheme = useAppStore(state => state.setTheme)
   const preferences = useAppStore(state => state.workspacePreferences)
@@ -87,7 +89,7 @@ function ProjectSettings({ projectPath, initialProject }: { projectPath: string;
   function resetEditor() {
     setPreferences({ editorFontFamily: defaults.editorFontFamily, editorFontSize: defaults.editorFontSize, editorLineHeight: defaults.editorLineHeight, contentWidth: defaults.contentWidth, paragraphSpacing: defaults.paragraphSpacing })
   }
-  const heading = (title: string, action?: React.ReactNode) => <div className="settings-section-heading"><h2>{title}</h2><div><span className="settings-instant"><Check size={12} />即时生效 · 自动保存</span>{action}</div></div>
+  const heading = (title: string, action?: React.ReactNode) => <div className="settings-section-heading"><h2>{title}</h2><div><span className="settings-instant"><Check size={12} />{preferenceError ? '本次生效 · 尚未保存' : '即时生效 · 自动保存'}</span>{action}</div></div>
   return <div className="settings-view">
     <header className="settings-page-header"><h1>设置</h1><p>{initialProject.title}</p></header>
     <nav className="settings-nav" aria-label="设置分组" role="tablist">{sections.map(([id, label], index) => <button key={id} id={`settings-tab-${id}`} role="tab" aria-selected={section === id} aria-controls={`settings-${id}`} tabIndex={section === id ? 0 : -1} className={section === id ? 'active' : ''} onClick={() => changeSection(id)} onKeyDown={event => {
@@ -95,6 +97,7 @@ function ProjectSettings({ projectPath, initialProject }: { projectPath: string;
       if (next < 0) return
       event.preventDefault(); changeSection(sections[next][0]); globalThis.document.getElementById(`settings-tab-${sections[next][0]}`)?.focus()
     }}>{label}{id === 'project' && dirty ? <span className="settings-dirty-dot" aria-label="有未保存修改" /> : null}</button>)}</nav>
+    {preferenceError ? <div role="alert" className="settings-preference-error"><span>{preferenceError}</span><Button variant="outline" onClick={() => { setPreferences({}); if (!useAppStore.getState().preferenceError) setTheme(theme) }}>重试保存偏好</Button></div> : null}
     <div className="settings-scroll" ref={scrollRef}>
       <section id="settings-project" role="tabpanel" aria-labelledby="settings-tab-project" hidden={section !== 'project'}>
         <Panel className="settings-card settings-project-card"><div className="settings-section-heading"><h2>作品信息</h2><span className="field-hint">修改后需保存</span></div><fieldset disabled={busy} className="settings-form">
