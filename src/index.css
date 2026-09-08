@@ -1439,3 +1439,6 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 .project-backup h2 { margin-top:0; font-size:16px; }
 .project-backup [role="alert"] { color:var(--red); overflow-wrap:anywhere; }
 .welcome-card .project-backup { margin-top:24px; }
+
+.toast-notice { position:fixed; z-index:110; bottom:46px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:14px; max-width:calc(100vw - 40px); padding:12px 18px; border:1px solid var(--border); border-radius:10px; background:var(--panel); color:var(--text); box-shadow:0 4px 24px #0002; }
+.toast-notice button { border:0; background:transparent; color:var(--accent); white-space:nowrap; cursor:pointer; }

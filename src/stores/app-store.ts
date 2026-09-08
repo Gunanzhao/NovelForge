@@ -1,3 +1,4 @@
+import { notify } from '../lib/notifications'
 import { readEditorSession, rememberEditor } from '../lib/editor-session'
 import { confirmDraftNavigation, dirtyDrafts, runGuarded } from '../lib/draft-guard'
 import { create } from 'zustand'
@@ -140,6 +141,8 @@ interface AppState {
   selectEntity: (kind: EntityKind, entityId?: string | null) => void
   saveEntity: (input: EntityInput) => Promise<void>
   deleteEntity: (entityId: string) => Promise<void>
+  trashLoading: boolean
+  trashError: string | null
   loadTrash: () => Promise<void>
   restoreTrash: (trashId: string) => Promise<void>
   permanentlyDelete: (trashId: string) => Promise<void>
@@ -168,6 +171,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   searchResults: [],
   searchQuery: '',
   recentProjects: [],
+  trashLoading: false, trashError: null,
   trash: [],
   sidebarOpen: DEFAULT_WORKSPACE_PREFERENCES.sidebarOpen,
   inspectorOpen: DEFAULT_WORKSPACE_PREFERENCES.inspectorOpen,
@@ -235,7 +239,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (previousPath && previousPath !== input.path) await projectApi.release?.(previousPath)
       if (request !== transitionGeneration) return
       ++selectionGeneration
-      set((state) => ({ projectPath: input.path, projectSession: state.projectSession + 1, data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], stats: emptyStats, saveState: 'saved' }))
+      set((state) => ({ projectPath: input.path, projectSession: state.projectSession + 1, data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
       if (checklistError) get().setError(checklistError)
       const chapter = firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
@@ -265,7 +269,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (previousPath && previousPath !== path) await projectApi.release?.(previousPath)
       if (request !== transitionGeneration) return
       ++selectionGeneration
-      set((state) => ({ projectPath: path, projectSession: state.projectSession + 1, data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], stats: emptyStats, saveState: 'saved' }))
+      set((state) => ({ projectPath: path, projectSession: state.projectSession + 1, data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
       const remembered = readEditorSession(path).nodeId
       const chapter = data.nodes.find(node => node.id === remembered && node.kind !== 'volume') ?? firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
@@ -299,7 +303,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedEntityId: null,
       searchResults: [],
       searchQuery: '',
-      trash: [],
+      trashLoading: false, trashError: null,
+  trash: [],
       stats: emptyStats,
       error: null,
       saveState: 'idle',
@@ -379,6 +384,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             continue
           }
           await get().refreshStats()
+          if (reason !== '自动保存' && isCurrentProjectSession(session)) notify({ message: '正文已保存', session: session.generation })
           return true
         } catch (error) {
           if (!isCurrentProjectSession(session) || get().document?.node.id !== savedNodeId) return false
@@ -510,6 +516,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set((state) => ({ document: null, documentVersion: state.documentVersion + 1 }))
       await get().refreshData(data, false, session)
       if (next) await get().selectNode(next.id)
+      if (isCurrentProjectSession(session)) notifyDeletion(nodeId, 'node', session)
     } catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
   },
 
@@ -521,6 +528,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const data = await projectApi.upsertEntity(input)
       await get().refreshData(data, true, session)
+      if (isCurrentProjectSession(session)) notify({ message: '资料已保存', session: session.generation })
     } catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
   },
 
@@ -533,6 +541,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!isCurrentProjectSession(session)) return
       await get().refreshData(data, false, session)
       set({ selectedEntityId: null })
+      notifyDeletion(entityId, 'entity', session)
     } catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
   },
 
@@ -540,8 +549,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
+    set({ trashLoading: true, trashError: null })
     try { const trash = await projectApi.listTrash(projectPath); if (isCurrentProjectSession(session)) set({ trash }) }
-    catch (error) { if (isCurrentProjectSession(session)) get().setError(error) }
+    catch (error) { if (isCurrentProjectSession(session)) set({ trashError: String(error) }) }
+    finally { if (isCurrentProjectSession(session)) set({ trashLoading: false }) }
   },
 
   restoreTrash: async (trashId) => {
@@ -613,7 +624,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
-    try { await get().refreshData(await projectApi.updateProject({ projectPath, ...input }), true, session) }
+    try { await get().refreshData(await projectApi.updateProject({ projectPath, ...input }), true, session); if (isCurrentProjectSession(session)) notify({ message: '作品信息已保存', session: session.generation }) }
     catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
   },
 }))
+
+function notifyDeletion(refId: string, refKind: 'node' | 'entity', session: ReturnType<typeof captureProjectSession>) {
+  notify({ message: refKind === 'node' ? '正文节点已移入回收站' : '资料已移入回收站', session: session.generation, undo: async () => {
+    if (!isCurrentProjectSession(session) || !session.path) throw new Error('项目已切换，请到原项目的回收站恢复。')
+    const items = await projectApi.listTrash(session.path)
+    if (!isCurrentProjectSession(session)) throw new Error('项目已切换，已取消恢复。')
+    const item = items.filter(item => item.refId === refId && item.refKind === refKind).sort((a, b) => b.deletedAt.localeCompare(a.deletedAt))[0]
+    if (!item) throw new Error('未找到该回收条目，它可能已经恢复。')
+    const data = await projectApi.restoreTrash({ projectPath: session.path, nodeId: item.id })
+    await useAppStore.getState().refreshData(data, true, session)
+    if (isCurrentProjectSession(session)) await useAppStore.getState().loadTrash()
+  } })
+}
