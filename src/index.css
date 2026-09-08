@@ -1433,3 +1433,9 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 .conflict-comparison { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 .conflict-comparison textarea { min-height:260px; margin-top:8px; }
 @media(max-width:700px) { .conflict-comparison { grid-template-columns:1fr; } }
+
+.backup-actions, .backup-result { display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.backup-result code { overflow-wrap:anywhere; flex:1 1 100%; font-size:12px; }
+.project-backup h2 { margin-top:0; font-size:16px; }
+.project-backup [role="alert"] { color:var(--red); overflow-wrap:anywhere; }
+.welcome-card .project-backup { margin-top:24px; }

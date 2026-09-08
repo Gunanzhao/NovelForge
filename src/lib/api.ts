@@ -24,7 +24,11 @@ export function chooseFile() {
   return open({ directory: false, multiple: false, title: '选择要导入的附件' }) as Promise<string | null>
 }
 
+export interface BackupReport { path: string; fileCount: number; totalBytes: number }
 export const projectApi = {
+  backup: (path: string, directory: string) => command<BackupReport>('backup_project', { path, directory }, false),
+  validateBackup: (path: string) => command<BackupReport>('validate_backup', { path }, false),
+  restoreBackup: (path: string, directory: string) => command<BackupReport>('restore_backup', { path, directory }, false),
   openExternalUrl: (url: string) => command<void>('open_external_url', { url }, false),
   release: (path: string) => isDesktop ? command<void>('release_project', { path }, false) : Promise.resolve(),
   create: (input: ProjectInput) => command<ProjectData>('create_project', { input }),
