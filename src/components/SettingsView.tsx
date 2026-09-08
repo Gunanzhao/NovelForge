@@ -1,7 +1,7 @@
 import { VersionInfo } from './VersionInfo'
 import { ProjectBackup } from './ProjectBackup'
 import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
-import { markDraftSaved } from '../lib/draft-guard'
+import { markDraftSaved, setDraftSaving } from '../lib/draft-guard'
 import { useEffect, useRef, useState } from 'react'
 import { Check, Copy, FileText, HardDrive, Monitor, Moon, RefreshCw, Save, ShieldCheck, Sun } from 'lucide-react'
 import { DEFAULT_WORKSPACE_PREFERENCES } from '../lib/workspace-preferences'
@@ -84,13 +84,15 @@ function ProjectSettings({ projectPath, initialProject }: { projectPath: string;
     if (!draft.title.trim()) { setSaveError('请输入作品名。'); return false }
     const target = Number(draft.targetWords)
     if (!draft.targetWords.trim() || !Number.isSafeInteger(target) || target < 0) { setSaveError('目标字数需为不小于 0 的整数。'); return false }
+    if (busy) return false
+    setDraftSaving(draftId, true)
     setBusy(true); setSaveError('')
     try {
       const saved = { ...draft, title: draft.title.trim(), targetWords: String(target) }
       await updateProject({ ...saved, targetWords: target })
       setDraft(saved); setBaseline(saved); markDraftSaved(draftId); return true
     } catch (error) { setSaveError(error instanceof Error ? error.message : String(error)); return false }
-    finally { setBusy(false) }
+    finally { setDraftSaving(draftId, false); setBusy(false) }
   }
   function resetEditor() {
     setPreferences({ editorFontFamily: defaults.editorFontFamily, editorFontSize: defaults.editorFontSize, editorLineHeight: defaults.editorLineHeight, contentWidth: defaults.contentWidth, paragraphSpacing: defaults.paragraphSpacing })
@@ -105,7 +107,7 @@ function ProjectSettings({ projectPath, initialProject }: { projectPath: string;
     }}>{label}{id === 'project' && dirty ? <span className="settings-dirty-dot" aria-label="有未保存修改" /> : null}</button>)}</nav>
     {preferenceError ? <div role="alert" className="settings-preference-error"><span>{preferenceError}</span><Button variant="outline" onClick={() => { setPreferences({}); if (!useAppStore.getState().preferenceError) setTheme(theme) }}>重试保存偏好</Button></div> : null}
     <div className="settings-scroll" ref={scrollRef}>
-      <section id="settings-project" role="tabpanel" aria-labelledby="settings-tab-project" hidden={section !== 'project'}>
+      <section inert={busy} id="settings-project" role="tabpanel" aria-labelledby="settings-tab-project" hidden={section !== 'project'}>
         <Panel className="settings-card settings-project-card"><div className="settings-section-heading"><h2>作品信息</h2><span className="field-hint">修改后需保存</span></div><fieldset disabled={busy} className="settings-form">
           <Field label="作品名"><TextInput value={draft.title} onChange={event => updateDraft('title', event.target.value)} /></Field>
           <div className="field-grid"><Field label="作者"><TextInput value={draft.author} onChange={event => updateDraft('author', event.target.value)} /></Field><Field label="类型"><TextInput value={draft.genre} onChange={event => updateDraft('genre', event.target.value)} placeholder="如：悬疑、奇幻、都市" /></Field></div>

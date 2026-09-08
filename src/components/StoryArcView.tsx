@@ -1,6 +1,6 @@
 import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
-import { markDraftSaved } from '../lib/draft-guard'
-import { useEffect, useMemo, useState } from 'react'
+import { markDraftSaved, setDraftSaving } from '../lib/draft-guard'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Flag, GripVertical, Plus, Save, Trash2 } from 'lucide-react'
 import {
   moveStoryArcMilestone, parseStoryArc, STORY_ARC_STATUSES, storyArcEntityInputContent,
@@ -27,6 +27,8 @@ export function StoryArcView() {
   const deleteEntity = useAppStore((state) => state.deleteEntity)
   const selectNode = useAppStore((state) => state.selectNode)
   const setError = useAppStore((state) => state.setError)
+  const newEntityId = useRef<string | null>(null)
+  useEffect(() => { newEntityId.current = null }, [selectedEntityId])
   const [title, setTitle] = useState('')
   const [draft, setDraft] = useState<StoryArcContent>(blankArc)
   const [busy, setBusy] = useState(false)
@@ -67,23 +69,28 @@ export function StoryArcView() {
 
   async function save() {
     if (!title.trim()) return false
+    if (busy) return false
+    setDraftSaving(draftId, true)
     setBusy(true)
+    const id = selected?.id ?? (newEntityId.current ??= newId())
     try {
       await saveEntity({
         projectPath: currentProjectPath,
         kind: 'story-arc',
-        id: selected?.id ?? null,
+        id,
         title: title.trim(),
         content: storyArcEntityInputContent(draft),
         tags: ['剧情线', draft.status],
       })
       setBaseline(JSON.stringify({ title, draft }))
       markDraftSaved(draftId)
+      setDraftSaving(draftId, false)
+      selectEntity('story-arc', id)
       return true
     } catch (error) {
       setError(error); return false
     } finally {
-      setBusy(false)
+      setDraftSaving(draftId, false); setBusy(false)
     }
   }
 
@@ -103,7 +110,7 @@ export function StoryArcView() {
     </aside>
     <section className="story-arc-editor">
       <div className="view-header"><div><p className="eyebrow">STORY ARC</p><h1>{selected ? selected.title : '新建剧情线'}</h1><p>章节关联和节点只提供提示，不会自动修改正文。</p></div></div>
-      <div className="story-arc-form">
+      <div className="story-arc-form" inert={busy}>
         <div className="field-grid"><Field label="名称"><TextInput value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：寻找星核" /></Field><Field label="状态"><select className="select-input" value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as StoryArcContent['status'] }))}>{STORY_ARC_STATUSES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field></div>
         <div className="field-grid"><Field label="颜色"><input className="story-arc-color-input" type="color" value={draft.color} onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))} /></Field><Field label="优先级"><TextInput type="number" value={draft.priority} onChange={(event) => setDraft((current) => ({ ...current, priority: Number(event.target.value) || 0 }))} /></Field></div>
         <Field label="说明"><textarea className="text-area" value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} placeholder="这条剧情线解决什么冲突？" /></Field>

@@ -1,5 +1,5 @@
 import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
-import { markDraftSaved, runGuarded } from '../lib/draft-guard'
+import { markDraftSaved, setDraftSaving, runGuarded } from '../lib/draft-guard'
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { BookOpen, CheckCircle2, CircleDashed, GitBranch, Plus, Save, Search, Trash2 } from 'lucide-react'
 import type { EntityRecord, NodeRecord } from '../lib/types'
@@ -122,6 +122,8 @@ export function ForeshadowingView() {
 
   async function save() {
     if (!draft.title.trim()) return false
+    if (busy) return false
+    setDraftSaving(draftId, true)
     setBusy(true)
     try {
       await saveEntity({
@@ -151,7 +153,7 @@ export function ForeshadowingView() {
     } catch (error) {
       setError(error); return false
     } finally {
-      setBusy(false)
+      setDraftSaving(draftId, false); setBusy(false)
     }
   }
 
@@ -217,7 +219,7 @@ export function ForeshadowingView() {
       </aside>}
       <section className="special-editor">
         <Panel className="special-card">{creating || selected ? <><div className="planning-card-head"><div><p className="eyebrow">THREAD DETAIL</p><h3>{creating ? '新建伏笔' : selected?.title}</h3></div><span className={'planning-state ' + draft.status}>{busy ? '保存中…' : foreshadowingStatusLabel(draft.status)}</span></div>
-          <div className="planning-form">
+          <div className="planning-form" inert={busy}>
             <Field label="伏笔标题"><TextInput autoFocus={creating} value={draft.title} onChange={(event) => updateField('title', event.target.value)} placeholder="例如：钟楼里缺失的第十三口钟" /></Field>
             <Field label="伏笔说明"><textarea className="text-area" value={draft.description} onChange={(event) => updateField('description', event.target.value)} placeholder="记录读者已经看到的线索、隐藏信息和预期效果…" /></Field>
             <div className="field-grid"><Field label="首次埋设章节"><TextInput value={draft.plantedIn} onChange={(event) => updateField('plantedIn', event.target.value)} placeholder="例如：第 2 章" /><ChapterReferences value={draft.plantedIn} nodes={data.nodes} onOpen={(id) => void selectNode(id)} /></Field><Field label="计划回收章节"><TextInput value={draft.plannedPayoff} onChange={(event) => updateField('plannedPayoff', event.target.value)} placeholder="例如：第 18 章" /><ChapterReferences value={draft.plannedPayoff} nodes={data.nodes} onOpen={(id) => void selectNode(id)} /></Field></div>

@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { decideDraftNavigation } from '../src/lib/draft-guard'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EntityRecord, NodeRecord, ProjectData } from '../src/lib/types'
 
@@ -78,7 +79,7 @@ describe('PromptPresetManager integration', () => {
     expect(api.aiComplete).not.toHaveBeenCalled()
   })
 
-  it('uses a compact empty state and inserts context at the selected text', () => {
+  it('uses a compact empty state and inserts context at the selected text', async () => {
     useAppStore.setState({ data: { ...project, entities: [] } })
     const { container } = render(<AiAssistantView />)
     expect(container.querySelector('.prompt-preset-layout.is-empty')).toBeTruthy()
@@ -89,6 +90,8 @@ describe('PromptPresetManager integration', () => {
     fireEvent.click(screen.getByRole('button', { name: '当前章节' }))
     expect(prompt.value).toBe('检查{{currentChapter}}。')
     fireEvent.click(screen.getByRole('button', { name: '新建' }))
+    expect(prompt.value).toBe('检查{{currentChapter}}。')
+    await act(async () => { await decideDraftNavigation('discard') })
     expect(prompt.value).toBe('')
     expect(container.querySelector('.preset-system-settings')?.hasAttribute('open')).toBe(false)
   })

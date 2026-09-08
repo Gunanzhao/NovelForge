@@ -1,5 +1,5 @@
 import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
-import { markDraftSaved } from '../lib/draft-guard'
+import { markDraftSaved, setDraftSaving } from '../lib/draft-guard'
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, ListChecks, RefreshCw, Save } from 'lucide-react'
 import {
@@ -29,6 +29,8 @@ export function ChecklistTemplateSettings() {
   async function save() {
     const labels = text.split(/\r?\n/u).map((item) => item.trim()).filter(Boolean)
     if (!labels.length) { setError('Checklist 模板至少需要一个检查项。'); return false }
+    if (busy) return false
+    setDraftSaving(draftId, true)
     setBusy(true)
     try {
       await saveEntity({
@@ -43,10 +45,10 @@ export function ChecklistTemplateSettings() {
     } catch (error) {
       setError(error); return false
     } finally {
-      setBusy(false)
+      setDraftSaving(draftId, false); setBusy(false)
     }
   }
-  return <Panel className="settings-card checklist-template-settings"><div className="panel-title"><h3>章节 Checklist 模板</h3><span>只影响以后新建的章节</span></div><Field label="检查项" hint="每行一个检查项；修改模板不会覆盖已有章节。"><textarea className="text-area" value={text} onChange={(event) => setText(event.target.value)} /></Field><div className="view-actions"><Button variant="outline" onClick={() => setText(DEFAULT_CHECKLIST_TEMPLATE.items.map((item) => item.label).join('\n'))}><RefreshCw size={13} />恢复默认小说模板</Button><Button disabled={busy} onClick={() => void save()}><Save size={13} />{busy ? '保存中…' : '保存模板'}</Button></div></Panel>
+  return <Panel className="settings-card checklist-template-settings"><div className="panel-title"><h3>章节 Checklist 模板</h3><span>只影响以后新建的章节</span></div><Field label="检查项" hint="每行一个检查项；修改模板不会覆盖已有章节。"><textarea disabled={busy} className="text-area" value={text} onChange={(event) => setText(event.target.value)} /></Field><div className="view-actions"><Button variant="outline" disabled={busy} onClick={() => setText(DEFAULT_CHECKLIST_TEMPLATE.items.map((item) => item.label).join('\n'))}><RefreshCw size={13} />恢复默认小说模板</Button><Button disabled={busy} onClick={() => void save()}><Save size={13} />{busy ? '保存中…' : '保存模板'}</Button></div></Panel>
 }
 
 export function ChapterChecklistInspector() {

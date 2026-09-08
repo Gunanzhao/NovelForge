@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { X } from 'lucide-react'
@@ -24,9 +25,30 @@ export function RecordSaveStatus({ updatedAt, busy }: { updatedAt?: string; busy
 }
 
 export function Modal({ open, title, onClose, children, footer }: { open: boolean; title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeRef = useRef(onClose)
+  useEffect(() => { closeRef.current = onClose })
+  useEffect(() => {
+    if (!open) return
+    const dialog = dialogRef.current
+    if (!dialog) return
+    const previous = document.activeElement as HTMLElement | null
+    const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),a[href],[tabindex="0"]')).filter(element => !element.closest('[hidden],[inert]'))
+    if (!dialog.contains(document.activeElement)) (dialog.querySelector<HTMLElement>('.modal-body input,.modal-body textarea') ?? focusable()[0])?.focus()
+    const key = (event: KeyboardEvent) => {
+      if (Array.from(document.querySelectorAll('[role="dialog"]')).at(-1) !== dialog) return
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeRef.current(); return }
+      if (event.key !== 'Tab') return
+      const items = focusable(), first = items[0], last = items.at(-1)
+      if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) { event.preventDefault(); last?.focus() }
+      else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) { event.preventDefault(); first?.focus() }
+    }
+    document.addEventListener('keydown', key, true)
+    return () => { document.removeEventListener('keydown', key, true); if (previous?.isConnected) previous.focus() }
+  }, [open])
   if (!open) return null
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-    <div className="modal-card" role="dialog" aria-modal="true" aria-label={title}>
+    <div ref={dialogRef} className="modal-card" role="dialog" aria-modal="true" aria-label={title}>
       <div className="modal-header"><div><p className="eyebrow">NOVELFORGE</p><h2>{title}</h2></div><IconButton icon={X} label="关闭" onClick={onClose} /></div>
       <div className="modal-body">{children}</div>
       {footer ? <div className="modal-footer">{footer}</div> : null}

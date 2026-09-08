@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-type Draft = { id: string; label: string; dirty: boolean; save: () => Promise<boolean>; discard: () => void }
+type Draft = { id: string; label: string; dirty: boolean; busy?: boolean; save: () => Promise<boolean>; discard: () => void }
 const drafts = new Map<string, Draft>()
 let resolver: ((allowed: boolean) => void) | null = null
 let pending: Promise<boolean> | null = null
@@ -9,16 +9,20 @@ export const useDraftGuard = create<{ revision: number; open: boolean; busy: boo
 const changed = () => useDraftGuard.setState(state => ({ revision: state.revision + 1 }))
 export function registerDraft(draft: Draft) { drafts.set(draft.id, draft); changed(); return () => { if (drafts.get(draft.id) === draft) { drafts.delete(draft.id); changed() } } }
 export const dirtyDrafts = () => [...drafts.values()].filter(draft => draft.dirty)
+export const busyDrafts = () => [...drafts.values()].some(draft => draft.busy)
+export function setDraftSaving(id: string, busy: boolean) { const draft = drafts.get(id); if (draft) { draft.busy = busy; changed() } }
 export function markDraftSaved(id: string) { const draft = drafts.get(id); if (draft) { draft.dirty = false; changed() } }
 export function confirmDraftNavigation(): Promise<boolean> {
-  if (saving || !dirtyDrafts().length) return Promise.resolve(true)
+  if (busyDrafts() || (saving && dirtyDrafts().length)) return Promise.resolve(false)
+  if (!dirtyDrafts().length) return Promise.resolve(true)
   if (pending) return Promise.resolve(false)
   pending = new Promise(resolve => { resolver = resolve })
   useDraftGuard.setState({ open: true, error: null })
   return pending
 }
 export function runGuarded(action: () => void) {
-  if (saving || !dirtyDrafts().length) { action(); return }
+  if (busyDrafts() || (saving && dirtyDrafts().length)) return
+  if (!dirtyDrafts().length) { action(); return }
   void confirmDraftNavigation().then(allowed => { if (allowed) action() })
 }
 function finish(allowed: boolean) { resolver?.(allowed); resolver = null; pending = null; useDraftGuard.setState({ open: false, busy: false, error: null }) }
@@ -35,7 +39,7 @@ export async function saveActiveDrafts() {
   finally { saving = false; useDraftGuard.setState({ busy: false }) }
 }
 export async function decideDraftNavigation(choice: 'save' | 'discard' | 'cancel') {
-  if (useDraftGuard.getState().busy) return
+  if (useDraftGuard.getState().busy || busyDrafts()) return
   if (choice === 'cancel') { finish(false); return }
   if (choice === 'save') { if (await saveActiveDrafts()) finish(true); return }
   for (const draft of dirtyDrafts()) { draft.discard(); markDraftSaved(draft.id) }

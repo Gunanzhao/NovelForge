@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useState } from 'react'
 import { useUnsavedDraft } from '../src/hooks/useUnsavedDraft'
 import { UnsavedChangesDialog } from '../src/components/UnsavedChangesDialog'
-import { confirmDraftNavigation, decideDraftNavigation, dirtyDrafts, runGuarded, saveActiveDrafts } from '../src/lib/draft-guard'
+import { confirmDraftNavigation, decideDraftNavigation, dirtyDrafts, registerDraft, setDraftSaving, runGuarded, saveActiveDrafts } from '../src/lib/draft-guard'
 afterEach(async () => { await act(async () => { await decideDraftNavigation('cancel') }); cleanup() })
 function Form({ save }: { save: (value: string) => Promise<boolean> }) {
   const [value, setValue] = useState('')
@@ -37,4 +37,17 @@ it('manual save clears dirty state and only the first queued navigation runs', a
   fireEvent.change(screen.getByLabelText('姓名'), { target: { value: '次稿' } })
   const first = vi.fn(), second = vi.fn(); act(() => { runGuarded(first); runGuarded(second) })
   await act(async () => { await decideDraftNavigation('save') }); expect(first).toHaveBeenCalledOnce(); expect(second).not.toHaveBeenCalled()
+})
+
+it('blocks navigation and discard while a manual save is pending', async () => {
+  const discard = vi.fn(), action = vi.fn()
+  const unregister = registerDraft({ id: 'pending', label: '资料', dirty: true, save: async () => true, discard })
+  try {
+    setDraftSaving('pending', true)
+    expect(await confirmDraftNavigation()).toBe(false)
+    runGuarded(action); await decideDraftNavigation('discard')
+    expect(action).not.toHaveBeenCalled(); expect(discard).not.toHaveBeenCalled()
+    setDraftSaving('pending', false)
+    const result = confirmDraftNavigation(); await decideDraftNavigation('discard'); expect(await result).toBe(true)
+  } finally { unregister() }
 })

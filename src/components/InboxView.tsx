@@ -1,5 +1,5 @@
 import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
-import { markDraftSaved, runGuarded } from '../lib/draft-guard'
+import { markDraftSaved, setDraftSaving, runGuarded } from '../lib/draft-guard'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, ArchiveRestore, CheckCircle2, Inbox, Lightbulb, Plus, Search, Trash2 } from 'lucide-react'
 import {
@@ -41,6 +41,8 @@ export function QuickInboxCapture() {
   const currentProjectPath = projectPath
   async function save() {
     if (!content.trim()) return false
+    if (busy) return false
+    setDraftSaving(draftId, true)
     setBusy(true)
     try {
       await saveEntity({
@@ -60,10 +62,10 @@ export function QuickInboxCapture() {
     } catch (error) {
       setError(error); return false
     } finally {
-      setBusy(false)
+      setDraftSaving(draftId, false); setBusy(false)
     }
   }
-  return <Modal open={open} title="快速记录灵感" onClose={() => runGuarded(() => setOpen(false))} footer={<><Button variant="outline" onClick={() => runGuarded(() => setOpen(false))}>取消</Button><Button disabled={busy || !content.trim()} onClick={() => void save()}>{busy ? '保存中…' : '保存灵感'}</Button></>}><div className="inbox-capture-form"><Field label="标题（可选）"><TextInput value={title} onChange={(event) => setTitle(event.target.value)} placeholder="留空时使用正文第一行" /></Field><Field label="正文"><textarea autoFocus className="text-area" value={content} onChange={(event) => setContent(event.target.value)} placeholder="先记下来，稍后整理…" /></Field><Field label="标签"><TextInput value={tags} onChange={(event) => setTags(event.target.value)} placeholder="使用逗号分隔" /></Field></div></Modal>
+  return <Modal open={open} title="快速记录灵感" onClose={() => runGuarded(() => setOpen(false))} footer={<><Button variant="outline" onClick={() => runGuarded(() => setOpen(false))}>取消</Button><Button disabled={busy || !content.trim()} onClick={() => void save()}>{busy ? '保存中…' : '保存灵感'}</Button></>}><div className="inbox-capture-form" inert={busy}><Field label="标题（可选）"><TextInput value={title} onChange={(event) => setTitle(event.target.value)} placeholder="留空时使用正文第一行" /></Field><Field label="正文"><textarea autoFocus className="text-area" value={content} onChange={(event) => setContent(event.target.value)} placeholder="先记下来，稍后整理…" /></Field><Field label="标签"><TextInput value={tags} onChange={(event) => setTags(event.target.value)} placeholder="使用逗号分隔" /></Field></div></Modal>
 }
 
 export function InboxView() {

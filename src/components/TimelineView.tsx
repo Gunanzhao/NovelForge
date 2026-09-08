@@ -1,5 +1,5 @@
 import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
-import { markDraftSaved, runGuarded } from '../lib/draft-guard'
+import { markDraftSaved, setDraftSaving, runGuarded } from '../lib/draft-guard'
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { BookOpen, CalendarDays, Clock3, MapPin, Plus, Save, Search, Trash2, Users } from 'lucide-react'
 import type { EntityRecord, NodeRecord } from '../lib/types'
@@ -109,6 +109,8 @@ export function TimelineView() {
 
   async function save() {
     if (!draft.title.trim()) return false
+    if (busy) return false
+    setDraftSaving(draftId, true)
     setBusy(true)
     try {
       await saveEntity({
@@ -139,7 +141,7 @@ export function TimelineView() {
     } catch (error) {
       setError(error); return false
     } finally {
-      setBusy(false)
+      setDraftSaving(draftId, false); setBusy(false)
     }
   }
 
@@ -186,7 +188,7 @@ export function TimelineView() {
       </aside>}
       <section className="special-editor">
         <Panel className="special-card">{creating || selected ? <><div className="planning-card-head"><div><p className="eyebrow">EVENT DETAIL</p><h3>{creating ? '新建时间线事件' : selected?.title}</h3></div><span className="planning-state">{busy ? '保存中…' : '本地资料'}</span></div>
-          <div className="planning-form">
+          <div className="planning-form" inert={busy}>
             <Field label="事件标题"><TextInput autoFocus={creating} value={draft.title} onChange={(event) => updateField('title', event.target.value)} placeholder="例如：雾港第一次停电" /></Field>
             <div className="field-grid"><Field label="故事日期" hint="可填写具体日期、时代或“第 3 日”"><TextInput value={draft.date} onChange={(event) => updateField('date', event.target.value)} placeholder="例如：2026-08-29 / 第三日" /></Field><Field label="时间"><TextInput value={draft.time} onChange={(event) => updateField('time', event.target.value)} placeholder="例如：深夜、黎明" /></Field></div>
             <div className="field-grid"><Field label="地点"><TextInput value={draft.location} onChange={(event) => updateField('location', event.target.value)} placeholder="发生地点" /></Field><Field label="参与人物"><TextInput value={draft.characters} onChange={(event) => updateField('characters', event.target.value)} placeholder="用逗号分隔人物" /></Field></div>
