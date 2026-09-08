@@ -239,7 +239,8 @@ export function EditorPane() {
     const formatItems: ContextMenuItem[] = formatCommands.map(([command, label]) => ({ type: 'item' as const, id: 'format-' + command, label, onSelect: () => applyCommand(command) }))
     const selectionAi: Array<[AiAction, string]> = [['polish', '润色'], ['rewrite', '改写'], ['expand', '扩写'], ['shrink', '缩写']]
     const cursorAi: Array<[AiAction, string]> = [['continue', '续写'], ['chapter-summary', '章节摘要'], ['outline', '生成大纲'], ['dialogue', '角色对话'], ['setting-advice', '设定建议'], ['name', '名字生成']]
-    const aiItems = (actions: Array<[AiAction, string]>) => actions.map(([action, label]) => ({ type: 'item' as const, id: 'ai-' + action, label, disabled: !document, onSelect: () => openAiAssistant(action) }))
+    const openAi = (action: AiAction) => useAiTask.getState().id ? useAppStore.getState().setInspectorTab('ai') : openAiAssistant(action)
+    const aiItems = (actions: Array<[AiAction, string]>) => actions.map(([action, label]) => ({ type: 'item' as const, id: 'ai-' + action, label, disabled: !document || Boolean(useAiTask.getState().id), onSelect: () => openAi(action) }))
     const items: ContextMenuItem[] = [
       { type: 'item', id: 'editor-undo', label: '撤销', icon: Undo2, onSelect: () => { undo(view); view.focus() } },
       { type: 'item', id: 'editor-redo', label: '重做', icon: Redo2, onSelect: () => { redo(view); view.focus() } },
@@ -249,7 +250,7 @@ export function EditorPane() {
       { type: 'separator' },
       { type: 'item', id: 'editor-format', label: '格式', children: formatItems, onSelect: () => undefined },
       { type: 'item', id: 'editor-ai', label: 'AI 处理选区', disabled: !hasSelection, children: aiItems(selectionAi), onSelect: () => undefined },
-      { type: 'item', id: 'editor-ai-open', label: '打开 AI 辅助', icon: Sparkles, onSelect: () => openAiAssistant(hasSelection ? 'polish' : 'continue') },
+      { type: 'item', id: 'editor-ai-open', label: '打开 AI 辅助', icon: Sparkles, onSelect: () => openAi(hasSelection ? 'polish' : 'continue') },
       { type: 'item', id: 'editor-search-current', label: hasSelection ? '搜索所选文字（当前章节）' : '当前章节搜索', icon: Search, disabled: !hasSelection, onSelect: () => search(selectionText, 'current') },
       { type: 'item', id: 'editor-search-project', label: hasSelection ? '搜索所选文字（全项目）' : '全项目搜索', icon: Search, disabled: !hasSelection, onSelect: () => search(selectionText, 'project') },
       { type: 'item', id: 'editor-ai-cursor', label: 'AI 写作任务', disabled: hasSelection, children: aiItems(cursorAi), onSelect: () => undefined },

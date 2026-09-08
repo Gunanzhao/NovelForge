@@ -131,7 +131,7 @@ export const useAiTask = create<AiTask>((set, get) => ({
   editResult(content) {
     const { result, target, mapping, edits, phase, application } = get()
     if (!result || !target || !mapping || phase !== 'complete' || edits.some(edit => edit.state === 'accepted')) return
-    set({ result: { ...result, content }, edits: application === 'rewrite' ? !target.conflict ? aiEdits(target.originalText, content, target.from) : aiEdits(target.originalText, content, target.originalFrom).map(edit => ({ ...edit, ...mapAiRange(edit, mapping) })) : [] })
+    set({ token: crypto.randomUUID(), result: { ...result, content }, edits: application === 'rewrite' ? !target.conflict ? aiEdits(target.originalText, content, target.from) : aiEdits(target.originalText, content, target.originalFrom).map(edit => ({ ...edit, ...mapAiRange(edit, mapping) })) : [] })
   },
   observe(before, after, knownChanges, acceptance) {
     const { target, source, mapping, edits } = get()

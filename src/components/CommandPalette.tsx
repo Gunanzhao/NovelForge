@@ -7,6 +7,7 @@ import {
 } from '../lib/command-registry'
 import type { CommandId, CommandDescriptor, ShortcutMap } from '../lib/command-registry'
 import { useAppStore } from '../stores/app-store'
+import { useAiTask } from '../stores/ai-task'
 import { Button, IconButton, TextInput } from './ui'
 
 interface CommandPaletteProps {
@@ -34,7 +35,11 @@ export function CommandPalette({ onNewProject, onCloseProject, onQuickOpen }: Co
       setOpen((current) => !current)
       return
     }
-    if (id === 'open-ai' && useAppStore.getState().activeView === 'manuscript') { useAppStore.getState().openEditorAi(); setOpen(false); return }
+    if (id === 'open-ai' && useAppStore.getState().activeView === 'manuscript') {
+      if (useAiTask.getState().id) useAppStore.getState().setInspectorTab('ai')
+      else useAppStore.getState().openEditorAi()
+      setOpen(false); return
+    }
     const view = commandView(id)
     if (view) {
       setView(view)

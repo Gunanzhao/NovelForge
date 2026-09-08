@@ -129,3 +129,18 @@ it('can revise and reapply a suggestion after undo without carrying a stale conf
   act(() => useAiTask.getState().accept())
   expect(editor().state.doc.toString()).toBe('前文。风很轻。灯很亮。后文。')
 })
+
+it('does not mark a revised suggestion accepted when redoing an older result', async () => {
+  setup()
+  act(() => editor().dispatch({ selection: { anchor: 3, head: 11 } }))
+  await act(async () => useAiTask.getState().start(captureAiTarget('selection'), 'rewrite', async () => ({ preferences: { mode: 'offline', endpoint: '', model: '' }, apiKey: '', systemPrompt: '', prompt: '测试', local: { content: '风很温暖。灯很亮。', model: 'local' } })))
+  act(() => useAiTask.getState().accept())
+  act(() => { undo(editor()) })
+  act(() => useAiTask.getState().editResult('风很轻。灯很亮。'))
+  act(() => { redo(editor()) })
+  expect(editor().state.doc.toString()).toBe('前文。风很温暖。灯很亮。后文。')
+  expect(useAiTask.getState().edits.every(edit => edit.state === 'pending')).toBe(true)
+  expect(useAiTask.getState().edits.some(edit => edit.conflict)).toBe(true)
+  act(() => useAiTask.getState().accept())
+  expect(editor().state.doc.toString()).toBe('前文。风很温暖。灯很亮。后文。')
+})
