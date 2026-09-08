@@ -1,3 +1,4 @@
+import { readEditorSession, rememberEditor } from '../lib/editor-session'
 import { confirmDraftNavigation, dirtyDrafts, runGuarded } from '../lib/draft-guard'
 import { create } from 'zustand'
 import { isNodeLocked } from '../lib/node-lock'
@@ -265,7 +266,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (request !== transitionGeneration) return
       ++selectionGeneration
       set((state) => ({ projectPath: path, projectSession: state.projectSession + 1, data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], stats: emptyStats, saveState: 'saved' }))
-      const chapter = firstChapter(data)
+      const remembered = readEditorSession(path).nodeId
+      const chapter = data.nodes.find(node => node.id === remembered && node.kind !== 'volume') ?? firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
       if (request !== transitionGeneration) return
       set({ recentProjects: rememberProject(path, data) })
@@ -327,6 +329,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const document = await projectApi.getDocument({ projectPath: path, nodeId })
       if (request !== selectionGeneration || !isCurrentProjectSession(session) || get().documentVersion !== version) return
+      rememberEditor(path, nodeId)
       set((state) => ({ document: { ...document, persistedContent: document.content }, editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', selectedEntityId: null, error: null, saveState: 'saved' }))
     } catch (error) {
       if (request === selectionGeneration && isCurrentProjectSession(session)) get().setError(error)

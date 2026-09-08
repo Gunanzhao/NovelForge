@@ -1,3 +1,4 @@
+import { clampEditorPosition, readEditorSession, rememberEditor } from '../lib/editor-session'
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { redo, undo } from '@codemirror/commands'
@@ -79,6 +80,30 @@ export function EditorPane() {
   const projectPath = useAppStore((state) => state.projectPath)
   const { openContextMenu } = useContextMenu()
   const editorViewRef = useRef<EditorView | null>(null)
+  const positionCleanup = useRef<(() => void) | null>(null)
+  useEffect(() => () => { positionCleanup.current?.(); positionCleanup.current = null }, [])
+  function createEditor(view: EditorView) {
+    positionCleanup.current?.()
+    editorViewRef.current = view
+    if (projectPath && document) {
+      const path = projectPath, nodeId = document.node.id
+      rememberEditor(path, nodeId)
+      const position = clampEditorPosition(readEditorSession(path).positions[nodeId], view.state.doc.length)
+      view.dispatch({ selection: { anchor: position.anchor, head: position.head } })
+      const frame = window.requestAnimationFrame(() => { view.scrollDOM.scrollTop = position.scrollTop; view.scrollDOM.scrollLeft = position.scrollLeft })
+      let timer: number | undefined
+      const persist = () => {
+        const selection = view.state.selection.main
+        rememberEditor(path, nodeId, { anchor: selection.anchor, head: selection.head, scrollTop: view.scrollDOM.scrollTop, scrollLeft: view.scrollDOM.scrollLeft })
+      }
+      const schedule = () => { window.clearTimeout(timer); timer = window.setTimeout(persist, 200) }
+      view.scrollDOM.addEventListener('scroll', schedule)
+      view.dom.addEventListener('keyup', schedule)
+      view.dom.addEventListener('mouseup', schedule)
+      positionCleanup.current = () => { window.cancelAnimationFrame(frame); window.clearTimeout(timer); persist(); view.scrollDOM.removeEventListener('scroll', schedule); view.dom.removeEventListener('keyup', schedule); view.dom.removeEventListener('mouseup', schedule) }
+    }
+    reportEditorSelection({ state: view.state } as ViewUpdate)
+  }
   const [wikiResolution, setWikiResolution] = useState<{ target: string; candidates: EntityRecord[] } | null>(null)
   const locked = isNodeLocked(data?.nodes ?? [], document?.node.id)
 
@@ -247,7 +272,7 @@ export function EditorPane() {
       </div>
     </div>
     <div className={'editor-body mode-' + editorMode}>
-      {editorMode !== 'preview' ? <div className="editor-pane" onContextMenu={openEditorContextMenu}><CodeMirror key={document.node.id} readOnly={locked} editable={!locked} value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={(view) => { editorViewRef.current = view; reportEditorSelection({ state: view.state } as ViewUpdate) }} onUpdate={reportEditorSelection} onChange={(value) => updateContent(value)} /></div> : null}
+      {editorMode !== 'preview' ? <div className="editor-pane" onContextMenu={openEditorContextMenu}><CodeMirror key={document.node.id} readOnly={locked} editable={!locked} value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={createEditor} onUpdate={reportEditorSelection} onChange={(value) => updateContent(value)} /></div> : null}
       {editorMode !== 'markdown' ? <div className="editor-pane" onContextMenu={handlePreviewContextMenu}><article className="preview"><MarkdownPreview markdown={document.content} entities={data?.entities} onWikiLink={resolveWikiTarget} /></article></div> : null}
     </div>
     {wikiResolution ? <div className="wiki-resolution" role="status">
