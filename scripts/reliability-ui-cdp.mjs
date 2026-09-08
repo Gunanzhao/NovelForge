@@ -17,7 +17,7 @@ const field = (selector, value) => ev(`(()=>{const e=document.querySelector(${JS
 const waitFor = async expression => { for (let i = 0; i < 80; i++) { if (await ev(expression)) return; await sleep(150) } throw Error('Timed out: ' + expression) }
 try {
   let target
-  for (let i=0;i<100;i++) { try { target=(await(await fetch('http://127.0.0.1:9462/json/list')).json()).find(item=>item.type==='page'); if(target)break } catch {} await sleep(200) }
+  for (let i=0;i<100;i++) { try { target=(await(await fetch('http://127.0.0.1:9462/json/list')).json()).find(item=>item.type==='page'); if(target)break } catch { /* Wait for startup or keep the original failure. */ } await sleep(200) }
   assert.ok(target); socket=new WebSocket(target.webSocketDebuggerUrl)
   await new Promise(resolve=>socket.addEventListener('open',resolve,{once:true}))
   socket.addEventListener('message',event=>{const message=JSON.parse(event.data),task=pending.get(message.id);if(task){pending.delete(message.id);if(message.error)task.reject(Error(message.error.message));else task.resolve(message.result)}})
@@ -80,6 +80,6 @@ try {
   console.log('UNDO_AND_VERSION_UI_OK')
   writeFileSync(resolve(run,'result.json'),JSON.stringify({projectPath,backup,restored,passed:true},null,2));console.log('RELIABILITY_UI_PASS',run)
 } catch(error) {
-  try { const shot=await cmd('Page.captureScreenshot',{format:'png'});writeFileSync(resolve(run,'failure.png'),Buffer.from(shot.data,'base64'));console.log('FAILURE_SCREENSHOT',run) } catch {}
+  try { const shot=await cmd('Page.captureScreenshot',{format:'png'});writeFileSync(resolve(run,'failure.png'),Buffer.from(shot.data,'base64'));console.log('FAILURE_SCREENSHOT',run) } catch { /* Wait for startup or keep the original failure. */ }
   throw error
 } finally { socket?.close(); child.kill() }
