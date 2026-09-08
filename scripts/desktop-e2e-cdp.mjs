@@ -268,15 +268,15 @@ async function rightClickAt(page, point) {
 }
 
 async function rightClickSelector(page, selector, text) {
-  const expression = "(function(){const item=Array.from(document.querySelectorAll(" + jsString(selector) + ")).find((node)=>" + (text ? "(node.textContent||'').includes(" + jsString(text) + ")" : 'true') + ");if(!item)return null;const rect=item.getBoundingClientRect();return {x:rect.left+Math.min(Math.max(8,rect.width/2),Math.max(8,rect.width-8)),y:rect.top+Math.min(Math.max(8,rect.height/2),Math.max(8,rect.height-8))}})()"
-  const point = await page.evaluate(expression)
-  if (!point) throw new Error('找不到右键目标：' + selector + (text ? ' / ' + text : ''))
-  await rightClickAt(page, point)
-  if (!await page.evaluate("document.querySelector('.context-menu[data-context-menu-surface=\"true\"]') !== null")) {
-    const fallback = "(function(){const item=Array.from(document.querySelectorAll(" + jsString(selector) + ")).find((node)=>" + (text ? "(node.textContent||'').includes(" + jsString(text) + ")" : 'true') + ");if(!item)return false;const rect=item.getBoundingClientRect();item.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,button:2,clientX:rect.left+Math.max(8,rect.width/2),clientY:rect.top+Math.max(8,rect.height/2)}));return true})()"
-    if (!await page.evaluate(fallback)) throw new Error('无法向右键目标发送回退事件：' + selector)
-    await sleep(120)
-  }
+  const find = `Array.from(document.querySelectorAll(${jsString(selector)})).find(node => ${text ? `(node.querySelector('.tree-label')?.textContent || node.textContent || '').trim() === ${jsString(text)}` : 'true'}) || Array.from(document.querySelectorAll(${jsString(selector)})).find(node => ${text ? `(node.textContent || '').includes(${jsString(text)})` : 'true'})`
+  const before = await page.evaluate(`(() => { const item = ${find}; if (!item) return null; const r = item.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2; return { y, hit: item.contains(document.elementFromPoint(x, y)) }; })()`)
+  if (!before) throw new Error('找不到右键目标：' + selector + ' / ' + text)
+  if (!before.hit) console.log('CONTEXT_TARGET_CLIPPED', selector, text, JSON.stringify(before))
+  await page.evaluate(`(() => { const item = ${find}; item.scrollIntoView({block:'center',inline:'nearest'}); })()`)
+  await sleep(120)
+  const point = await page.evaluate(`(() => { const item = ${find}; if (!item) return null; const r = item.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2; return { x, y, hit: item.contains(document.elementFromPoint(x, y)) }; })()`)
+  if (!point?.hit) throw new Error('右键目标被遮挡或仍在可见区域外：' + selector + ' / ' + text + ' ' + JSON.stringify(point))
+  await rightClickAt(page, { x: point.x, y: point.y })
 }
 
 async function assertCustomContextMenu(page, label) {
@@ -1089,11 +1089,14 @@ async function run() {
 
     await clickTitle(page, '项目设置')
     await waitForText(page, '项目设置')
+    await clickExact(page, '外观与布局')
     await clickExact(page, '深色')
     await waitForCondition(page, "document.documentElement.dataset.theme === 'dark'", '深色主题')
     await clickTitle(page, '收起左栏')
     await waitForCondition(page, "document.querySelector('.main-layout')?.classList.contains('sidebar-closed')", '收起左栏')
     await clickTitle(page, '展开左栏')
+    await clickExact(page, '正文')
+    await waitForSelector(page, '.cm-content', '正文辅助栏')
     await clickTitle(page, '收起辅助栏')
     await waitForCondition(page, "document.querySelector('.main-layout')?.classList.contains('inspector-closed')", '收起辅助栏')
     await clickTitle(page, '展开辅助栏')
