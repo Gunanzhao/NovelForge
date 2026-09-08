@@ -1,7 +1,7 @@
 import { clampEditorPosition, readEditorSession, rememberEditor } from '../lib/editor-session'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
-import { redo, undo } from '@codemirror/commands'
+import { isolateHistory, redo, undo } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
 import { EditorState, RangeSetBuilder } from '@codemirror/state'
 import { isNodeLocked } from '../lib/node-lock'
@@ -18,6 +18,7 @@ import { readClipboardText, writeClipboardText } from '../lib/clipboard'
 import type { AiAction } from '../lib/ai-data'
 import { ENTITY_LABELS, NODE_STATUS_LABELS, type EntityRecord } from '../lib/types'
 import { useAppStore } from '../stores/app-store'
+import { registerAiEditor, useAiTask } from '../stores/ai-task'
 import { Button, IconButton } from './ui'
 import { useContextMenu } from './ContextMenu'
 import { MarkdownPreview } from './MarkdownPreview'
@@ -76,15 +77,32 @@ export function EditorPane() {
   const setView = useAppStore((state) => state.setView)
   const setEditorSelection = useAppStore((state) => state.setEditorSelection)
   const setError = useAppStore((state) => state.setError)
-  const openAiAssistant = useAppStore((state) => state.openAiAssistant)
+  const openAiAssistant = useAppStore((state) => state.openEditorAi)
   const projectPath = useAppStore((state) => state.projectPath)
   const { openContextMenu } = useContextMenu()
   const editorViewRef = useRef<EditorView | null>(null)
+  const aiEditorCleanup = useRef<(() => void) | null>(null)
+  const [floating, setFloating] = useState<{ left: number; top: number } | null>(null)
+  const floatingMeasure = useRef({})
+  const aiBusy = useAiTask(state => Boolean(state.id))
+  useLayoutEffect(() => () => { aiEditorCleanup.current?.() }, [])
   const positionCleanup = useRef<(() => void) | null>(null)
   useLayoutEffect(() => () => { positionCleanup.current?.(); positionCleanup.current = null }, [])
   function createEditor(view: EditorView) {
     positionCleanup.current?.()
     editorViewRef.current = view
+    aiEditorCleanup.current?.()
+    const current = useAppStore.getState()
+    if (current.projectPath && current.document) {
+      aiEditorCleanup.current = registerAiEditor({ project: current.projectPath, session: current.projectSession, node: current.document.node.id }, (source, changes) => {
+        if (!view.dom.isConnected || view.state.doc.toString() !== source) return false
+        let end = 0
+        changes.iterChangedRanges((_from, _to, _newFrom, newTo) => { end = newTo })
+        view.dispatch({ changes, selection: { anchor: end }, annotations: isolateHistory.of('full'), userEvent: 'input.ai' })
+        view.focus()
+        return view.state.doc.toString() !== source || changes.empty
+      })
+    }
     if (projectPath && document) {
       const path = projectPath, nodeId = document.node.id
       rememberEditor(path, nodeId)
@@ -129,6 +147,17 @@ export function EditorPane() {
     const nodeId = document?.node.id
     if (!nodeId) return
     const selection = update.state.selection.main
+    if (update.selectionSet || update.docChanged) {
+      const view = editorViewRef.current
+      if (selection.empty) setFloating(null)
+      else if (view) view.requestMeasure({ key: floatingMeasure.current,
+        read: () => view.coordsAtPos(selection.from),
+        write: rect => {
+          if (!rect || rect.top < 110 || rect.top > window.innerHeight - 30 || !view.hasFocus) { setFloating(null); return }
+          setFloating({ left: Math.max(8, Math.min(rect.left, window.innerWidth - 270)), top: Math.max(60, rect.top - 40) })
+        },
+      })
+    }
     setEditorSelection({
       nodeId,
       from: selection.from,
@@ -268,14 +297,15 @@ export function EditorPane() {
       <div className="editor-title-row"><div><p className="eyebrow">MANUSCRIPT / {document.node.kind.toUpperCase()}</p><h1>{document.node.title}</h1></div><span>{document.node.filePath}</span><IconButton icon={Maximize2} label="专注模式（F11）" onClick={toggleFocusMode} /></div>
       <div className="editor-toolbar">
         <IconButton icon={Bold} label="粗体（Ctrl+B）" onClick={() => applyCommand('bold')} /><IconButton icon={Italic} label="斜体（Ctrl+I）" onClick={() => applyCommand('italic')} /><IconButton icon={Strikethrough} label="删除线" onClick={() => applyCommand('strikethrough')} /><IconButton icon={Heading1} label="标题" onClick={() => applyCommand('heading')} /><IconButton icon={Quote} label="引用" onClick={() => applyCommand('quote')} /><IconButton icon={List} label="无序列表" onClick={() => applyCommand('unordered-list')} /><IconButton icon={ListOrdered} label="有序列表" onClick={() => applyCommand('ordered-list')} /><IconButton icon={ListChecks} label="任务列表" onClick={() => applyCommand('task-list')} /><IconButton icon={Link} label="链接" onClick={() => applyCommand('link')} /><IconButton icon={Image} label="图片" onClick={() => applyCommand('image')} /><IconButton icon={Code2} label="代码" onClick={() => applyCommand('code')} /><IconButton icon={Minus} label="分割线" onClick={() => applyCommand('horizontal-rule')} />
-        <span className="toolbar-separator" /><Button variant="ghost" onClick={() => void saveCurrentDocument('手动保存')}><Save size={14} />保存</Button>
+        <span className="toolbar-separator" /><Button variant="ghost" className="editor-ai-launcher" onMouseDown={event => event.preventDefault()} onClick={() => aiBusy ? useAppStore.getState().setInspectorTab('ai') : openAiAssistant()}><Sparkles size={14} />{aiBusy ? 'AI 生成中' : 'AI 辅助'}</Button><Button variant="ghost" onClick={() => void saveCurrentDocument('手动保存')}><Save size={14} />保存</Button>
         <span className="mode-switch"><button className={editorMode === 'markdown' ? 'active' : ''} onClick={() => setEditorMode('markdown')}><PenLine size={12} /> 编辑</button><button className={editorMode === 'split' ? 'active' : ''} onClick={() => setEditorMode('split')}><Columns3 size={12} /> 分栏</button><button className={editorMode === 'preview' ? 'active' : ''} onClick={() => setEditorMode('preview')}><Eye size={12} /> 预览</button></span>
       </div>
     </div>
     <div className={'editor-body mode-' + editorMode}>
-      {editorMode !== 'preview' ? <div className="editor-pane" onContextMenu={openEditorContextMenu}><CodeMirror className="editor-codemirror" key={document.node.id} readOnly={locked} editable={!locked} value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={createEditor} onUpdate={reportEditorSelection} onChange={(value) => updateContent(value)} /></div> : null}
+      {editorMode !== 'preview' ? <div className="editor-pane" onContextMenu={openEditorContextMenu} onBlurCapture={() => setFloating(null)}><CodeMirror className="editor-codemirror" key={document.node.id} readOnly={locked} editable={!locked} value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={createEditor} onUpdate={reportEditorSelection} onChange={(value, update) => { useAiTask.getState().observe(update.startState.doc.toString(), value, update.changes); updateContent(value) }} /></div> : null}
       {editorMode !== 'markdown' ? <div className="editor-pane" onContextMenu={handlePreviewContextMenu}><article className="preview"><MarkdownPreview markdown={document.content} entities={data?.entities} onWikiLink={resolveWikiTarget} /></article></div> : null}
     </div>
+    {floating && !locked && editorMode !== 'preview' ? <div className="editor-ai-floating" role="toolbar" aria-label="选区 AI 操作" style={floating} onMouseDown={event => event.preventDefault()}>{([['polish', '润色'], ['rewrite', '改写'], ['expand', '扩写'], ['shrink', '缩写']] as const).map(([value, label]) => <button key={value} disabled={aiBusy} onClick={() => { openAiAssistant(value); setFloating(null) }}>{label}</button>)}<button aria-label="关闭选区 AI 操作" onClick={() => setFloating(null)}>×</button></div> : null}
     {wikiResolution ? <div className="wiki-resolution" role="status">
       <div className="wiki-resolution-copy"><strong>{wikiResolution.target}</strong><span>{wikiResolution.candidates.length > 1 ? '找到多个同名条目，请选择要打开的资料。' : '没有找到对应资料，可以先去搜索项目内容。'}</span></div>
       {wikiResolution.candidates.length ? <div className="wiki-resolution-candidates">{wikiResolution.candidates.map((candidate) => <button type="button" key={candidate.id} onClick={() => { setWikiResolution(null); selectEntity(candidate.kind, candidate.id) }}><strong>{candidate.title}</strong><span>{ENTITY_LABELS[candidate.kind]} · {candidate.filePath}</span></button>)}</div> : <div className="wiki-resolution-actions"><Button variant="outline" onClick={() => openWikiSearch(wikiResolution.target)}>去搜索</Button><Button variant="ghost" onClick={() => setWikiResolution(null)}>关闭</Button></div>}

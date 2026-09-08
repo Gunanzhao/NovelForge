@@ -1,3 +1,4 @@
+import { useAiTask } from '../src/stores/ai-task'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -49,6 +50,7 @@ const data: ProjectData = {
 
 describe('AiAssistantView insecure HTTP confirmation', () => {
   beforeEach(() => {
+  useAiTask.setState(useAiTask.getInitialState(), true)
     aiComplete.mockClear()
     writeAiPreferences({ endpoint: 'http://provider.example/v1', model: 'mock-model' })
     useAppStore.setState({

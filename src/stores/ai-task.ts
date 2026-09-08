@@ -45,6 +45,7 @@ interface AiTask {
   accept: (id?: string) => void
   reject: (id: string) => void
   insert: (position: 'target' | 'after' | 'end') => void
+  replace: () => void
 }
 
 export function captureAiTarget(kind: AiTarget['kind'], range?: { from: number; to: number }): AiTarget {
@@ -149,6 +150,17 @@ export const useAiTask = create<AiTask>((set, get) => ({
     } catch (error) { set({ error: String(error) }); useAppStore.getState().setError(error) }
   },
   reject(id) { set(state => ({ edits: state.edits.map(edit => edit.id === id && edit.state === 'pending' ? { ...edit, state: 'rejected' } : edit) })) },
+  replace() {
+    const { target, source, result, phase } = get()
+    if (!target || !result || phase !== 'complete') return
+    try {
+      if (target.conflict) throw new Error('目标正文已变化，不能覆盖。')
+      const edit: AiEdit = { id: 'replace', ...target, before: source.slice(target.from, target.to), after: result.content, state: 'pending' }
+      const { content, changes } = applyAiEdits(source, [edit])
+      writeChanges(target, source, content, changes)
+      set({ phase: 'idle', error: '' })
+    } catch (error) { set({ error: String(error) }); useAppStore.getState().setError(error) }
+  },
   insert(position) {
     const { target, source, result, phase } = get()
     if (!target || !result || phase !== 'complete') return

@@ -34,6 +34,7 @@ export function PromptPresetManager({ busy, onRun, presentation = 'panel', defau
 }) {
   const data = useAppStore((state) => state.data)
   const projectPath = useAppStore((state) => state.projectPath)
+  const projectSession = useAppStore(state => state.projectSession)
   const document = useAppStore((state) => state.document)
   const editorSelection = useAppStore((state) => state.editorSelection)
   const saveEntity = useAppStore((state) => state.saveEntity)
@@ -50,6 +51,7 @@ export function PromptPresetManager({ busy, onRun, presentation = 'panel', defau
   const [systemOpen, setSystemOpen] = useState(false)
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const [preview, setPreview] = useState<{ preset: PromptPreset; resolution: PromptResolution; run: boolean } | null>(null)
+  useEffect(() => { setSelectedId(null); setDraft(BLANK); setBaseline(JSON.stringify(BLANK)); setPreview(null); setVisible(false); newEntityId.current = null }, [projectSession])
   const presets = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'prompt-preset').map(parsePromptPreset).sort((left, right) => left.name.localeCompare(right.name, 'zh-CN')), [data?.entities])
   const selectedJson = JSON.stringify(presets.find((preset) => preset.id === selectedId) ?? null)
   const selected = useMemo(() => JSON.parse(selectedJson) as PromptPreset | null, [selectedJson])

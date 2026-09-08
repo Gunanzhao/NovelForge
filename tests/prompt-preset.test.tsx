@@ -1,3 +1,4 @@
+import { useAiTask } from '../src/stores/ai-task'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { decideDraftNavigation } from '../src/lib/draft-guard'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -44,6 +45,7 @@ const project: ProjectData = {
 
 describe('PromptPresetManager integration', () => {
   beforeEach(() => {
+  useAiTask.setState(useAiTask.getInitialState(), true)
     vi.clearAllMocks()
     useAppStore.setState({
       projectPath: 'project',

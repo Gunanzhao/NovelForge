@@ -1,3 +1,4 @@
+import { useAiTask } from '../src/stores/ai-task'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EntityRecord, NodeRecord, ProjectData } from '../src/lib/types'
@@ -16,6 +17,7 @@ const arc: EntityRecord = { id: 'arc', kind: 'story-arc', title: '主线', tags:
 const data: ProjectData = { project: { formatVersion: 1, id: 'project', title: '测试', author: '', description: '', genre: '', targetWords: 1, createdAt: '', updatedAt: '' }, nodes: [chapter, section], entities: [arc], recovery: [] }
 
 beforeEach(() => {
+  useAiTask.setState(useAiTask.getInitialState(), true)
   vi.clearAllMocks()
   api.aiComplete.mockResolvedValue({ content: '结果', model: 'test' })
   writeAiPreferences({ endpoint: 'https://provider.example/v1', model: 'test' })

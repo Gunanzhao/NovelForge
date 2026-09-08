@@ -106,6 +106,9 @@ interface AppState {
   trash: TrashItem[]
   sidebarOpen: boolean
   inspectorOpen: boolean
+  inspectorTab: 'chapter' | 'ai'
+  setInspectorTab: (tab: 'chapter' | 'ai') => void
+  openEditorAi: (action?: AiAction) => void
   focusMode: boolean
   theme: ThemeMode
   preferenceError: string | null
@@ -175,6 +178,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   trash: [],
   sidebarOpen: DEFAULT_WORKSPACE_PREFERENCES.sidebarOpen,
   inspectorOpen: DEFAULT_WORKSPACE_PREFERENCES.inspectorOpen,
+  inspectorTab: 'chapter',
+  setInspectorTab: (inspectorTab) => set({ inspectorTab, inspectorOpen: true }),
+  openEditorAi: (action) => {
+    const selection = get().editorSelection
+    set({ activeView: 'manuscript', inspectorOpen: true, inspectorTab: 'ai', requestedAiAction: action ?? (selection?.text.trim() ? 'polish' : 'continue') })
+  },
   focusMode: false,
   theme: 'system',
   workspacePreferences: { ...DEFAULT_WORKSPACE_PREFERENCES },

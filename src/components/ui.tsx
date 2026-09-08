@@ -36,7 +36,7 @@ export function Modal({ open, title, onClose, children, footer }: { open: boolea
     const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),a[href],[tabindex="0"]')).filter(element => !element.closest('[hidden],[inert]'))
     if (!dialog.contains(document.activeElement)) (dialog.querySelector<HTMLElement>('.modal-body input,.modal-body textarea') ?? focusable()[0])?.focus()
     const key = (event: KeyboardEvent) => {
-      if (Array.from(document.querySelectorAll('[role="dialog"]')).at(-1) !== dialog) return
+      if (dialog.closest('[hidden],[inert]') || Array.from(document.querySelectorAll('[role="dialog"]')).filter(item => !item.closest('[hidden],[inert]')).at(-1) !== dialog) return
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeRef.current(); return }
       if (event.key !== 'Tab') return
       const items = focusable(), first = items[0], last = items.at(-1)

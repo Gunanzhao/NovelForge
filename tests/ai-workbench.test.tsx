@@ -1,3 +1,4 @@
+import { useAiTask } from '../src/stores/ai-task'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { NodeRecord, ProjectData } from '../src/lib/types'
@@ -10,6 +11,7 @@ import { readAiPreferences, writeAiPreferences } from '../src/lib/ai-data'
 const chapter: NodeRecord = { id: 'chapter', title: '雨夜', kind: 'chapter', parentId: null, orderIndex: 0, status: 'draft', filePath: 'chapter.md', createdAt: '', updatedAt: '' }
 const data: ProjectData = { project: { id: 'project', title: '测试', author: '', description: '', genre: '', targetWords: 1000, formatVersion: 1, createdAt: '', updatedAt: '' }, nodes: [chapter], entities: [], recovery: [] }
 beforeEach(() => {
+  useAiTask.setState(useAiTask.getInitialState(), true)
   localStorage.clear(); vi.clearAllMocks()
   useAppStore.setState({ projectPath: 'project', data, document: { node: chapter, content: '雨落在信封上。' }, editorSelection: null, requestedAiAction: null, error: null })
   api.aiComplete.mockResolvedValue({ content: '门铃响了一声。', model: 'writer' })

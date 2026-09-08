@@ -1,3 +1,4 @@
+import { useAiTask } from '../src/stores/ai-task'
 import { useCodexSession } from '../src/stores/codex-session'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,6 +17,7 @@ const chapter: NodeRecord = { id: 'chapter', title: '第一章', kind: 'chapter'
 const data: ProjectData = { project: { id: 'project', title: '测试', author: '', description: '', genre: '', targetWords: 1000, formatVersion: 1, createdAt: '', updatedAt: '' }, nodes: [chapter], entities: [], recovery: [] }
 
 beforeEach(() => {
+  useAiTask.setState(useAiTask.getInitialState(), true)
   useCodexSession.setState(useCodexSession.getInitialState(), true); vi.resetAllMocks()
   mocks.status.mockResolvedValue({ ready: true, version: '0.153.4', authMode: 'chatgpt', planType: 'plus', rateLimits: [], compatibility: { state: 'passed' }, selectedModel: 'writer', selectedEffort: 'low', models: [{ model: 'writer', displayName: 'Writer', defaultReasoningEffort: 'low', supportedReasoningEfforts: [{ reasoningEffort: 'low' }] }] })
   mocks.models.mockResolvedValue([{ model: 'writer', displayName: 'Writer', defaultReasoningEffort: 'low', supportedReasoningEfforts: [{ reasoningEffort: 'low' }] }])
@@ -105,7 +107,7 @@ describe('Codex writing integration', () => {
     expect(mocks.generate.mock.calls[0][0].prompt).toContain('分析 雨夜。')
     expect(screen.queryByRole('button', { name: '追加到正文' })).toBeNull()
   })
-  it('runs selection polish and rejects a changed selection', async () => {
+  it('runs selection polish against the original range after the cursor moves', async () => {
     useAppStore.setState({ editorSelection: { nodeId: 'chapter', from: 0, to: 2, text: '雨夜' } })
     mocks.generate.mockResolvedValue({ content: '细雨长夜', model: 'writer' })
     await ready()
@@ -114,8 +116,8 @@ describe('Codex writing integration', () => {
     await screen.findByDisplayValue('细雨长夜')
     act(() => useAppStore.setState({ editorSelection: { nodeId: 'chapter', from: 1, to: 2, text: '夜' } }))
     fireEvent.click(screen.getByRole('button', { name: '替换选区' }))
-    expect(useAppStore.getState().error).toContain('选区已变化')
-    expect(useAppStore.getState().document?.content).toBe('雨夜。')
+    expect(useAppStore.getState().error).toBeNull()
+    expect(useAppStore.getState().document?.content).toBe('细雨长夜。')
   })
   it('keeps the entry closed when runtime compatibility checks fail', async () => {
     mocks.status.mockRejectedValue(new Error('当前版本未通过工具隔离验证'))

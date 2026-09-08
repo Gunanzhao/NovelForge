@@ -34,6 +34,7 @@ export function CommandPalette({ onNewProject, onCloseProject, onQuickOpen }: Co
       setOpen((current) => !current)
       return
     }
+    if (id === 'open-ai' && useAppStore.getState().activeView === 'manuscript') { useAppStore.getState().openEditorAi(); setOpen(false); return }
     const view = commandView(id)
     if (view) {
       setView(view)

@@ -1,3 +1,4 @@
+import { useAiTask } from '../src/stores/ai-task'
 import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react'
 import {afterEach,beforeEach,expect,it,vi} from 'vitest'
 import type {EntityRecord,NodeRecord,ProjectData} from '../src/lib/types'
@@ -13,7 +14,7 @@ const section:NodeRecord={...chapter,id:'s',parentId:'c',kind:'section',filePath
 const attachment:EntityRecord={id:'a',kind:'attachment',title:'参考资料.txt',filePath:'attachments/a.txt',content:{chapterId:'c',description:'用于核对城市设定的说明',sourcePath:'PRIVATE_SOURCE_MUST_NOT_SEND',rawBytes:'BINARY_MUST_NOT_SEND'},tags:[],createdAt:'',updatedAt:''}
 const other:EntityRecord={...attachment,id:'b',title:'另一个章节的附件.txt',content:{chapterId:'other',description:'其他章节'}}
 const data:ProjectData={project:{id:'p',formatVersion:1,title:'测试',author:'',description:'',genre:'',targetWords:0,createdAt:'',updatedAt:''},nodes:[chapter,section],entities:[attachment,other],recovery:[]}
-beforeEach(()=>{localStorage.clear();useAppStore.setState({...useAppStore.getInitialState(),projectPath:'P',data,document:{node:chapter,content:'测试正文'},saveState:'saved',selectedEntityId:'a'})})
+beforeEach(()=>{useAiTask.setState(useAiTask.getInitialState(), true);localStorage.clear();useAppStore.setState({...useAppStore.getInitialState(),projectPath:'P',data,document:{node:chapter,content:'测试正文'},saveState:'saved',selectedEntityId:'a'})})
 afterEach(cleanup)
 it('从章节链接打开正确附件，筛选无匹配时不保留旧详情操作',()=>{
  render(<AttachmentsView/>);expect(screen.getByRole('button',{name:'打开文件'})).toBeTruthy();
