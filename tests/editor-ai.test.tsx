@@ -85,6 +85,20 @@ it('retains a pending request when changing workbench presentation and binds ins
   fireEvent.click(screen.getByRole('button', { name: '插入原光标处' }))
   expect(useAppStore.getState().document?.content).toBe(content + '续写结果')
 })
+it('selects the chapter when switching to summary after expanding an inline selection task', async () => {
+  const view = render(<AiAssistantView compact />)
+  act(() => {
+    useAppStore.getState().setEditorSelection({ nodeId: node.id, from: 3, to: 11, text: '风很冷。灯很暗。' })
+    useAppStore.getState().openEditorAi('polish')
+  })
+  act(() => useAppStore.setState({ activeView: 'ai' }))
+  view.rerender(<AiAssistantView />)
+  fireEvent.click(screen.getByRole('button', { name: '摘要' }))
+  fireEvent.click(screen.getByRole('button', { name: '运行辅助' }))
+  await waitFor(() => expect(mocks.aiComplete).toHaveBeenCalledTimes(1))
+  expect(mocks.aiComplete.mock.calls[0][0].prompt).toContain(content)
+  expect(useAiTask.getState().target?.kind).toBe('chapter')
+})
 it('blocks application to locked chapters even when the result was generated before locking', async () => {
   setup()
   await act(async () => useAiTask.getState().start(captureAiTarget('chapter'), 'rewrite', async () => ({ preferences: { mode: 'offline', endpoint: '', model: '' }, apiKey: '', systemPrompt: '', prompt: '润色', local: { content: '新正文', model: 'local' } })))

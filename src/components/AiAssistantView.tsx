@@ -65,7 +65,7 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
 
   function chooseTask(next: AiAction) {
     setAction(next)
-    if (compact || useAppStore.getState().activeView === 'manuscript') {
+    if (compact || draftTarget || useAppStore.getState().activeView === 'manuscript') {
       try {
         const kind = isSelectionAction(next) ? 'selection' : ['summary', 'chapter-summary', 'outline', 'setting-advice'].includes(next) ? 'chapter' : 'cursor'
         setDraftTarget(captureAiTarget(kind)); setSelectedIds(new Set(['ai-target']))
