@@ -2,15 +2,15 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.1.1-rc.1（预发布）**。
+当前版本：**1.1.1-rc.2（预发布）**。
 
 [![main CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Amain)
 
 ## 下载
 
-- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.1/NovelForge_1.1.1-rc.1_x64-setup.exe)
-- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.1/novelforge.exe)
-- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.1/SHA256SUMS.txt)
+- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.2/NovelForge_1.1.1-rc.2_x64-setup.exe)
+- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.2/novelforge.exe)
+- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.2/SHA256SUMS.txt)
 - [版本说明与历史 Release](https://github.com/Gunanzhao/NovelForge/releases)
 
 已有安装版用户运行新安装包升级；直接运行独立 EXE 不会更新旧快捷方式。桌面版需要 Windows WebView2。
@@ -22,7 +22,7 @@ NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台�
 - **写作规划**：三级大纲、时间线、伏笔、剧情线、人物关系图、灵感箱和章节完成 Checklist。
 - **辅助分析**：写作统计、人物出场统计、一致性检查、断链与关联提示。
 - **名字生成器**：12 类名字、8 种风格，支持命名条件、家族与主题系列、项目避重、锁定、收藏、历史和专属词库。
-- **AI 辅助**：左侧任务与参考资料、右侧结果的双栏工作台，支持续写、润色、改写、摘要等任务和可复用 Prompt 模板。连接设置、模板编辑与请求预览按需打开。
+- **AI 辅助**：正文右侧可直接续写、润色、改写、扩写、缩写和摘要，选区浮动工具栏、右键菜单及快捷键均可进入；与完整双栏工作台共享任务和结果，支持参考资料、Prompt 模板、修改对比、逐项接受和撤销重做。
 - **导出与恢复**：Markdown、TXT、HTML、DOCX、EPUB、PDF 导出，回收站及整项目备份、校验和恢复。
 - **工作区**：浅色／深色／跟随系统主题、专注模式、侧栏调整、快捷命令和未保存草稿保护。
 
@@ -31,10 +31,18 @@ NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台�
 1. 创建项目时选择空目录，或打开已有 NovelForge 项目。
 2. 在左侧建立卷、章或节，进入正文写作；人物、地点等资料可在对应页面维护。
 3. 正文中使用 `[[人物名]]` 等引用关联资料；用写作规划、时间线和伏笔管理情节。
-4. AI 辅助中选择任务及参考资料，查看请求预览后运行，再确认是否将结果应用到正文。
+4. 正文工具栏点击“AI 辅助”，或选中文字后使用浮动工具栏／右键菜单。确认目标及参考资料，预览请求后运行，再审阅结果并决定是否应用。
 5. 使用导出生成阅读文件，使用整项目备份保留正文、资料、附件和历史。
 
-常用快捷键：`Ctrl+S` 保存，`Ctrl+P` 快速打开，`Ctrl+Shift+P`（兼容 `Ctrl+K`）打开命令面板，`Ctrl+Shift+I` 记录灵感。
+常用快捷键：`Ctrl+S` 保存，`Ctrl+P` 快速打开，`Ctrl+Shift+P`（兼容 `Ctrl+K`）打开命令面板，`Ctrl+Shift+I` 记录灵感，`Ctrl+0` 打开 AI 辅助。
+
+## 正文内使用 AI
+
+- 正文右栏可切换“章节信息 / AI 辅助”；窗口较窄或处于专注模式时使用抽屉。点击“完整工作台”可展开，任务、输入、结果及连接状态保持一致。收起面板或切换普通页面不会重复发送或中止生成。
+- 润色、改写、扩写、缩写默认绑定进入时的选区；续写绑定原光标，默认参考光标前最多 4,000 字符；摘要默认参考整章。可以重新选择目标、勾选人物等资料或使用模板。打开面板、选择任务和预览均不会发送请求，只有运行时发送明确选中的上下文。
+- 结果可复制、修改后应用或重新生成；选区修改提供“生成结果 / 修改对比”，可全部接受、逐项接受或保留原文。接受后通过编辑器 `Ctrl+Z` / `Ctrl+Y` 撤销、重做，审阅状态同步更新；已接受部分内容后结果文本锁定，避免后续改写覆盖已接受内容。
+- 应用位置绑定本次原目标，移动光标不会改写新选区。目标之外的编辑会自动跟踪位置；与目标改动冲突时阻止覆盖，仍可接受其他无冲突项。整章替换需要确认，锁定章节不能写入。
+- 切换章节会停止当前任务接收，旧结果不能写入另一章；切换项目会取消并清空任务。Codex 支持流式查看和停止生成；兼容 Provider 当前一次性返回，“停止接收”会忽略后续返回，但服务端可能仍继续处理。未完成结果只可查看与复制。
 
 ## AI 模式
 
@@ -63,7 +71,7 @@ NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台�
 
 额度与本机 Codex 账号共用，缺失额度信息不代表零额度。本地兼容检查不消耗订阅生成额度；真实生成会发送明确选中的内容并使用订阅额度。模拟验证通过不等于所有模型的真实订阅生成均已验收。
 
-结果可以流式查看和停止生成；未完成文本只供查看与复制，正文或选区变化会阻止直接应用旧结果。生成请求不自动重发。
+Codex 结果可以流式查看和停止生成；未完成文本只供查看与复制，目标内容冲突时阻止覆盖。生成请求不自动重发，也不会因切换界面重复发起。
 
 ## 数据安全
 
@@ -97,6 +105,14 @@ pnpm tauri:build
 
 Windows EXE 位于 `src-tauri/target/release/`，NSIS 安装包位于 `src-tauri/target/release/bundle/nsis/`。
 
-桌面连接与布局专项可运行 `node scripts/codex-compatibility-ui-cdp.mjs` 和 `node scripts/ai-workbench-ui-cdp.mjs`，使用合成项目，不默认执行真实订阅生成。CI 包含前端、Rust 检查和 Windows CLI 兼容矩阵，实时结果见 [GitHub Actions](https://github.com/Gunanzhao/NovelForge/actions)。
+桌面专项在构建后运行：
+
+```powershell
+node scripts/editor-ai-ui-cdp.mjs
+node scripts/codex-compatibility-ui-cdp.mjs
+node scripts/ai-workbench-ui-cdp.mjs
+```
+
+这些检查使用独立合成项目和 WebView2 配置，截图与结果写入忽略的 `tmp/`。正文 AI 测试使用本机模拟 Provider，验证选区范围、共享任务、差异审阅、撤销重做、自动保存及浅／深色和窄窗口布局；Codex 测试只检查登录、兼容性和连接保持，不默认执行真实订阅生成。CI 包含前端、Rust 检查和 Windows CLI 兼容矩阵，实时结果见 [GitHub Actions](https://github.com/Gunanzhao/NovelForge/actions)。
 
 插件扩展目前采用源码内显式注册的进程内 Registry，不从磁盘动态执行任意外部 JavaScript。
