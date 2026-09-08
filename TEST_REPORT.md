@@ -1,6 +1,36 @@
+# 当前测试报告
+
+<a id="rc11-validation"></a>
+
+## rc.11 验收（2026-09-08）
+
+当前版本为 1.1.0-rc.11。以下历史章节只代表各版本当时的结果。
+
+- 前端全量：54 文件 / 313 项通过；TypeScript、ESLint 和 Windows Tauri 生产构建通过。
+- Rust：107 项通过、5 项默认忽略；格式、Clippy `-D warnings` 通过。
+- 完整桌面 E2E 通过；修复测试对滚出视口树条目的右键定位，未用模拟点击掩盖错误命中。
+- 可靠性专项覆盖设置与人物草稿导航、重复保存身份、外部冲突不覆盖磁盘且保留恢复文件、整项目备份/校验/新目录恢复、回收撤销、版本信息。
+- 实际长章节滚动从约 350px 离开页面再返回仍保留；修复包装层高度和卸载时缓存被清零。
+- 13 页双尺寸（1440×900、1100×750）、深色主题、字号预览和 TXT 导出通过。
+- NSIS rc.10 安装与 rc.11 升级均退出 0；升级安装版 ProductVersion=1.1.0-rc.11，原有合成正文和人物通过原生接口及实际页面验证。
+- 真实付费 AI、真实 Codex 订阅和大型基准本轮未重跑；不沿用历史通过结果充作当前验证。
+
+依赖审计：pnpm 未发现已知漏洞；cargo-audit 0.22.2 退出 0，保留 17 条上游维护/unsoundness 类 allowed warnings，未将其描述为零警告。
+
+可复现入口：`pnpm test`、`cargo test --locked`（src-tauri）、`node scripts/desktop-e2e-cdp.mjs`、`node scripts/reliability-ui-cdp.mjs`、`node scripts/workspace-ui-cdp.mjs`。桌面脚本需要已构建的 Windows release EXE。
+
+详见 [发布说明](docs/releases/v1.1.0-rc.11.md) 和 [阶段记录](docs/audits/rc11-progress.md)。云端门禁与发布状态请查看 GitHub Actions 和对应 Release。
+
+发布产物 SHA-256：
+
+- Windows 安装包：`497120d118475fff965bfb795cb279cf29d5fbafdfe3539bb1ccbef750cb0faf`
+- 独立 EXE：`a4f2fd739a409d406d183386feed4bb0e973041f73fe34460590be6594986924`
+
+---
+
 <a id="rc6-validation"></a>
 
-## rc.6 当前验收（2026-09-06）
+## rc.6 历史验收（2026-09-06）
 
 前端 43 文件 / 277 项、Rust 100 项常规测试通过；原始三个失败用例额外复测通过，两项容量测试按完整名称显式执行通过。类型检查、Lint、Rust 格式和 Clippy 通过，Windows EXE / NSIS 版本均为 1.1.0-rc.6。
 
