@@ -76,6 +76,7 @@ export interface ProjectData {
 }
 
 export interface DocumentData {
+  persistedContent?: string
   node: NodeRecord
   content: string
 }

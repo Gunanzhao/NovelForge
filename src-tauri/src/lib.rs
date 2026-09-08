@@ -39,6 +39,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             confirm_window_close,
+            commands::guard::save_document_checked,
+            commands::guard::release_project,
             commands::navigation::open_external_url,
             commands::project::create_project,
             commands::project::open_project,

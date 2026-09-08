@@ -26,6 +26,7 @@ export function chooseFile() {
 
 export const projectApi = {
   openExternalUrl: (url: string) => command<void>('open_external_url', { url }, false),
+  release: (path: string) => isDesktop ? command<void>('release_project', { path }, false) : Promise.resolve(),
   create: (input: ProjectInput) => command<ProjectData>('create_project', { input }),
   open: (path: string) => command<ProjectData>('open_project', { path }),
   createNode: (input: NodeInput) => command<ProjectData>('create_node', { input }),
@@ -36,7 +37,9 @@ export const projectApi = {
   copyNode: (input: CopyNodeInput) => command<ProjectData>('copy_node', { input }),
   deleteNode: (input: { projectPath: string; nodeId: string }) => command<ProjectData>('delete_node', { input }),
   getDocument: (input: { projectPath: string; nodeId: string }) => command<DocumentData>('get_document', { input }),
-  saveDocument: (input: SaveDocumentInput) => command<DocumentData>('save_document', { input }),
+  saveDocument: (input: SaveDocumentInput & { expectedContent?: string }) => isDesktop
+    ? command<DocumentData>('save_document_checked', { input, expectedContent: input.expectedContent ?? input.content }, false)
+    : command<DocumentData>('save_document', { input }),
   listRecovery: (path: string) => command<RecoveryItem[]>('list_recovery', { path }),
   readRecovery: (input: { projectPath: string; recoveryId: string }) => command<string>('read_recovery', { input }),
   restoreRecovery: (input: { projectPath: string; recoveryId: string }) => command<ProjectData>('restore_recovery', { input }),

@@ -137,6 +137,7 @@ fn initialize_project(root: PathBuf, input: ProjectInput) -> Result<ProjectData,
 #[tauri::command]
 pub fn open_project(path: String) -> Result<ProjectData, String> {
     let root = storage::existing_project_root(&path)?;
+    super::guard::acquire(&root)?;
     let database_path = storage::safe_relative(&root, ".novelforge/database.sqlite")?;
     if !database_path.is_file() {
         // Do not leave a newly initialized, empty database behind when recovery fails.

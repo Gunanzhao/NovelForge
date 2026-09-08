@@ -230,6 +230,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (request !== transitionGeneration) return
       if (get().document && get().saveState !== 'saved' && !await get().saveCurrentDocument('切换项目前保存')) throw new Error('当前正文保存失败，已保留当前项目')
       if (request !== transitionGeneration) return
+      const previousPath = get().projectPath
+      if (previousPath && previousPath !== input.path) await projectApi.release?.(previousPath)
+      if (request !== transitionGeneration) return
       ++selectionGeneration
       set((state) => ({ projectPath: input.path, projectSession: state.projectSession + 1, data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], stats: emptyStats, saveState: 'saved' }))
       if (checklistError) get().setError(checklistError)
@@ -257,6 +260,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (request !== transitionGeneration) return
       if (get().document && get().saveState !== 'saved' && !await get().saveCurrentDocument('切换项目前保存')) throw new Error('当前正文保存失败，已保留当前项目')
       if (request !== transitionGeneration) return
+      const previousPath = get().projectPath
+      if (previousPath && previousPath !== path) await projectApi.release?.(previousPath)
+      if (request !== transitionGeneration) return
       ++selectionGeneration
       set((state) => ({ projectPath: path, projectSession: state.projectSession + 1, data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], stats: emptyStats, saveState: 'saved' }))
       const chapter = firstChapter(data)
@@ -278,6 +284,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!saved) return false
     }
     if (request !== transitionGeneration) return false
+    if (get().projectPath) await projectApi.release?.(get().projectPath!)
     ++selectionGeneration
     set((state) => ({
       projectPath: null,
@@ -320,7 +327,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const document = await projectApi.getDocument({ projectPath: path, nodeId })
       if (request !== selectionGeneration || !isCurrentProjectSession(session) || get().documentVersion !== version) return
-      set((state) => ({ document, editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', selectedEntityId: null, error: null, saveState: 'saved' }))
+      set((state) => ({ document: { ...document, persistedContent: document.content }, editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', selectedEntityId: null, error: null, saveState: 'saved' }))
     } catch (error) {
       if (request === selectionGeneration && isCurrentProjectSession(session)) get().setError(error)
     }
@@ -352,14 +359,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ saveState: 'saving', error: null })
         try {
           const saved = await projectApi.saveDocument({
-            projectPath: savedProjectPath, nodeId: savedNodeId, content: savedContent, reason,
+            projectPath: savedProjectPath, nodeId: savedNodeId, content: savedContent, reason, expectedContent: document.persistedContent,
           })
           if (!isCurrentProjectSession(session)) return true
           const current = get()
           const sameDocument = current.projectPath === savedProjectPath && current.document?.node.id === savedNodeId
           const sameVersion = sameDocument && current.documentVersion === documentVersion && current.document?.content === savedContent
           set((state) => ({
-            document: sameVersion && state.document ? { ...state.document, node: saved.node, content: saved.content } : state.document,
+            document: sameDocument && state.document ? { ...state.document, persistedContent: saved.content, ...(sameVersion ? { node: saved.node, content: saved.content } : {}) } : state.document,
             saveState: sameVersion ? 'saved' : state.saveState,
             data: state.data ? { ...state.data, nodes: state.data.nodes.map((node) => node.id === saved.node.id ? saved.node : node) } : state.data,
           }))
@@ -374,6 +381,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           if (!isCurrentProjectSession(session) || get().document?.node.id !== savedNodeId) return false
           set({ saveState: 'error' })
           get().setError(error)
+          if (String(error).includes('EXTERNAL_CONFLICT:')) {
+            try { const recovery = await projectApi.listRecovery(savedProjectPath); if (isCurrentProjectSession(session)) set(state => ({ data: state.data ? { ...state.data, recovery } : null })) } catch { /* The saved copy path remains available in the conflict message. */ }
+          }
           return false
         }
       }

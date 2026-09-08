@@ -27,6 +27,7 @@ pub(crate) mod ai;
 pub(crate) mod consistency;
 pub(crate) mod entities;
 pub(crate) mod export;
+pub(crate) mod guard;
 pub(crate) mod manuscript;
 pub(crate) mod project;
 pub(crate) mod recovery;
@@ -62,6 +63,7 @@ pub(crate) use trash::{empty_trash, list_trash, permanent_delete, restore_trash}
 
 fn project_connection(path: &str) -> Result<(PathBuf, Connection), String> {
     let root = storage::existing_project_root(path)?;
+    guard::acquire(&root)?;
     let connection = storage::open_db(&root)?;
     Ok((root, connection))
 }
