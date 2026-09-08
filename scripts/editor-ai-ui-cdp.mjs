@@ -1,0 +1,97 @@
+/* global Buffer, console, fetch, process, setTimeout, WebSocket */
+import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
+import { spawn } from 'node:child_process'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+const run = resolve('tmp/editor-ai-ui-' + Date.now())
+mkdirSync(run, { recursive: true })
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+const child = spawn(resolve('src-tauri/target/release/novelforge.exe'), [], { windowsHide: true, stdio: 'ignore', env: { ...process.env, WEBVIEW2_USER_DATA_FOLDER: resolve(run, 'profile'), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=9469' } })
+let socket, seq = 0
+const pending = new Map()
+const cmd = (method, params = {}) => new Promise((resolve, reject) => { const id = ++seq; pending.set(id, { resolve, reject }); socket.send(JSON.stringify({ id, method, params })) })
+const ev = async expression => { const result = await cmd('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (result.exceptionDetails) throw Error(JSON.stringify(result.exceptionDetails)); return result.result?.value }
+const call = (name, args) => ev(`window.__TAURI_INTERNALS__.invoke(${JSON.stringify(name)},${JSON.stringify(args)})`)
+const click = text => ev(`(()=>{const scope=[...document.querySelectorAll('[role="dialog"]')].filter(e=>e.getClientRects().length).at(-1)??document;const e=[...scope.querySelectorAll('button')].find(e=>e.getClientRects().length&&(e.getAttribute('aria-label')||e.textContent.trim())===${JSON.stringify(text)});if(!e)throw Error('missing '+${JSON.stringify(text)});e.click()})()`)
+const waitFor = async (expression, count = 100) => { for (let i=0;i<count;i++) { if (await ev(expression)) return; await sleep(250) } throw Error('Timed out: '+expression) }
+const capture = async name => { const shot=await cmd('Page.captureScreenshot',{format:'png'});writeFileSync(resolve(run,name+'.png'),Buffer.from(shot.data,'base64')) }
+
+const requests=[]
+const server=createServer((request,response)=>{
+  let body=''
+  request.on('data',chunk=>{body+=chunk})
+  request.on('end',()=>{
+    requests.push(JSON.parse(body))
+    setTimeout(()=>{response.writeHead(200,{'Content-Type':'application/json'});response.end(JSON.stringify({choices:[{message:{content:'风很暖。灯很亮。'}}],model:'synthetic-writer'}))},800)
+  })
+})
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve))
+try {
+  let target
+  for(let i=0;i<100;i++){try{target=(await(await fetch('http://127.0.0.1:9469/json/list')).json()).find(item=>item.type==='page');if(target)break}catch{/* startup */}await sleep(200)}
+  assert.ok(target);socket=new WebSocket(target.webSocketDebuggerUrl)
+  await new Promise(resolve=>socket.addEventListener('open',resolve,{once:true}))
+  socket.addEventListener('message',event=>{const message=JSON.parse(event.data),task=pending.get(message.id);if(task){pending.delete(message.id);if(message.error)task.reject(Error(message.error.message));else task.resolve(message.result)}})
+  await cmd('Runtime.enable');await waitFor('!!window.__TAURI_INTERNALS__?.invoke')
+  await cmd('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false})
+  const projectPath=resolve(run,'project')
+  const data=await call('create_project',{input:{path:projectPath,title:'正文 AI 验收',author:'',genre:'',description:'',targetWords:1000}})
+  const chapter=data.nodes.find(node=>node.kind==='chapter')
+  const original='# 雨夜\n\n前文。风很冷。灯很暗。后文。\n\n远处的钟声响了，街灯下的影子慢慢走过。'.replaceAll('\\n','\n')
+  await call('save_document',{input:{projectPath,nodeId:chapter.id,content:original,reason:'合成测试'}})
+  const preferences={mode:'provider',endpoint:`http://127.0.0.1:${server.address().port}/v1`,model:'synthetic-writer'}
+  await ev(`localStorage.setItem('novelforge:ai-preferences:v1',${JSON.stringify(JSON.stringify(preferences))});localStorage.setItem('novelforge:recent-projects',${JSON.stringify(JSON.stringify([{path:projectPath,title:'正文 AI 验收',updatedAt:''}]))});location.reload()`)
+  await sleep(800);await waitFor(`!!document.querySelector('.recent-project')`);await ev(`document.querySelector('.recent-project').click()`)
+  await waitFor(`!!document.querySelector('.cm-content')?.cmTile?.root?.view`)
+  await ev(`window.editor=()=>document.querySelector('.cm-content').cmTile.root.view`)
+  const start=original.indexOf('风很冷')
+  await ev(`editor().focus();editor().dispatch({selection:{anchor:${start},head:${start+8}}})`)
+  await waitFor(`!!document.querySelector('.editor-ai-floating')`)
+  await capture('selection-toolbar')
+  await ev(`document.querySelector('.editor-ai-floating button').click()`)
+  await waitFor(`!document.querySelector('.ai-host').hidden`)
+  assert.equal(requests.length,0)
+  assert.equal(await ev(`document.querySelector('.workspace').hidden`),false)
+  await click('预览上下文');await waitFor(`!!document.querySelector('.ai-request-dialog [role="dialog"]')`)
+  assert.ok(await ev(`document.querySelector('.ai-preview-panel').textContent.includes('风很冷。灯很暗。')`))
+  assert.equal(await ev(`document.querySelector('.ai-preview-panel').textContent.includes('后文。')`),false)
+  await capture('inline-preview');await click('返回编辑')
+  await click('运行辅助');await click('完整工作台')
+  await waitFor(`document.querySelector('.ai-host').classList.contains('ai-host-full')`)
+  await waitFor(`document.querySelector('.ai-result-text')?.value==='风很暖。灯很亮。'`)
+  assert.equal(requests.length,1)
+  assert.ok(requests[0].messages[1].content.includes('风很冷。灯很暗。'))
+  assert.equal(requests[0].messages[1].content.includes('后文。'),false)
+  await capture('full-shared-result')
+  await ev(`Array.from(document.querySelectorAll('.nav-item')).find(e=>e.textContent.trim()==='正文').click()`)
+  await waitFor(`document.querySelector('.ai-host').classList.contains('ai-host-inline')`)
+  await ev(`editor().dispatch({changes:[{from:0,insert:'开场。'},{from:editor().state.doc.length,insert:'结尾。'}]})`)
+  await click('修改对比 · 2');await capture('inline-diff')
+  await click('接受此项')
+  const first=await ev(`editor().state.doc.toString()`)
+  assert.ok(first.includes('风很暖。灯很暗。'))
+  await ev('editor().focus()')
+  await cmd('Input.dispatchKeyEvent',{type:'keyDown',key:'z',code:'KeyZ',modifiers:2,windowsVirtualKeyCode:90})
+  await cmd('Input.dispatchKeyEvent',{type:'keyUp',key:'z',code:'KeyZ',modifiers:2,windowsVirtualKeyCode:90})
+  assert.equal(await ev('editor().state.doc.toString()'),'开场。'+original+'结尾。')
+  await cmd('Input.dispatchKeyEvent',{type:'keyDown',key:'y',code:'KeyY',modifiers:2,windowsVirtualKeyCode:89})
+  await cmd('Input.dispatchKeyEvent',{type:'keyUp',key:'y',code:'KeyY',modifiers:2,windowsVirtualKeyCode:89})
+  assert.equal(await ev('editor().state.doc.toString()'),first)
+  await click('保留原文')
+  const records=[]
+  for(const [width,height] of [[1440,900],[1100,750],[1100,650]]){
+    await cmd('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});await sleep(400)
+    const dimensions=await ev(`(()=>{const p=document.querySelector('.ai-host').getBoundingClientRect(),f=document.querySelector('.ai-result-actions').getBoundingClientRect();return {width:p.width,left:p.left,right:p.right,bottom:p.bottom,actionsBottom:f.bottom,horizontalOverflow:document.documentElement.scrollWidth>innerWidth+1,drawer:document.querySelector('.ai-host').classList.contains('ai-host-drawer')}})()`)
+    assert.equal(dimensions.horizontalOverflow,false)
+    assert.ok(dimensions.actionsBottom<=height-20,JSON.stringify(dimensions))
+    records.push({width,height,...dimensions});await capture('editor-ai-'+width+'x'+height)
+  }
+  await ev(`document.documentElement.dataset.theme='dark'`);await sleep(350);await capture('editor-ai-dark')
+  await waitFor(`window.__TAURI_INTERNALS__.invoke('get_document',${JSON.stringify({input:{projectPath,nodeId:chapter.id}})}).then(d=>d.content===${JSON.stringify(first)})`)
+  writeFileSync(resolve(run,'result.json'),JSON.stringify({result:'EDITOR_AI_UI_PASS',records,requests:requests.length,paidGeneration:false},null,2))
+  console.log('EDITOR_AI_UI_PASS '+run)
+} catch(error) {
+  if(socket){try{await capture('failure');console.log(await ev('document.body.innerText.slice(-3500)'))}catch{/* app exited */}}
+  throw error
+} finally { socket?.close();child.kill();server.close() }

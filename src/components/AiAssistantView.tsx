@@ -59,6 +59,7 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
   const [connectionOpen, setConnectionOpen] = useState(false)
   const [resultApplication, setResultApplication] = useState<'builtin' | PromptPresetAction>('builtin')
   const confirmedHttpProviders = useRef(new Set<string>())
+  const instructionRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => { setDraftTarget(null); setInstruction(''); setSelectedIds(new Set()); setLoadedContext([]); setPreviewOpen(false) }, [projectSession])
 
@@ -79,6 +80,7 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
       const kind = isSelectionAction(requestedAiAction) ? 'selection' : inline && !['summary', 'chapter-summary', 'outline', 'setting-advice'].includes(requestedAiAction) ? 'cursor' : 'chapter'
       setDraftTarget(captureAiTarget(kind)); setSelectedIds(new Set(['ai-target']))
     } catch (error) { setError(error) }
+    window.requestAnimationFrame(() => instructionRef.current?.focus())
     consumeAiAction()
   }, [consumeAiAction, requestedAiAction, setError])
   useEffect(() => {
@@ -254,7 +256,7 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
           </div>
           <p className="ai-task-description">{AI_ACTIONS.find((item) => item.id === action)?.description}</p>
           {compact || draftTarget ? <div className="ai-target-summary"><strong>{draftTarget ? `${draftTarget.title} · ${draftTarget.kind === 'selection' ? '原选区' : draftTarget.kind === 'cursor' ? '原光标' : '整章'}` : '当前正文'}</strong><Button variant="outline" disabled={busy} onClick={() => { try { setDraftTarget(captureAiTarget(selectionReady ? 'selection' : 'cursor')); setSelectedIds(new Set(['ai-target'])) } catch (error) { setError(error) } }}>使用当前选区/光标</Button><Button variant="ghost" disabled={busy} onClick={() => { try { setDraftTarget(captureAiTarget('chapter')); setSelectedIds(new Set(['ai-target'])) } catch (error) { setError(error) } }}>使用整章</Button></div> : null}
-          <Field label="写作要求"><textarea className="text-area ai-instruction-input" disabled={busy} value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="例如：保持第一人称，增加悬念，不改变已有设定…" /></Field>
+          <Field label="写作要求"><textarea ref={instructionRef} className="text-area ai-instruction-input" disabled={busy} value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="例如：保持第一人称，增加悬念，不改变已有设定…" /></Field>
           <div className="ai-context-section">
             <div className="panel-title"><h3>参考资料</h3><span>{selectedItems.length} 项上下文</span></div>
             <p className="ai-context-hint">只有勾选的资料会加入请求</p>

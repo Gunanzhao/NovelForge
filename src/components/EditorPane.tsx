@@ -1,7 +1,7 @@
 import { clampEditorPosition, readEditorSession, rememberEditor } from '../lib/editor-session'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
-import { isolateHistory, redo, undo } from '@codemirror/commands'
+import { invertedEffects, isolateHistory, redo, undo } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
 import { EditorState, RangeSetBuilder } from '@codemirror/state'
 import { isNodeLocked } from '../lib/node-lock'
@@ -19,6 +19,7 @@ import type { AiAction } from '../lib/ai-data'
 import { ENTITY_LABELS, NODE_STATUS_LABELS, type EntityRecord } from '../lib/types'
 import { useAppStore } from '../stores/app-store'
 import { registerAiEditor, useAiTask } from '../stores/ai-task'
+import { aiAcceptanceEffect } from '../lib/ai-edit'
 import { Button, IconButton } from './ui'
 import { useContextMenu } from './ContextMenu'
 import { MarkdownPreview } from './MarkdownPreview'
@@ -86,6 +87,7 @@ export function EditorPane() {
   const floatingMeasure = useRef({})
   const aiBusy = useAiTask(state => Boolean(state.id))
   useLayoutEffect(() => () => { aiEditorCleanup.current?.() }, [])
+  useEffect(() => { const hide = () => setFloating(null); window.addEventListener('resize', hide); return () => window.removeEventListener('resize', hide) }, [])
   const positionCleanup = useRef<(() => void) | null>(null)
   useLayoutEffect(() => () => { positionCleanup.current?.(); positionCleanup.current = null }, [])
   function createEditor(view: EditorView) {
@@ -94,11 +96,11 @@ export function EditorPane() {
     aiEditorCleanup.current?.()
     const current = useAppStore.getState()
     if (current.projectPath && current.document) {
-      aiEditorCleanup.current = registerAiEditor({ project: current.projectPath, session: current.projectSession, node: current.document.node.id }, (source, changes) => {
+      aiEditorCleanup.current = registerAiEditor({ project: current.projectPath, session: current.projectSession, node: current.document.node.id }, (source, changes, acceptance) => {
         if (!view.dom.isConnected || view.state.doc.toString() !== source) return false
         let end = 0
         changes.iterChangedRanges((_from, _to, _newFrom, newTo) => { end = newTo })
-        view.dispatch({ changes, selection: { anchor: end }, annotations: isolateHistory.of('full'), userEvent: 'input.ai' })
+        view.dispatch({ changes, selection: { anchor: end }, annotations: isolateHistory.of('full'), effects: acceptance ? aiAcceptanceEffect.of(acceptance) : [], userEvent: 'input.ai' })
         view.focus()
         return view.state.doc.toString() !== source || changes.empty
       })
@@ -115,7 +117,7 @@ export function EditorPane() {
         const selection = view.state.selection.main
         rememberEditor(path, nodeId, { anchor: selection.anchor, head: selection.head, scrollTop: view.scrollDOM.scrollTop, scrollLeft: view.scrollDOM.scrollLeft })
       }
-      const schedule = () => { window.clearTimeout(timer); timer = window.setTimeout(persist, 200) }
+      const schedule = () => { setFloating(null); window.clearTimeout(timer); timer = window.setTimeout(persist, 200) }
       view.scrollDOM.addEventListener('scroll', schedule)
       view.dom.addEventListener('keyup', schedule)
       view.dom.addEventListener('mouseup', schedule)
@@ -158,17 +160,17 @@ export function EditorPane() {
         },
       })
     }
-    setEditorSelection({
-      nodeId,
-      from: selection.from,
-      to: selection.to,
-      text: update.state.sliceDoc(selection.from, selection.to),
-    })
+    const text = update.state.sliceDoc(selection.from, selection.to)
+    const previous = useAppStore.getState().editorSelection
+    if (previous?.nodeId !== nodeId || previous.from !== selection.from || previous.to !== selection.to || previous.text !== text) {
+      setEditorSelection({ nodeId, from: selection.from, to: selection.to, text })
+    }
   }, [document?.node.id, setEditorSelection])
 
   const extensions = useMemo(() => [
     markdown(),
     EditorView.lineWrapping,
+    invertedEffects.of(transaction => transaction.effects.filter(effect => effect.is(aiAcceptanceEffect)).map(effect => aiAcceptanceEffect.of({ ...effect.value, accepted: !effect.value.accepted }))),
     EditorState.transactionFilter.of((transaction) => {
       const current = useAppStore.getState()
       return transaction.docChanged && isNodeLocked(current.data?.nodes ?? [], current.document?.node.id) ? [] : transaction
@@ -302,7 +304,7 @@ export function EditorPane() {
       </div>
     </div>
     <div className={'editor-body mode-' + editorMode}>
-      {editorMode !== 'preview' ? <div className="editor-pane" onContextMenu={openEditorContextMenu} onBlurCapture={() => setFloating(null)}><CodeMirror className="editor-codemirror" key={document.node.id} readOnly={locked} editable={!locked} value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={createEditor} onUpdate={reportEditorSelection} onChange={(value, update) => { useAiTask.getState().observe(update.startState.doc.toString(), value, update.changes); updateContent(value) }} /></div> : null}
+      {editorMode !== 'preview' ? <div className="editor-pane" onContextMenu={openEditorContextMenu} onBlurCapture={() => setFloating(null)}><CodeMirror className="editor-codemirror" key={document.node.id} readOnly={locked} editable={!locked} value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={createEditor} onUpdate={reportEditorSelection} onChange={(value, update) => { const acceptance = update.transactions.flatMap(transaction => transaction.effects).find(effect => effect.is(aiAcceptanceEffect))?.value; useAiTask.getState().observe(update.startState.doc.toString(), value, update.changes, acceptance); updateContent(value) }} /></div> : null}
       {editorMode !== 'markdown' ? <div className="editor-pane" onContextMenu={handlePreviewContextMenu}><article className="preview"><MarkdownPreview markdown={document.content} entities={data?.entities} onWikiLink={resolveWikiTarget} /></article></div> : null}
     </div>
     {floating && !locked && editorMode !== 'preview' ? <div className="editor-ai-floating" role="toolbar" aria-label="选区 AI 操作" style={floating} onMouseDown={event => event.preventDefault()}>{([['polish', '润色'], ['rewrite', '改写'], ['expand', '扩写'], ['shrink', '缩写']] as const).map(([value, label]) => <button key={value} disabled={aiBusy} onClick={() => { openAiAssistant(value); setFloating(null) }}>{label}</button>)}<button aria-label="关闭选区 AI 操作" onClick={() => setFloating(null)}>×</button></div> : null}

@@ -3,7 +3,7 @@ import { ChangeSet, type ChangeDesc } from '@codemirror/state'
 import { isDesktop, projectApi } from '../lib/api'
 import { codexApi } from '../lib/codex'
 import { estimateContextBudget, type AiPreferences } from '../lib/ai-data'
-import { aiEdits, applyAiEdits, mapAiRange, textChanges, type AiEdit, type AiRange } from '../lib/ai-edit'
+import { aiEdits, applyAiEdits, mapAiRange, textChanges, type AiAcceptance, type AiEdit, type AiRange } from '../lib/ai-edit'
 import { isNodeLocked } from '../lib/node-lock'
 import type { AiCompletionResult } from '../lib/types'
 import { useAppStore } from './app-store'
@@ -27,6 +27,7 @@ export interface AiRequest {
   local: AiCompletionResult
 }
 interface AiTask {
+  token: string
   id: string | null
   phase: 'idle' | 'preparing' | 'running' | 'complete' | 'cancelled' | 'failed'
   result: AiCompletionResult | null
@@ -41,7 +42,7 @@ interface AiTask {
   stop: () => void
   clear: () => void
   editResult: (content: string) => void
-  observe: (before: string, after: string, changes?: ChangeSet) => void
+  observe: (before: string, after: string, changes?: ChangeSet, acceptance?: AiAcceptance) => void
   accept: (id?: string) => void
   reject: (id: string) => void
   insert: (position: 'target' | 'after' | 'end') => void
@@ -64,28 +65,29 @@ function isCurrent(target: AiTarget) {
 }
 
 // The editor registers a transactional writer, so accepting AI edits has one undo boundary.
-let editorWriter: { target: Pick<AiTarget, 'project' | 'session' | 'node'>; write: (source: string, changes: ChangeSet) => boolean } | null = null
-export function registerAiEditor(target: Pick<AiTarget, 'project' | 'session' | 'node'>, write: (source: string, changes: ChangeSet) => boolean) {
+let editorWriter: { target: Pick<AiTarget, 'project' | 'session' | 'node'>; write: (source: string, changes: ChangeSet, acceptance?: AiAcceptance) => boolean } | null = null
+export function registerAiEditor(target: Pick<AiTarget, 'project' | 'session' | 'node'>, write: (source: string, changes: ChangeSet, acceptance?: AiAcceptance) => boolean) {
   const entry = { target, write }; editorWriter = entry
   return () => { if (editorWriter === entry) editorWriter = null }
 }
-function writeChanges(target: AiTarget, source: string, content: string, changes: ChangeSet) {
+function writeChanges(target: AiTarget, source: string, content: string, changes: ChangeSet, acceptance?: AiAcceptance) {
   if (!isCurrent(target) || isNodeLocked(useAppStore.getState().data?.nodes ?? [], target.node)) throw new Error('目标章节已切换或锁定，无法应用结果。')
   if (editorWriter && editorWriter.target.project === target.project && editorWriter.target.session === target.session && editorWriter.target.node === target.node) {
-    if (!editorWriter.write(source, changes)) throw new Error('编辑器正文已变化，未应用结果。')
+    if (!editorWriter.write(source, changes, acceptance)) throw new Error('编辑器正文已变化，未应用结果。')
   } else {
     if (useAppStore.getState().document?.content !== source) throw new Error('目标正文已变化，未应用结果。')
+    useAiTask.getState().observe(source, content, changes, acceptance)
     useAppStore.getState().updateContent(content)
   }
   if (useAppStore.getState().document?.content !== content) throw new Error('正文未完成更新，请重新检查。')
 }
 
 export const useAiTask = create<AiTask>((set, get) => ({
-  id: null, phase: 'idle', result: null, error: '', target: null, source: '', mapping: null, edits: [], application: 'generate', transport: 'offline',
+  token: '', id: null, phase: 'idle', result: null, error: '', target: null, source: '', mapping: null, edits: [], application: 'generate', transport: 'offline',
   async start(target, application, prepare) {
     if (get().id) return
     const id = crypto.randomUUID()
-    set({ id, phase: 'preparing', result: null, error: '', target, source: target.originalContent, mapping: ChangeSet.empty(target.originalContent.length).desc, edits: [], application, transport: 'offline' })
+    set({ token: id, id, phase: 'preparing', result: null, error: '', target, source: target.originalContent, mapping: ChangeSet.empty(target.originalContent.length).desc, edits: [], application, transport: 'offline' })
     const valid = () => get().id === id && isCurrent(target)
     try {
       const request = await prepare()
@@ -106,7 +108,8 @@ export const useAiTask = create<AiTask>((set, get) => ({
       } else result = local
       if (!valid()) return
       const mapping = get().mapping!
-      const edits = application === 'rewrite' ? aiEdits(target.originalText, result.content, target.originalFrom).map(edit => ({ ...edit, ...mapAiRange(edit, mapping) })) : []
+      const live = get().target!
+      const edits = application === 'rewrite' ? !live.conflict ? aiEdits(target.originalText, result.content, live.from) : aiEdits(target.originalText, result.content, target.originalFrom).map(edit => ({ ...edit, ...mapAiRange(edit, mapping) })) : []
       set({ result, edits, phase: 'complete', id: null })
     } catch (error) {
       if (!valid()) return
@@ -128,13 +131,19 @@ export const useAiTask = create<AiTask>((set, get) => ({
   editResult(content) {
     const { result, target, mapping, edits, phase, application } = get()
     if (!result || !target || !mapping || phase !== 'complete' || edits.some(edit => edit.state === 'accepted')) return
-    set({ result: { ...result, content }, edits: application === 'rewrite' ? aiEdits(target.originalText, content, target.originalFrom).map(edit => ({ ...edit, ...mapAiRange(edit, mapping) })) : [] })
+    set({ result: { ...result, content }, edits: application === 'rewrite' ? !target.conflict ? aiEdits(target.originalText, content, target.from) : aiEdits(target.originalText, content, target.originalFrom).map(edit => ({ ...edit, ...mapAiRange(edit, mapping) })) : [] })
   },
-  observe(before, after, knownChanges) {
+  observe(before, after, knownChanges, acceptance) {
     const { target, source, mapping, edits } = get()
     if (!target || !mapping || !isCurrent(target) || source === after) return
     const changes = source === before && knownChanges ? knownChanges : textChanges(source, after)
-    set({ source: after, mapping: mapping.composeDesc(changes.desc), target: { ...target, ...mapAiRange(target, changes) }, edits: edits.map(edit => edit.state === 'pending' ? { ...edit, ...mapAiRange(edit, changes) } : edit) })
+    const affected = acceptance?.token === get().token ? acceptance : null
+    const nextTarget = { ...target, ...mapAiRange(target, changes) }
+    if (target.kind !== 'cursor' && after.slice(nextTarget.from, nextTarget.to) === target.originalText) nextTarget.conflict = false
+    set({ source: after, mapping: mapping.composeDesc(changes.desc), target: nextTarget, edits: edits.map(edit => {
+      if (affected?.ids.includes(edit.id)) return { ...edit, from: changes.mapPos(edit.from, -1), to: changes.mapPos(edit.to, 1), conflict: false, state: affected.accepted ? 'accepted' : 'pending' }
+      return { ...edit, ...mapAiRange(edit, changes) }
+    }) })
   },
   accept(id) {
     const { target, source, edits, phase } = get()
@@ -143,10 +152,8 @@ export const useAiTask = create<AiTask>((set, get) => ({
       const selected = edits.filter(edit => edit.state === 'pending' && (id === undefined || edit.id === id))
       if (!selected.length) return
       const { content, changes } = applyAiEdits(source, selected)
-      // Mark accepted before the editor transaction maps the remaining pending hunks.
-      set({ edits: edits.map(edit => selected.includes(edit) ? { ...edit, state: 'accepted' } : edit), error: '' })
-      try { writeChanges(target, source, content, changes) }
-      catch (error) { set({ edits }); throw error }
+      writeChanges(target, source, content, changes, { token: get().token, ids: selected.map(edit => edit.id), accepted: true })
+      set({ error: '' })
     } catch (error) { set({ error: String(error) }); useAppStore.getState().setError(error) }
   },
   reject(id) { set(state => ({ edits: state.edits.map(edit => edit.id === id && edit.state === 'pending' ? { ...edit, state: 'rejected' } : edit) })) },

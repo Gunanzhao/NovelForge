@@ -1604,3 +1604,6 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
   .ai-inline-workbench .ai-budget-summary { display:none; }
   .ai-inline-workbench .ai-workbench-header { display:none; }
 }
+
+.ai-view.ai-inline-workbench { overflow:hidden; }
+.ai-inline-workbench .ai-output-panel { min-height:0; height:auto; }

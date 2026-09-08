@@ -1,4 +1,8 @@
-import { ChangeSet, type ChangeDesc } from '@codemirror/state'
+import { ChangeSet, StateEffect, type ChangeDesc } from '@codemirror/state'
+
+export interface AiAcceptance { token: string; ids: string[]; accepted: boolean }
+// IDs do not depend on document offsets; the task maps offsets using every editor change.
+export const aiAcceptanceEffect = StateEffect.define<AiAcceptance>()
 
 export interface AiRange { from: number; to: number; conflict: boolean }
 export interface AiEdit extends AiRange {
