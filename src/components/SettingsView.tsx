@@ -1,3 +1,4 @@
+import { VersionInfo } from './VersionInfo'
 import { ProjectBackup } from './ProjectBackup'
 import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
 import { markDraftSaved } from '../lib/draft-guard'
@@ -133,7 +134,7 @@ function ProjectSettings({ projectPath, initialProject }: { projectPath: string;
       </section>
       <section id="settings-data" role="tabpanel" aria-labelledby="settings-tab-data" hidden={section !== 'data'}>
         <Panel className="settings-card"><div className="settings-section-heading"><h2>项目数据</h2><HardDrive size={18} /></div><p className="field-hint">{isDesktop ? '文件保存在你选择的项目文件夹。' : '当前为浏览器开发模式，数据保存在本机浏览器中。'}</p><div className="settings-project-path"><code>{projectPath}</code><Button variant="outline" onClick={() => { void writeClipboardText(projectPath).then(ok => setCopyStatus(ok ? '路径已复制' : '复制失败，请手动复制路径')).catch(() => setCopyStatus('复制失败，请手动复制路径')) }}><Copy size={13} />复制路径</Button></div><span role="status" className="field-hint">{copyStatus}</span><div className="settings-info"><div><FileText size={16} /><span><strong>正文与资料保存在本地</strong>备份时请保留整个项目文件夹，包括正文、资料和历史记录。</span></div><div><ShieldCheck size={16} /><span><strong>AI 由你触发</strong>发送前可预览请求内容，选择本次使用的上下文。</span></div></div></Panel>
-        <ProjectBackup /><details className="settings-card settings-logs" onToggle={event => setLogsOpen(event.currentTarget.open)}><summary>应用日志<span>按需查看操作记录</span></summary>{section === 'data' && logsOpen ? <ProjectLogs projectPath={projectPath} /> : null}</details>
+        <ProjectBackup /><VersionInfo /><details className="settings-card settings-logs" onToggle={event => setLogsOpen(event.currentTarget.open)}><summary>应用日志<span>按需查看操作记录</span></summary>{section === 'data' && logsOpen ? <ProjectLogs projectPath={projectPath} /> : null}</details>
       </section>
     </div>
     {section === 'project' || dirty || saveError ? <footer className="settings-savebar"><div><span role="status">{busy ? '正在保存作品信息…' : dirty ? '作品信息有未保存修改' : '作品信息已保存'}</span>{saveError ? <p role="alert">保存失败：{saveError}</p> : null}</div><Button disabled={busy || !dirty} onClick={() => void submit()}><Save size={14} />{busy ? '保存中…' : '保存作品信息'}</Button></footer> : null}

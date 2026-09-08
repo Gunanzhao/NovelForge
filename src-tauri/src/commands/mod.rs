@@ -35,6 +35,7 @@ pub(crate) mod recovery;
 pub(crate) mod search;
 pub(crate) mod statistics;
 pub(crate) mod trash;
+pub(crate) mod updates;
 
 #[allow(unused_imports)]
 pub(crate) use ai::{ai_complete, normalize_ai_endpoint};

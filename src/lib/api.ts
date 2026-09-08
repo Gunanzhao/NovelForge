@@ -25,7 +25,9 @@ export function chooseFile() {
 }
 
 export interface BackupReport { path: string; fileCount: number; totalBytes: number }
+export interface UpdateInfo { currentVersion: string; latestVersion: string; available: boolean; url: string }
 export const projectApi = {
+  checkUpdates: () => command<UpdateInfo>('check_updates', {}, false),
   backup: (path: string, directory: string) => command<BackupReport>('backup_project', { path, directory }, false),
   validateBackup: (path: string) => command<BackupReport>('validate_backup', { path }, false),
   restoreBackup: (path: string, directory: string) => command<BackupReport>('restore_backup', { path, directory }, false),

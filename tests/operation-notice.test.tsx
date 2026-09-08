@@ -21,7 +21,7 @@ it('keeps failed undo available to retry and hides it when the project changes',
 })
 it('distinguishes load errors from an empty trash and offers retry', async () => {
   api.listTrash.mockRejectedValueOnce(new Error('读取失败')).mockResolvedValueOnce([])
-  render(<ContextMenuProvider><TrashView /></ContextMenuProvider>)
+  render(<ContextMenuProvider fallbackItems={[]}><TrashView /></ContextMenuProvider>)
   await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('读取失败'))
   expect(screen.queryByText('回收站是空的')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: '重试加载' }))
