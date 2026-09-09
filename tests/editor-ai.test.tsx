@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { EditorView } from '@codemirror/view'
 import { undo, redo } from '@codemirror/commands'
+import { selectNextOccurrence } from '@codemirror/search'
 const mocks = vi.hoisted(() => ({ aiComplete: vi.fn() }))
 vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: { aiComplete: mocks.aiComplete } }))
 import { EditorPane } from '../src/components/EditorPane'
@@ -30,6 +31,22 @@ function editor() {
 function setup() {
   return render(<ContextMenuProvider fallbackItems={[]}><EditorPane /><AiAssistantView compact /></ContextMenuProvider>)
 }
+it('keeps native selection editing single-target, including Ctrl+D and undo/redo', () => {
+  useAppStore.setState({ document: { node, content: '海风与海风' } })
+  setup()
+  act(() => {
+    editor().dispatch({ selection: { anchor: 0, head: 2 } })
+    selectNextOccurrence(editor())
+  })
+  expect(editor().state.selection.ranges).toHaveLength(1)
+  act(() => editor().dispatch(editor().state.replaceSelection('雨')))
+  expect(editor().state.doc.toString().match(/海风/g)).toHaveLength(1)
+  const changed = editor().state.doc.toString()
+  act(() => { undo(editor()) })
+  expect(editor().state.doc.toString()).toBe('海风与海风')
+  act(() => { redo(editor()) })
+  expect(editor().state.doc.toString()).toBe(changed)
+})
 it('opens AI in the manuscript without sending, and sends only the explicitly captured selection', async () => {
   setup()
   act(() => editor().dispatch({ selection: { anchor: 3, head: 11 } }))

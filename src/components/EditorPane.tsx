@@ -25,7 +25,7 @@ import { useContextMenu } from './ContextMenu'
 import { MarkdownPreview } from './MarkdownPreview'
 
 // Use the browser's per-line selection instead of CodeMirror's merged rectangle layer.
-const editorBasicSetup = { drawSelection: false }
+const editorBasicSetup = { drawSelection: false, allowMultipleSelections: false, rectangularSelection: false }
 
 function wikiDecorationSet(source: string): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
