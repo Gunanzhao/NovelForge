@@ -93,3 +93,5 @@ jobs:
         run: cargo test --locked
       - name: Audit dependencies
         run: cargo audit --file Cargo.lock
+      - name: Regression for the GTK GLib security backport (optimized)
+        run: cargo test --manifest-path ../scripts/glib-regression/Cargo.toml --release --locked

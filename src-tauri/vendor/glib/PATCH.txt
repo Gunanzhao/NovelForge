@@ -1,0 +1,6 @@
+Source: crates.io glib 0.18.5 (MIT), vendored for GTK 3 / Tauri compatibility.
+Security backport: RUSTSEC-2024-0429. Only src/variant_iter.rs is changed: the C output pointer is mutable and passed as &mut p.
+Upstream fix: https://github.com/gtk-rs/gtk-rs-core/pull/1343
+Do not suppress this advisory globally. Remove this patch when Tauri can use glib >= 0.20.
+Optimized Linux regression: scripts/glib-regression/Cargo.toml.
+Original .crate SHA-256: 233daaf6e83ae6a12a52055f568f9d7cf4671dabb78ff9560ab6da230ce00ee5

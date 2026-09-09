@@ -3,6 +3,7 @@ dist/
 .vite/
 .pnpm-store/
 src-tauri/target/
+scripts/glib-regression/target/
 src-tauri/gen/
 *.log
 .env

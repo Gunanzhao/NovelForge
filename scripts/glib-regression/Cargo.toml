@@ -1,0 +1,10 @@
+[package]
+name = "novelforge-glib-regression"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+glib = { path = "../../src-tauri/vendor/glib" }
+
+[workspace]
