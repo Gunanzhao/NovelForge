@@ -66,3 +66,19 @@ it('keeps connection and context inputs when conditions invalidate a pending req
   await act(async () => resolve({ content: '[{"name":"林舟"}]' }))
   expect(onResults).not.toHaveBeenCalled()
 })
+
+it.each([[8192, 8192], [100000, 32000], [undefined, 4000]])('uses saved name generation budget %s (normalized to %s)', async (saved, expected) => {
+  localStorage.setItem('novelforge:ai-preferences:v1', JSON.stringify({ maxTokens: saved, temperature: 0 }))
+  mocks.aiComplete.mockResolvedValue({ content: '[{"name":"林舟"}]' })
+  const onResults = setup()
+  fireEvent.click(screen.getByRole('button', { name: '发送并生成 AI 名字' }))
+  await waitFor(() => expect(onResults).toHaveBeenCalledTimes(1))
+  expect(mocks.aiComplete.mock.calls[0][0]).toMatchObject({ maxTokens: expected, temperature: 0 })
+})
+it('does not accept truncated but valid name JSON', async () => {
+  mocks.aiComplete.mockResolvedValue({ content: '[{"name":"林舟"}]', incomplete: true })
+  const onResults = setup()
+  fireEvent.click(screen.getByRole('button', { name: '发送并生成 AI 名字' }))
+  await waitFor(() => expect(screen.getByRole('status').textContent).toContain('结果不完整'))
+  expect(onResults).not.toHaveBeenCalled()
+})
