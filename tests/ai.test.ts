@@ -66,3 +66,17 @@ describe('AI context helpers', () => {
     expect(applyAiSelectionResult('甲原文乙', 1, 3, '新', 'insert-after')).toBe('甲原文新乙')
   })
 })
+
+it('resolves recent chapters from the enclosing chapter and fails closed for invalid targets', () => {
+  const nodes = [1, 2, 3, 4, 5].map(n => node('c' + n, 'chapter', '章' + n, null, n))
+  nodes.push(node('section', 'section', '节', 'c1', 0))
+  nodes.push(node('orphan', 'section', '孤立节', 'missing', 0))
+  nodes.push(node('cycle', 'section', '环', 'cycle', 0))
+  expect(recentChapterIds(nodes, 'section', 3)).toEqual(['c1'])
+  expect(recentChapterIds(nodes, 'c4', 3)).toEqual(['c2', 'c3', 'c4'])
+  expect(recentChapterIds(nodes, 'orphan', 3)).toEqual([])
+  expect(recentChapterIds(nodes, 'cycle', 3)).toEqual([])
+  expect(recentChapterIds(nodes, 'missing', 3)).toEqual([])
+  expect(recentChapterIds(nodes, undefined, 3)).toEqual(['c3', 'c4', 'c5'])
+  expect(recentChapterIds(nodes, 'c4', Number.NaN)).toEqual(['c4'])
+})

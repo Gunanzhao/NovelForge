@@ -106,9 +106,17 @@ export function paragraphRange(content: string, position = 0) {
 export function recentChapterIds(nodes: NodeRecord[], currentNodeId: string | undefined, count: number) {
   const chapters = sortManuscriptNodes(nodes).filter((node) => node.kind === 'chapter')
   if (!chapters.length) return []
-  const safeCount = Math.max(1, Math.min(50, Math.round(count)))
-  const currentIndex = currentNodeId ? chapters.findIndex((chapter) => chapter.id === currentNodeId) : chapters.length - 1
-  const end = currentIndex < 0 ? chapters.length : currentIndex + 1
+  const safeCount = Number.isFinite(count) ? Math.max(1, Math.min(50, Math.round(count))) : 1
+  let current = nodes.find(node => node.id === currentNodeId)
+  const visited = new Set<string>()
+  while (current?.kind === 'section' && !visited.has(current.id)) {
+    visited.add(current.id)
+    current = nodes.find(node => node.id === current?.parentId)
+  }
+  // Missing or orphan targets must never silently select unrelated end-of-book context.
+  const currentIndex = currentNodeId ? chapters.findIndex(chapter => chapter.id === current?.id) : chapters.length - 1
+  if (currentIndex < 0) return []
+  const end = currentIndex + 1
   return chapters.slice(Math.max(0, end - safeCount), end).map((chapter) => chapter.id)
 }
 
