@@ -2,18 +2,28 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.1.1-rc.2（预发布）**。
+当前版本：**1.1.1-rc.3（预发布）**。
 
 [![main CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Amain)
 
 ## 下载
 
-- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.2/NovelForge_1.1.1-rc.2_x64-setup.exe)
-- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.2/novelforge.exe)
-- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.2/SHA256SUMS.txt)
+- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.3/NovelForge_1.1.1-rc.3_x64-setup.exe)
+- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.3/novelforge.exe)
+- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.3/SHA256SUMS.txt)
 - [版本说明与历史 Release](https://github.com/Gunanzhao/NovelForge/releases)
 
 已有安装版用户运行新安装包升级；直接运行独立 EXE 不会更新旧快捷方式。桌面版需要 Windows WebView2。
+
+## 1.1.1-rc.3 相比 1.1.1-rc.2
+
+- **正文选区显示**：使用浏览器原生文本选择，跨行及自动换行高亮贴合实际文字；浅色与深色分别设置选区背景和文字颜色。选中文本时隐藏当前行的整行底色，避免大面积矩形遮盖正文，普通界面和 F11 专注模式均适用。
+- **AI 等待期间可继续操作**：兼容 Provider 请求在后台执行，不再阻塞窗口线程；等待模型响应时仍可编辑正文、切换页面和访问项目数据。
+- **AI 空响应诊断**：区分输出上限耗尽、仅返回思考内容、服务拒绝、工具调用和无可用正文，结果区明确显示等待、失败与停止状态。支持字符串、文本分块及旧式文本响应；思考字段和开头的 `<think>` 内容不会作为正文应用。
+- **输出上限恢复**：内置 Provider 任务因输出上限耗尽失败时，可手动提高 Max Tokens 并重试；按钮将上限提高至至少 4,096，之后按当前值翻倍，最高 32,000。也可打开连接设置自行调整，不会自动重发请求。
+- **回归验证**：新增真实鼠标拖选验收和模拟慢速 Provider 的桌面响应检查，保留选区绑定、逐项接受、撤销重做和正文冲突保护。
+
+本次在 rc.2 已有的正文 AI 侧栏、完整工作台、模板和 Codex 接入基础上修复交互与响应处理；[完整代码对比](https://github.com/Gunanzhao/NovelForge/compare/v1.1.1-rc.2...v1.1.1-rc.3)。
 
 ## 主要功能
 
@@ -53,6 +63,8 @@ NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台�
 ### 兼容 Provider
 
 在“连接设置”填写 OpenAI-compatible 服务的 Base URL、模型和可选 API Key。密钥只保留在当前窗口，不保存到项目或偏好。远程非加密 HTTP 地址会在发送前提示并要求确认。
+
+等待期间可继续操作软件。若结果区提示“输出上限耗尽”，可手动提高上限重试，或在模型服务中降低思考量；提高上限可能增加耗时和服务用量。当前仍为一次性返回正文，“停止接收”仅忽略后续结果，不能保证服务端停止处理。
 
 ### Codex 订阅（实验性）
 
@@ -111,6 +123,8 @@ Windows EXE 位于 `src-tauri/target/release/`，NSIS 安装包位于 `src-tauri
 node scripts/editor-ai-ui-cdp.mjs
 node scripts/codex-compatibility-ui-cdp.mjs
 node scripts/ai-workbench-ui-cdp.mjs
+node scripts/editor-selection-ui-cdp.mjs
+node scripts/provider-responsive-ui-cdp.mjs
 ```
 
 这些检查使用独立合成项目和 WebView2 配置，截图与结果写入忽略的 `tmp/`。正文 AI 测试使用本机模拟 Provider，验证选区范围、共享任务、差异审阅、撤销重做、自动保存及浅／深色和窄窗口布局；Codex 测试只检查登录、兼容性和连接保持，不默认执行真实订阅生成。CI 包含前端、Rust 检查和 Windows CLI 兼容矩阵，实时结果见 [GitHub Actions](https://github.com/Gunanzhao/NovelForge/actions)。
