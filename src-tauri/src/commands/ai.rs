@@ -493,10 +493,7 @@ mod cancellation_tests {
                             error.kind(),
                             std::io::ErrorKind::ConnectionReset
                                 | std::io::ErrorKind::ConnectionAborted
-                        ) =>
-                    {
-                        ()
-                    }
+                        ) => {}
                     other => panic!("cancel did not close socket: {other:?}"),
                 }
             });

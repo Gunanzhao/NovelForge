@@ -73,7 +73,7 @@ describe('complete AI request preview and budget', () => {
     const count = messages.reduce((sum, text) => sum + Array.from(text).length, 0)
     expect(screen.getByText(`System + User：${count.toLocaleString()} 字符 · 预计 ${Math.ceil(count / 4).toLocaleString()} Token · 安全阈值 ${AI_CONTEXT_SAFE_CHAR_LIMIT.toLocaleString()} 字符`)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '确认运行' }))
-    await waitFor(() => expect(api.aiComplete).toHaveBeenCalledWith(expect.objectContaining({ systemPrompt: messages[0], prompt: messages[1] })))
+    await waitFor(() => expect(api.aiComplete).toHaveBeenCalledWith(expect.objectContaining({ systemPrompt: messages[0], prompt: messages[1] }), expect.any(String)))
     act(() => useAppStore.setState({ document: { node: chapter, content: '修改后的正文' } }))
     fireEvent.click(screen.getByRole('button', { name: '预览上下文' }))
     await waitFor(() => expect(container.querySelectorAll('.ai-preview-panel pre')[1].textContent).toContain('修改后的正文'))
@@ -106,7 +106,7 @@ describe('complete AI request preview and budget', () => {
       await waitFor(() => expect(useAppStore.getState().error).toContain('安全阈值'))
       expect(api.aiComplete).not.toHaveBeenCalled()
     } else {
-      await waitFor(() => expect(api.aiComplete).toHaveBeenCalledWith(expect.objectContaining({ systemPrompt: messages[0], prompt: messages[1] })))
+      await waitFor(() => expect(api.aiComplete).toHaveBeenCalledWith(expect.objectContaining({ systemPrompt: messages[0], prompt: messages[1] }), expect.any(String)))
     }
   })
 })
