@@ -6,7 +6,7 @@ import { resolve } from 'node:path'
 const run = resolve('tmp/editor-selection-ui-' + Date.now())
 mkdirSync(run, { recursive: true })
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
-const child = spawn(resolve('src-tauri/target/release/novelforge.exe'), [], { windowsHide: true, stdio: 'ignore', env: { ...process.env, WEBVIEW2_USER_DATA_FOLDER: resolve(run, 'profile'), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=9471' } })
+const child = spawn(resolve(process.env.NOVELFORGE_EXE || 'src-tauri/target/release/novelforge.exe'), [], { windowsHide: true, stdio: 'ignore', env: { ...process.env, WEBVIEW2_USER_DATA_FOLDER: resolve(run, 'profile'), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=9471' } })
 let socket, seq = 0
 const pending = new Map()
 const cmd = (method, params = {}) => new Promise((resolve, reject) => { const id = ++seq; pending.set(id, { resolve, reject }); socket.send(JSON.stringify({ id, method, params })) })
@@ -74,6 +74,10 @@ try {
         assert.ok(contrast(actual.background, actual.foreground) >= 4.5, JSON.stringify(actual))
         if (name === 'multiline') await capture(`${theme}-${focus ? 'focus' : 'normal'}-drag`)
         await cmd('Input.dispatchMouseEvent', { type: 'mouseReleased', ...points[1], button: 'left', buttons: 0, clickCount: 1 })
+        await sleep(350)
+        assert.ok(await ev(`!!document.querySelector('.editor-ai-floating')`), `toolbar disappeared after mouse release: ${theme}/${focus}/${name}`)
+        assert.equal(await ev(`window.getSelection().toString()`), actual.text)
+        if (name === 'multiline') await capture(`${theme}-${focus ? 'focus' : 'normal'}-released`)
         records.push({ theme, focus, name, contrast: contrast(actual.background, actual.foreground), background: actual.background, foreground: actual.foreground })
       }
       if (focus) {
@@ -82,11 +86,18 @@ try {
       }
     }
   }
-  await click('AI 辅助')
+  await cmd('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', modifiers: 8, windowsVirtualKeyCode: 39 })
+  await cmd('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', modifiers: 8, windowsVirtualKeyCode: 39 })
+  await sleep(350)
+  assert.ok(await ev(`!!document.querySelector('.editor-ai-floating')`), 'toolbar disappeared after Shift+Arrow release')
+  const selectedText = await ev(`window.getSelection().toString()`)
+  const buttonPoint = await ev(`(()=>{const r=document.querySelector('.editor-ai-floating button').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}})()`)
+  await cmd('Input.dispatchMouseEvent', { type: 'mousePressed', ...buttonPoint, button: 'left', buttons: 1, clickCount: 1 })
+  await cmd('Input.dispatchMouseEvent', { type: 'mouseReleased', ...buttonPoint, button: 'left', buttons: 0, clickCount: 1 })
   await waitFor(`!document.querySelector('.ai-host').hidden`)
   await click('预览上下文')
   await waitFor(`!!document.querySelector('.ai-preview-panel')`)
-  assert.ok(await ev(`document.querySelector('.ai-preview-panel').textContent.includes(${JSON.stringify(original.slice(2, original.indexOf('最后一段') + 4))})`))
+  assert.ok(await ev(`document.querySelector('.ai-preview-panel').textContent.includes(${JSON.stringify(selectedText)})`))
   assert.equal(await ev('editor().state.doc.toString()'), original)
   await click('返回编辑')
   await ev(`[...document.querySelectorAll('.nav-item')].find(e=>e.textContent.trim()==='正文').click()`)

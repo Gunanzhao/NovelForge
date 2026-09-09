@@ -1,3 +1,6 @@
+import { autoNameExtension } from '../lib/auto-name-extension'
+import { NameRecognitionCard, type NameCard } from './NameRecognition'
+import type { AutoNameMatch } from '../lib/auto-names'
 import { clampEditorPosition, readEditorSession, rememberEditor } from '../lib/editor-session'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
@@ -68,6 +71,13 @@ function wikiTitleKey(title: string) {
 
 export function EditorPane() {
   const document = useAppStore((state) => state.document)
+  const autoNames = useAppStore(state => state.workspacePreferences.autoRecognizeNames !== false)
+  const [nameCard, setNameCard] = useState<NameCard | null>(null)
+  const closeNameCard = useCallback(() => setNameCard(null), [])
+  const openNameCard = useCallback((match: AutoNameMatch, view: EditorView) => {
+    const state = useAppStore.getState()
+    if (state.projectPath && state.document) setNameCard({ ...match, view, version: view.state.doc, project: state.projectPath, node: state.document.node.id, session: state.projectSession })
+  }, [])
   const data = useAppStore((state) => state.data)
   const editorMode = useAppStore((state) => state.editorMode)
   const saveState = useAppStore((state) => state.saveState)
@@ -83,6 +93,7 @@ export function EditorPane() {
   const setError = useAppStore((state) => state.setError)
   const openAiAssistant = useAppStore((state) => state.openEditorAi)
   const projectPath = useAppStore((state) => state.projectPath)
+  useEffect(() => { setNameCard(null) }, [projectPath, document?.node.id, data?.entities, autoNames])
   const { openContextMenu } = useContextMenu()
   const editorViewRef = useRef<EditorView | null>(null)
   const aiEditorCleanup = useRef<(() => void) | null>(null)
@@ -120,11 +131,13 @@ export function EditorPane() {
         const selection = view.state.selection.main
         rememberEditor(path, nodeId, { anchor: selection.anchor, head: selection.head, scrollTop: view.scrollDOM.scrollTop, scrollLeft: view.scrollDOM.scrollLeft })
       }
-      const schedule = () => { setFloating(null); window.clearTimeout(timer); timer = window.setTimeout(persist, 200) }
-      view.scrollDOM.addEventListener('scroll', schedule)
+      // Persisting the caret after mouse/key release must not dismiss selection actions.
+      const schedule = () => { window.clearTimeout(timer); timer = window.setTimeout(persist, 200) }
+      const onScroll = () => { setFloating(null); schedule() }
+      view.scrollDOM.addEventListener('scroll', onScroll)
       view.dom.addEventListener('keyup', schedule)
       view.dom.addEventListener('mouseup', schedule)
-      positionCleanup.current = () => { window.cancelAnimationFrame(frame); window.clearTimeout(timer); persist(); view.scrollDOM.removeEventListener('scroll', schedule); view.dom.removeEventListener('keyup', schedule); view.dom.removeEventListener('mouseup', schedule) }
+      positionCleanup.current = () => { window.cancelAnimationFrame(frame); window.clearTimeout(timer); persist(); view.scrollDOM.removeEventListener('scroll', onScroll); view.dom.removeEventListener('keyup', schedule); view.dom.removeEventListener('mouseup', schedule) }
     }
     reportEditorSelection({ state: view.state } as ViewUpdate)
   }
@@ -180,7 +193,8 @@ export function EditorPane() {
       return transaction.docChanged && isNodeLocked(current.data?.nodes ?? [], current.document?.node.id) ? [] : transaction
     }),
     ...wikiEditorExtension(resolveWikiTarget),
-  ], [resolveWikiTarget])
+    ...(autoNames && typeof Worker !== 'undefined' ? [autoNameExtension(data?.entities ?? [], openNameCard, closeNameCard)] : []),
+  ], [resolveWikiTarget, autoNames, data?.entities, openNameCard, closeNameCard])
   const applyCommand = useCallback((command: MarkdownCommand) => {
     const view = editorViewRef.current
     if (!view || !view.dom.isConnected) return
@@ -313,6 +327,7 @@ export function EditorPane() {
       {editorMode !== 'markdown' ? <div className="editor-pane" onContextMenu={handlePreviewContextMenu}><article className="preview"><MarkdownPreview markdown={document.content} entities={data?.entities} onWikiLink={resolveWikiTarget} /></article></div> : null}
     </div>
     {floating && !locked && editorMode !== 'preview' ? <div className="editor-ai-floating" role="toolbar" aria-label="选区 AI 操作" style={floating} onMouseDown={event => event.preventDefault()}>{([['polish', '润色'], ['rewrite', '改写'], ['expand', '扩写'], ['shrink', '缩写']] as const).map(([value, label]) => <button key={value} disabled={aiBusy} onClick={() => { openAiAssistant(value); setFloating(null) }}>{label}</button>)}<button aria-label="关闭选区 AI 操作" onClick={() => setFloating(null)}>×</button></div> : null}
+    {nameCard ? <NameRecognitionCard card={nameCard} close={closeNameCard} /> : null}
     {wikiResolution ? <div className="wiki-resolution" role="status">
       <div className="wiki-resolution-copy"><strong>{wikiResolution.target}</strong><span>{wikiResolution.candidates.length > 1 ? '找到多个同名条目，请选择要打开的资料。' : '没有找到对应资料，可以先去搜索项目内容。'}</span></div>
       {wikiResolution.candidates.length ? <div className="wiki-resolution-candidates">{wikiResolution.candidates.map((candidate) => <button type="button" key={candidate.id} onClick={() => { setWikiResolution(null); selectEntity(candidate.kind, candidate.id) }}><strong>{candidate.title}</strong><span>{ENTITY_LABELS[candidate.kind]} · {candidate.filePath}</span></button>)}</div> : <div className="wiki-resolution-actions"><Button variant="outline" onClick={() => openWikiSearch(wikiResolution.target)}>去搜索</Button><Button variant="ghost" onClick={() => setWikiResolution(null)}>关闭</Button></div>}

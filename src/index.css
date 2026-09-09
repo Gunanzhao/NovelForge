@@ -1623,3 +1623,12 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 
 .ai-view.ai-inline-workbench { overflow:hidden; }
 .ai-inline-workbench .ai-output-panel { min-height:0; height:auto; }
+
+.cm-auto-name { text-decoration: underline dotted color-mix(in srgb, var(--accent) 45%, transparent); text-underline-offset: 4px; cursor: help; }
+.name-recognition-list { display:grid; gap:12px; max-height:50vh; overflow:auto; }
+.name-recognition-list section { padding:12px; border:1px solid var(--line); border-radius:8px; }
+.name-recognition-list h3 { margin:0 0 8px; }
+.name-recognition-list p { white-space:pre-wrap; overflow-wrap:anywhere; }
+.name-recognition-list small { color:var(--muted); overflow-wrap:anywhere; }
+.name-recognition-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+.name-recognition-settings input { accent-color:var(--accent); }

@@ -1,3 +1,4 @@
+import { NameRecognitionSettings } from './NameRecognition'
 import { VersionInfo } from './VersionInfo'
 import { ProjectBackup } from './ProjectBackup'
 import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
@@ -123,6 +124,7 @@ function ProjectSettings({ projectPath, initialProject }: { projectPath: string;
         </Panel>
       </section>
       <section id="settings-editor" role="tabpanel" aria-labelledby="settings-tab-editor" hidden={section !== 'editor'}>
+        <NameRecognitionSettings />
         <Panel className="settings-card">{heading('编辑器', <Button variant="outline" onClick={resetEditor}>恢复本页默认</Button>)}<div className="settings-editor-layout"><div className="settings-editor-controls">
           <Field label="正文字体"><select className="select-input" value={preferences.editorFontFamily} onChange={event => preference('editorFontFamily', event.target.value === 'sans' ? 'sans' : 'serif')}><option value="serif">衬线 · 适合长篇阅读</option><option value="sans">无衬线 · 适合校对</option></select></Field>
           <NumberSetting label="编辑字号" value={preferences.editorFontSize} min={12} max={22} unit="px" onChange={value => preference('editorFontSize', value)} />

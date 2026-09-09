@@ -1,6 +1,7 @@
 export type EditorFontFamily = 'serif' | 'sans'
 
 export interface WorkspacePreferences {
+  autoRecognizeNames?: boolean
   sidebarWidth: number
   inspectorWidth: number
   sidebarOpen: boolean
@@ -14,6 +15,7 @@ export interface WorkspacePreferences {
 }
 
 export const DEFAULT_WORKSPACE_PREFERENCES: WorkspacePreferences = {
+  autoRecognizeNames: true,
   sidebarWidth: 272,
   inspectorWidth: 278,
   sidebarOpen: true,
@@ -38,6 +40,7 @@ function finiteNumber(value: unknown, fallback: number, min: number, max: number
 export function normalizeWorkspacePreferences(value: unknown): WorkspacePreferences {
   const source = value && typeof value === 'object' ? value as Record<string, unknown> : {}
   return {
+    autoRecognizeNames: source.autoRecognizeNames !== false,
     sidebarWidth: finiteNumber(source.sidebarWidth, DEFAULT_WORKSPACE_PREFERENCES.sidebarWidth, 220, 420, true),
     inspectorWidth: finiteNumber(source.inspectorWidth, DEFAULT_WORKSPACE_PREFERENCES.inspectorWidth, 220, 420, true),
     sidebarOpen: typeof source.sidebarOpen === 'boolean' ? source.sidebarOpen : DEFAULT_WORKSPACE_PREFERENCES.sidebarOpen,
