@@ -41,7 +41,7 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
   const { result } = task
   const busy = task.phase === 'preparing' || task.phase === 'running'
   const resultComplete = task.phase === 'complete'
-  const resultStatus = { idle: '已应用', preparing: '准备上下文', running: '生成中', complete: '已完成', cancelled: '已停止 · 结果未完成', failed: '生成失败 · 结果未完成' }[task.phase]
+  const resultStatus = { idle: '已应用', preparing: '准备上下文', running: '生成中', complete: '已完成', cancelled: '已停止 · 结果未完成', failed: '生成失败 · 结果未完成', incomplete: '结果不完整 · 禁止应用' }[task.phase]
   const [draftTarget, setDraftTarget] = useState<AiTarget | null>(null)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [providerName, setProviderName] = useState(preferences.providerName ?? '')

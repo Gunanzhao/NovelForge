@@ -264,4 +264,5 @@ export interface AiCompletionInput {
 export interface AiCompletionResult {
   content: string
   model: string
+  incomplete?: boolean
 }

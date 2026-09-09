@@ -88,3 +88,15 @@ it('shows an empty-output failure and retries only on explicit request with a la
   expect(readAiPreferences().maxTokens).toBe(4096)
   expect(useAppStore.getState().document?.content).toBe('雨落在信封上。')
 })
+
+it('labels a truncated result and never offers manuscript replacement', async () => {
+  writeAiPreferences({ mode: 'provider', endpoint: 'http://127.0.0.1:1234/v1', model: 'writer' })
+  api.aiComplete.mockResolvedValueOnce({ content: '半段正文', model: 'writer', incomplete: true })
+  render(<AiAssistantView />)
+  fireEvent.click(screen.getByRole('button', { name: '运行辅助' }))
+  expect(await screen.findByDisplayValue('半段正文')).toHaveProperty('readOnly', true)
+  expect(screen.getByText(/结果不完整 · 禁止应用/)).toBeTruthy()
+  expect(screen.queryByRole('button', { name: '替换当前正文' })).toBeNull()
+  expect(screen.queryByRole('button', { name: '追加到正文' })).toBeNull()
+  expect(screen.getByRole('button', { name: '复制' })).toBeTruthy()
+})

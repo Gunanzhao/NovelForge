@@ -156,7 +156,14 @@ fn complete_blocking(input: AiCompletionInput) -> Result<AiCompletionResult, Str
     Ok(AiCompletionResult {
         content: content.to_string(),
         model,
+        incomplete: response_incomplete(&body),
     })
+}
+
+fn response_incomplete(body: &serde_json::Value) -> bool {
+    body["choices"][0]["finish_reason"]
+        .as_str()
+        .is_some_and(|reason| reason != "stop")
 }
 
 fn response_content(body: &serde_json::Value) -> Result<String, String> {
@@ -232,8 +239,23 @@ fn response_content(body: &serde_json::Value) -> Result<String, String> {
 
 #[cfg(test)]
 mod response_tests {
-    use super::response_content;
+    use super::{response_content, response_incomplete};
     use serde_json::json;
+    #[test]
+    fn partial_text_keeps_its_incomplete_status() {
+        for reason in ["length", "content_filter", "tool_calls"] {
+            let body =
+                json!({"choices":[{"finish_reason":reason,"message":{"content":"半段正文"}}]});
+            assert_eq!(response_content(&body).unwrap(), "半段正文");
+            assert!(response_incomplete(&body));
+        }
+        assert!(!response_incomplete(
+            &json!({"choices":[{"finish_reason":"stop"}]})
+        ));
+        assert!(!response_incomplete(
+            &json!({"choices":[{"message":{"content":"兼容旧服务"}}]})
+        ));
+    }
     #[test]
     fn parses_text_blocks_and_legacy_fallback() {
         assert_eq!(response_content(&json!({"choices":[{"message":{"content":[{"type":"text","text":"正文"},{"type":"reasoning","text":"private"},{"type":"text","text":"结束"}]}}]})).unwrap(), "正文结束");

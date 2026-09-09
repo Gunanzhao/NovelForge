@@ -29,7 +29,7 @@ export interface AiRequest {
 interface AiTask {
   token: string
   id: string | null
-  phase: 'idle' | 'preparing' | 'running' | 'complete' | 'cancelled' | 'failed'
+  phase: 'idle' | 'preparing' | 'running' | 'complete' | 'cancelled' | 'failed' | 'incomplete'
   result: AiCompletionResult | null
   error: string
   target: AiTarget | null
@@ -108,6 +108,10 @@ export const useAiTask = create<AiTask>((set, get) => ({
         result = await projectApi.aiComplete({ endpoint: prefs.endpoint, model: prefs.model, apiKey, systemPrompt, prompt, temperature: prefs.temperature ?? 0.7, maxTokens: prefs.maxTokens ?? 4000 })
       } else result = local
       if (!valid()) return
+      if (result.incomplete) {
+        set({ result, edits: [], phase: 'incomplete', id: null, error: '模型未完整生成正文，以下仅为部分结果，可复制查看，不能直接应用到正文。请调整输出上限或模型设置后重新生成。' })
+        return
+      }
       const mapping = get().mapping!
       const live = get().target!
       const edits = application === 'rewrite' ? !live.conflict ? aiEdits(target.originalText, result.content, live.from) : aiEdits(target.originalText, result.content, target.originalFrom).map(edit => ({ ...edit, ...mapAiRange(edit, mapping) })) : []

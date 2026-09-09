@@ -82,3 +82,16 @@ it('uses a registered editor transaction and inserts at the original cursor only
   expect(useAppStore.getState().document?.content).toBe('前文。插入风很冷。灯很暗。后文。')
   unregister()
 })
+
+it('preserves partial text for inspection but blocks every manuscript application path', async () => {
+  mocks.aiComplete.mockResolvedValue({ content: '被截断的半段正文', model: 'writer', incomplete: true })
+  const original = useAppStore.getState().document!.content
+  await useAiTask.getState().start(captureAiTarget('selection'), 'rewrite', async () => ({ ...request(), preferences: { mode: 'provider', endpoint: 'http://127.0.0.1:1234/v1', model: 'writer' } }))
+  expect(useAiTask.getState().phase).toBe('incomplete')
+  expect(useAiTask.getState().result?.content).toBe('被截断的半段正文')
+  expect(useAiTask.getState().edits).toEqual([])
+  useAiTask.getState().accept(); useAiTask.getState().replace(); useAiTask.getState().insert('after')
+  useAiTask.getState().editResult('手工改写也不能绕过完整性检查')
+  expect(useAppStore.getState().document?.content).toBe(original)
+  expect(useAiTask.getState().result?.content).toBe('被截断的半段正文')
+})

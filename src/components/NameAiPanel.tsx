@@ -57,7 +57,9 @@ export function NameAiPanel({ category, style, count, rules, excluded, onResults
         if (!status.ready) throw new Error(status.compatibility?.diagnostic?.message ?? 'Codex 尚未就绪，请在 AI 辅助设置中检查连接并登录。')
         content = (await codexApi.generate({ cliPath, requestId: id, model: status.selectedModel, effort: status.selectedEffort, systemPrompt, prompt }, () => {}, () => active.current?.id !== id)).content
       } else {
-        content = (await projectApi.aiComplete({ endpoint, model, apiKey, systemPrompt, prompt, temperature: preferences.temperature ?? 0.8, maxTokens: 4000 })).content
+        const result = await projectApi.aiComplete({ endpoint, model, apiKey, systemPrompt, prompt, temperature: preferences.temperature ?? 0.8, maxTokens: 4000 })
+        if (result.incomplete) throw new Error('AI 名字结果不完整，请提高输出上限或调整模型后重试。')
+        content = result.content
       }
       if (active.current?.id !== id || !isCurrentProjectSession(session)) return
       const avoid = new Set(excluded.map(nameKey))

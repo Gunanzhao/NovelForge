@@ -325,4 +325,6 @@ pub struct AiCompletionInput {
 pub struct AiCompletionResult {
     pub content: String,
     pub model: String,
+    #[serde(default)]
+    pub incomplete: bool,
 }
