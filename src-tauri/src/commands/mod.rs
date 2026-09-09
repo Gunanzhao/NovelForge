@@ -37,8 +37,8 @@ pub(crate) mod statistics;
 pub(crate) mod trash;
 pub(crate) mod updates;
 
-#[allow(unused_imports)]
-pub(crate) use ai::{ai_complete, normalize_ai_endpoint};
+#[cfg(test)]
+pub(crate) use ai::{ai_complete_for_test as ai_complete, normalize_ai_endpoint};
 pub(crate) use consistency::{check_consistency, ExportRenderOptions};
 pub(crate) use entities::safe_filename;
 pub(crate) use entities::{

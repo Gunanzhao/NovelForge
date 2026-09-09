@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-const mocks = vi.hoisted(() => ({ aiComplete: vi.fn(), status: vi.fn(), cancelCheck: vi.fn(async () => {}), generate: vi.fn(), cancel: vi.fn(async () => {}) }))
-vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: { aiComplete: mocks.aiComplete } }))
+const mocks = vi.hoisted(() => ({ aiCancel: vi.fn(async () => {}), aiComplete: vi.fn(), status: vi.fn(), cancelCheck: vi.fn(async () => {}), generate: vi.fn(), cancel: vi.fn(async () => {}) }))
+vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: { aiComplete: mocks.aiComplete, aiCancel: mocks.aiCancel } }))
 vi.mock('../src/lib/codex', () => ({ codexApi: mocks }))
 import { NameAiPanel } from '../src/components/NameAiPanel'
 import { useAppStore } from '../src/stores/app-store'
@@ -36,6 +36,7 @@ it('discards a provider reply after cancellation', async () => {
   const onResults = setup()
   fireEvent.click(screen.getByRole('button', { name: '发送并生成 AI 名字' }))
   fireEvent.click(screen.getByRole('button', { name: '停止生成' }))
+  expect(mocks.aiCancel).toHaveBeenCalledWith(mocks.aiComplete.mock.calls[0][1])
   await act(async () => resolve({ content: '[{"name":"林舟"}]' }))
   expect(onResults).not.toHaveBeenCalled()
 })
@@ -59,6 +60,7 @@ it('keeps connection and context inputs when conditions invalidate a pending req
   fireEvent.change(screen.getByLabelText('世界观、人物背景与命名意象'), { target: { value: '保留背景' } })
   fireEvent.click(screen.getByRole('button', { name: '发送并生成 AI 名字' }))
   rerender(<NameAiPanel {...props} revision="after" />)
+  expect(mocks.aiCancel).toHaveBeenCalledWith(mocks.aiComplete.mock.calls[0][1])
   expect((screen.getByLabelText('世界观、人物背景与命名意象') as HTMLTextAreaElement).value).toBe('保留背景')
   expect((screen.getByLabelText('Provider 地址') as HTMLInputElement).value).toBe('https://example.com/v1')
   await act(async () => resolve({ content: '[{"name":"林舟"}]' }))

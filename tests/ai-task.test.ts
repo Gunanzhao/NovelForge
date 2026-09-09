@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { ChangeSet } from '@codemirror/state'
-const mocks = vi.hoisted(() => ({ generate: vi.fn(), cancel: vi.fn(), aiComplete: vi.fn() }))
-vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: { aiComplete: mocks.aiComplete } }))
+const mocks = vi.hoisted(() => ({ generate: vi.fn(), cancel: vi.fn(), aiCancel: vi.fn(async () => {}), aiComplete: vi.fn() }))
+vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: { aiComplete: mocks.aiComplete, aiCancel: mocks.aiCancel } }))
 vi.mock('../src/lib/codex', () => ({ codexApi: mocks }))
 import { useAiTask, captureAiTarget, registerAiEditor, type AiRequest } from '../src/stores/ai-task'
 import { useAppStore } from '../src/stores/app-store'
@@ -94,4 +94,17 @@ it('preserves partial text for inspection but blocks every manuscript applicatio
   useAiTask.getState().editResult('手工改写也不能绕过完整性检查')
   expect(useAppStore.getState().document?.content).toBe(original)
   expect(useAiTask.getState().result?.content).toBe('被截断的半段正文')
+})
+
+it('cancels the provider request by the exact generation id', async () => {
+  let finish!: (value: {content: string; model: string}) => void
+  mocks.aiComplete.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  const running = useAiTask.getState().start(captureAiTarget('chapter'), 'generate', async () => ({ ...request(), preferences: {mode:'provider',endpoint:'http://127.0.0.1:1234/v1',model:'writer'} }))
+  await Promise.resolve()
+  const id = useAiTask.getState().id
+  expect(mocks.aiComplete.mock.calls[0][1]).toBe(id)
+  useAiTask.getState().stop()
+  expect(mocks.aiCancel).toHaveBeenCalledWith(id)
+  finish({content:'迟到结果',model:'writer'});await running
+  expect(useAiTask.getState().result).toBeNull()
 })

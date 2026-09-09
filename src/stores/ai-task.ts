@@ -105,7 +105,7 @@ export const useAiTask = create<AiTask>((set, get) => ({
           if (valid()) set(state => ({ result: { content: (state.result?.content ?? '') + delta, model: prefs.codexModel ?? '' } }))
         }, () => !valid())
       } else if (transport === 'provider') {
-        result = await projectApi.aiComplete({ endpoint: prefs.endpoint, model: prefs.model, apiKey, systemPrompt, prompt, temperature: prefs.temperature ?? 0.7, maxTokens: prefs.maxTokens ?? 4000 })
+        result = await projectApi.aiComplete({ endpoint: prefs.endpoint, model: prefs.model, apiKey, systemPrompt, prompt, temperature: prefs.temperature ?? 0.7, maxTokens: prefs.maxTokens ?? 4000 }, id)
       } else result = local
       if (!valid()) return
       if (result.incomplete) {
@@ -128,6 +128,7 @@ export const useAiTask = create<AiTask>((set, get) => ({
     if (!id) return
     set({ id: null, phase: 'cancelled', error: '' })
     if (transport === 'codex') void codexApi.cancel(id).catch(error => useAppStore.getState().setError(error))
+    if (transport === 'provider') void projectApi.aiCancel(id).catch(() => { /* Late results remain rejected; the backend also enforces one active request. */ })
   },
   clear() {
     get().stop()

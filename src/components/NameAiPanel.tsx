@@ -25,6 +25,7 @@ export function NameAiPanel({ category, style, count, rules, excluded, onResults
   useEffect(() => () => {
     const request = active.current
     active.current = null
+    if (request?.mode === 'provider') void projectApi.aiCancel(request.id).catch(() => {})
     if (request?.mode === 'codex') void Promise.allSettled([codexApi.cancel(request.id), codexApi.cancelCheck(request.id)])
   }, [])
   useEffect(() => {
@@ -33,6 +34,7 @@ export function NameAiPanel({ category, style, count, rules, excluded, onResults
     active.current = null
     setBusy(false)
     setError('条件或结果已更新，已停止接收旧请求。')
+    if (request.mode === 'provider') void projectApi.aiCancel(request.id).catch(() => {})
     if (request.mode === 'codex') void Promise.allSettled([codexApi.cancel(request.id), codexApi.cancelCheck(request.id)])
   }, [revision])
   const available = data?.entities.filter(entity => ['character', 'location', 'world'].includes(entity.kind)) ?? []
@@ -57,7 +59,7 @@ export function NameAiPanel({ category, style, count, rules, excluded, onResults
         if (!status.ready) throw new Error(status.compatibility?.diagnostic?.message ?? 'Codex 尚未就绪，请在 AI 辅助设置中检查连接并登录。')
         content = (await codexApi.generate({ cliPath, requestId: id, model: status.selectedModel, effort: status.selectedEffort, systemPrompt, prompt }, () => {}, () => active.current?.id !== id)).content
       } else {
-        const result = await projectApi.aiComplete({ endpoint, model, apiKey, systemPrompt, prompt, temperature: preferences.temperature ?? 0.8, maxTokens: 4000 })
+        const result = await projectApi.aiComplete({ endpoint, model, apiKey, systemPrompt, prompt, temperature: preferences.temperature ?? 0.8, maxTokens: 4000 }, id)
         if (result.incomplete) throw new Error('AI 名字结果不完整，请提高输出上限或调整模型后重试。')
         content = result.content
       }
@@ -74,6 +76,7 @@ export function NameAiPanel({ category, style, count, rules, excluded, onResults
   }
   function cancel() {
     const request = active.current; active.current = null; setBusy(false); setError('已停止接收本次结果。')
+    if (request?.mode === 'provider') void projectApi.aiCancel(request.id).catch(() => {})
     if (request?.mode === 'codex') void Promise.allSettled([codexApi.cancel(request.id), codexApi.cancelCheck(request.id)])
   }
   return <details className="name-options"><summary>可选 AI 命名</summary><fieldset disabled={busy} className="name-ai-fields">

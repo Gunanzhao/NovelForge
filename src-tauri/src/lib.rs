@@ -77,6 +77,7 @@ pub fn run() {
             commands::search::search_project,
             commands::consistency::check_consistency,
             commands::ai::ai_complete,
+            commands::ai::ai_cancel,
             commands::codex::codex_status,
             commands::codex::codex_models,
             commands::codex::codex_login,
