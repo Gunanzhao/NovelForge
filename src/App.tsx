@@ -243,7 +243,7 @@ export default function App() {
   const inspectorVisible = inspectorOpen && activeView === 'manuscript'
   const inlineAi = inspectorVisible && inspectorTab === 'ai'
   const aiDrawer = inlineAi && (focusMode || viewportWidth < 1180)
-  const columns = fitWorkspaceColumns(inlineAi ? { ...workspacePreferences, inspectorWidth: 400 } : workspacePreferences, viewportWidth, sidebarOpen && !focusMode, inspectorVisible && !focusMode && !aiDrawer)
+  const columns = fitWorkspaceColumns(workspacePreferences, viewportWidth, sidebarOpen && !focusMode, inspectorVisible && !focusMode && !aiDrawer)
   const inspectorTabs = <div className="inspector-tabs" role="tablist" aria-label="正文辅助面板"><button role="tab" aria-selected={inspectorTab === 'chapter'} onClick={() => setInspectorTab('chapter')}>章节信息</button><button role="tab" aria-selected={inspectorTab === 'ai'} onClick={() => useAiTask.getState().id ? setInspectorTab('ai') : useAppStore.getState().openEditorAi()}>AI 辅助</button></div>
   const layoutStyle = {
     '--sidebar-width': String(columns.sidebar) + 'px',
