@@ -24,6 +24,9 @@ import { Button, IconButton } from './ui'
 import { useContextMenu } from './ContextMenu'
 import { MarkdownPreview } from './MarkdownPreview'
 
+// Use the browser's per-line selection instead of CodeMirror's merged rectangle layer.
+const editorBasicSetup = { drawSelection: false }
+
 function wikiDecorationSet(source: string): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
   const decoration = Decoration.mark({ class: 'cm-wiki-link' })
@@ -170,6 +173,7 @@ export function EditorPane() {
   const extensions = useMemo(() => [
     markdown(),
     EditorView.lineWrapping,
+    EditorView.editorAttributes.of(view => ({ 'data-has-selection': String(view.state.selection.ranges.some(range => !range.empty)) })),
     invertedEffects.of(transaction => transaction.effects.filter(effect => effect.is(aiAcceptanceEffect)).map(effect => aiAcceptanceEffect.of({ ...effect.value, accepted: !effect.value.accepted }))),
     EditorState.transactionFilter.of((transaction) => {
       const current = useAppStore.getState()
@@ -305,7 +309,7 @@ export function EditorPane() {
       </div>
     </div>
     <div className={'editor-body mode-' + editorMode}>
-      {editorMode !== 'preview' ? <div className="editor-pane" onContextMenu={openEditorContextMenu} onBlurCapture={() => setFloating(null)}><CodeMirror className="editor-codemirror" key={document.node.id} readOnly={locked} editable={!locked} value={document.content} height="100%" theme="none" extensions={extensions} onCreateEditor={createEditor} onUpdate={reportEditorSelection} onChange={(value, update) => { const acceptance = update.transactions.flatMap(transaction => transaction.effects).find(effect => effect.is(aiAcceptanceEffect))?.value; useAiTask.getState().observe(update.startState.doc.toString(), value, update.changes, acceptance); updateContent(value) }} /></div> : null}
+      {editorMode !== 'preview' ? <div className="editor-pane" onContextMenu={openEditorContextMenu} onBlurCapture={() => setFloating(null)}><CodeMirror className="editor-codemirror" key={document.node.id} readOnly={locked} editable={!locked} value={document.content} height="100%" theme="none" basicSetup={editorBasicSetup} extensions={extensions} onCreateEditor={createEditor} onUpdate={reportEditorSelection} onChange={(value, update) => { const acceptance = update.transactions.flatMap(transaction => transaction.effects).find(effect => effect.is(aiAcceptanceEffect))?.value; useAiTask.getState().observe(update.startState.doc.toString(), value, update.changes, acceptance); updateContent(value) }} /></div> : null}
       {editorMode !== 'markdown' ? <div className="editor-pane" onContextMenu={handlePreviewContextMenu}><article className="preview"><MarkdownPreview markdown={document.content} entities={data?.entities} onWikiLink={resolveWikiTarget} /></article></div> : null}
     </div>
     {floating && !locked && editorMode !== 'preview' ? <div className="editor-ai-floating" role="toolbar" aria-label="选区 AI 操作" style={floating} onMouseDown={event => event.preventDefault()}>{([['polish', '润色'], ['rewrite', '改写'], ['expand', '扩写'], ['shrink', '缩写']] as const).map(([value, label]) => <button key={value} disabled={aiBusy} onClick={() => { openAiAssistant(value); setFloating(null) }}>{label}</button>)}<button aria-label="关闭选区 AI 操作" onClick={() => setFloating(null)}>×</button></div> : null}
