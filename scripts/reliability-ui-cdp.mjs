@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+const expectedVersion = JSON.parse(readFileSync(resolve('package.json'), 'utf8')).version
 const run = resolve('tmp/reliability-ui-' + Date.now())
 mkdirSync(run, { recursive: true })
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -76,7 +77,7 @@ try {
   await click('移入回收站');await waitFor(`!![...document.querySelectorAll('.toast-notice button')].find(e=>e.textContent==='撤销移入回收站')`);await click('撤销移入回收站');await sleep(350)
   assert.ok((await call('list_entities',{path:projectPath,kind:'character'})).some(e=>e.title==='保护人物'))
   await ev(`document.querySelector('button[title="项目设置"]').click()`);await click('数据与日志');await capture('settings-backup')
-  assert.ok(await ev(`document.querySelector('.version-info').textContent.includes('1.1.0-rc.11')`))
+  assert.ok(await ev(`document.querySelector('.version-info').textContent.includes(${JSON.stringify(expectedVersion)})`))
   console.log('UNDO_AND_VERSION_UI_OK')
   writeFileSync(resolve(run,'result.json'),JSON.stringify({projectPath,backup,restored,passed:true},null,2));console.log('RELIABILITY_UI_PASS',run)
 } catch(error) {

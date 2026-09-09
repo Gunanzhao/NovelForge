@@ -88,6 +88,21 @@ try {
   await waitFor(`!!document.querySelector('.ai-preview-panel')`)
   assert.ok(await ev(`document.querySelector('.ai-preview-panel').textContent.includes(${JSON.stringify(original.slice(2, original.indexOf('最后一段') + 4))})`))
   assert.equal(await ev('editor().state.doc.toString()'), original)
+  await click('返回编辑')
+  await ev(`[...document.querySelectorAll('.nav-item')].find(e=>e.textContent.trim()==='正文').click()`)
+  await waitFor(`document.querySelector('.cm-content').getClientRects().length>0`)
+  await ev(`editor().dispatch({changes:{from:0,to:editor().state.doc.length,insert:'海风与海风'}});editor().focus();editor().dispatch({selection:{anchor:0,head:2}})`)
+  await cmd('Input.dispatchKeyEvent', { type: 'keyDown', key: 'd', code: 'KeyD', modifiers: 2, windowsVirtualKeyCode: 68 })
+  await cmd('Input.dispatchKeyEvent', { type: 'keyUp', key: 'd', code: 'KeyD', modifiers: 2, windowsVirtualKeyCode: 68 })
+  assert.equal(await ev('editor().state.selection.ranges.length'), 1)
+  await cmd('Input.insertText', { text: '雨' })
+  assert.equal(await ev(`(editor().state.doc.toString().match(/海风/g)||[]).length`), 1)
+  const changed = await ev('editor().state.doc.toString()')
+  for (const [key, code, expected] of [['z', 90, '海风与海风'], ['y', 89, changed]]) {
+    await cmd('Input.dispatchKeyEvent', { type: 'keyDown', key, code: 'Key' + key.toUpperCase(), modifiers: 2, windowsVirtualKeyCode: code })
+    await cmd('Input.dispatchKeyEvent', { type: 'keyUp', key, code: 'Key' + key.toUpperCase(), modifiers: 2, windowsVirtualKeyCode: code })
+    assert.equal(await ev('editor().state.doc.toString()'), expected)
+  }
   writeFileSync(resolve(run, 'result.json'), JSON.stringify({ result: 'EDITOR_SELECTION_UI_PASS', records }, null, 2))
   console.log('EDITOR_SELECTION_UI_PASS ' + run)
 } catch (error) {

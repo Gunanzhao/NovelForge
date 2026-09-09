@@ -41,12 +41,12 @@ try {
   const metrics = []
   const nav = async label => { await ev(`(()=>{const button=[...document.querySelectorAll('.nav-item')].find(e=>e.textContent.trim().startsWith(${JSON.stringify(label)}));if(!button)throw Error('Missing navigation');button.closest('details')?.setAttribute('open','');button.click()})()`); await sleep(220) }
   async function capture(label) {
-    const value = await ev(`(()=>{const main=document.querySelector('main'),r=main.getBoundingClientRect();const controls=[...main.querySelectorAll('button,input,select,textarea')].filter(e=>e.getClientRects().length&&!e.closest('details:not([open])'));return {width:innerWidth,height:innerHeight,body:document.body.scrollWidth,workspace:r.width,overflow:controls.filter(e=>{const f=e.getBoundingClientRect();return f.left<r.left-1||f.right>r.right+1}).map(e=>(e.getAttribute('aria-label')||e.textContent||e.placeholder).slice(0,50))}})()`)
+    const value = await ev(`(()=>{const main=document.querySelector('.ai-host-full:not([hidden])')??document.querySelector('main'),r=main.getBoundingClientRect();const controls=[...main.querySelectorAll('button,input,select,textarea')].filter(e=>e.getClientRects().length&&!e.closest('details:not([open])'));return {width:innerWidth,height:innerHeight,body:document.body.scrollWidth,workspace:r.width,overflow:controls.filter(e=>{const f=e.getBoundingClientRect();return f.left<r.left-1||f.right>r.right+1}).map(e=>(e.getAttribute('aria-label')||e.textContent||e.placeholder).slice(0,50))}})()`)
     metrics.push({label,...value})
     const shot=await cmd('Page.captureScreenshot',{format:'png'});writeFileSync(resolve(run,label+'.png'),Buffer.from(shot.data,'base64'))
     assert.ok(value.body<=value.width,label+' body overflow');assert.deepEqual(value.overflow,[],label+' controls overflow')
   }
-  for (const [width,height] of [[1440,900],[1100,750]]) {
+  for (const [width,height] of [[1440,900],[1100,650]]) {
     await cmd('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false})
     for (const [label,id] of [['总览','dashboard'],['正文','manuscript'],['人物','character'],['地点','location'],['世界观','world'],['时间线','timeline'],['伏笔','foreshadow'],['剧情线','arc'],['灵感箱','inbox'],['资料附件','attachment'],['AI 辅助','ai'],['全文搜索','search'],['项目设置','settings']]) {
       await nav(label)
@@ -75,8 +75,8 @@ try {
   await ev(`document.querySelector('#settings-editor .settings-section-heading button').click()`)
   assert.equal(await ev(`getComputedStyle(document.querySelector('.settings-reading-preview')).fontSize`),'14px')
   await nav('AI 辅助');await capture('ai-dark')
-  assert.ok(await ev(`document.querySelector('.ai-offline-summary').getBoundingClientRect().height>0`))
-  assert.ok(await ev(`document.querySelector('.ai-connection-settings').getBoundingClientRect().height===0`))
+  assert.ok(await ev(`document.querySelector('.ai-host-full').getBoundingClientRect().height>0`))
+  assert.equal(await ev(`document.querySelectorAll('.ai-connection-dialog [role=dialog]').length`),0)
   await nav('正文')
   await ev(`[...document.querySelectorAll('.topbar button')].find(e=>e.textContent.trim()==='导出').click()`)
   await waitFor(`!!document.querySelector('.export-summary')`)
