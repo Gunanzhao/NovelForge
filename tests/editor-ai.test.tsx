@@ -175,3 +175,14 @@ it('does not mark a revised suggestion accepted when redoing an older result', a
   act(() => useAiTask.getState().accept())
   expect(editor().state.doc.toString()).toBe('前文。风很温暖。灯很亮。后文。')
 })
+
+it.each(['polish', 'rewrite', 'expand', 'shrink'])('does not offer a whole-chapter target for selection-only task %s', (action) => {
+  setup()
+  act(() => editor().dispatch({ selection: { anchor: 3, head: 11 } }))
+  if (action === 'polish') fireEvent.click(screen.getByRole('button', { name: '润色' }))
+  else fireEvent.change(screen.getByRole('combobox', { name: '更多任务' }), { target: { value: action } })
+  expect((screen.getByRole('button', { name: '使用整章' }) as HTMLButtonElement).disabled).toBe(true)
+  expect(screen.getByText(/仅处理选区；如需处理整章/)).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: '摘要' }))
+  expect((screen.getByRole('button', { name: '使用整章' }) as HTMLButtonElement).disabled).toBe(false)
+})
