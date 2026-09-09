@@ -212,7 +212,8 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
       })
     } catch (error) { setError(error) }
   }
-  async function runPreset(preset: PromptPreset, resolution: PromptResolution) {
+  async function runPreset(preset: PromptPreset, resolution: PromptResolution, isCurrentSource: () => boolean) {
+    if (!isCurrentSource()) { setError('模板上下文已变化，请重新预览。'); return }
     if (busy || !canSend()) return
     try {
       const target = preset.action === 'rewrite' ? captureAiTarget('selection') : resolveTarget()

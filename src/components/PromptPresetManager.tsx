@@ -30,7 +30,7 @@ export function PromptPresetManager({ busy, onRun, presentation = 'panel', defau
   defaultSystemPrompt?: string
   presentation?: 'panel' | 'launcher'
   busy: boolean
-  onRun: (preset: PromptPreset, resolution: PromptResolution) => Promise<void>
+  onRun: (preset: PromptPreset, resolution: PromptResolution, isCurrentSource: () => boolean) => Promise<void>
 }) {
   const data = useAppStore((state) => state.data)
   const projectPath = useAppStore((state) => state.projectPath)
@@ -50,7 +50,11 @@ export function PromptPresetManager({ busy, onRun, presentation = 'panel', defau
   const [saving, setSaving] = useState(false)
   const [systemOpen, setSystemOpen] = useState(false)
   const promptRef = useRef<HTMLTextAreaElement>(null)
-  const [preview, setPreview] = useState<{ preset: PromptPreset; resolution: PromptResolution; run: boolean } | null>(null)
+  const previewRequest = useRef(0)
+  const [preview, setPreview] = useState<{ preset: PromptPreset; resolution: PromptResolution; run: boolean; isCurrentSource: () => boolean } | null>(null)
+  function cancelPreview() { previewRequest.current++; setPreview(null) }
+  useEffect(() => () => { previewRequest.current++ }, [])
+  useEffect(() => { previewRequest.current++; setPreview(null) }, [projectSession, projectPath, document?.node.id, document?.content, editorSelection])
   useEffect(() => { setSelectedId(null); setDraft(BLANK); setBaseline(JSON.stringify(BLANK)); setPreview(null); setVisible(false); newEntityId.current = null }, [projectSession])
   const presets = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'prompt-preset').map(parsePromptPreset).sort((left, right) => left.name.localeCompare(right.name, 'zh-CN')), [data?.entities])
   const selectedJson = JSON.stringify(presets.find((preset) => preset.id === selectedId) ?? null)
@@ -146,6 +150,16 @@ export function PromptPresetManager({ busy, onRun, presentation = 'panel', defau
   }
 
   async function preparePreview(preset: PromptPreset, run: boolean) {
+    const request = ++previewRequest.current
+    setPreview(null)
+    const source = useAppStore.getState()
+    const selection = JSON.stringify(source.editorSelection)
+    const isCurrentSource = () => {
+      const current = useAppStore.getState()
+      return current.projectPath === source.projectPath && current.projectSession === source.projectSession &&
+        current.document?.node.id === source.document?.node.id && current.documentVersion === source.documentVersion &&
+        current.document?.content === source.document?.content && JSON.stringify(current.editorSelection) === selection
+    }
     try {
       const resolution = await resolvePromptTemplate(preset.prompt, {
         data: currentData,
@@ -154,13 +168,14 @@ export function PromptPresetManager({ busy, onRun, presentation = 'panel', defau
         selection: editorSelection,
         loadDocument: async (nodeId) => (await projectApi.getDocument({ projectPath: currentProjectPath, nodeId })).content,
       })
+      if (request !== previewRequest.current || !isCurrentSource()) return
       if (resolution.errors.length) {
         setError(resolution.errors.join('\n'))
         return
       }
-      setPreview({ preset, resolution, run })
+      setPreview({ preset, resolution, run, isCurrentSource })
     } catch (error) {
-      setError(error)
+      if (request === previewRequest.current && isCurrentSource()) setError(error)
     }
   }
 
@@ -173,6 +188,19 @@ export function PromptPresetManager({ busy, onRun, presentation = 'panel', defau
     if (!selected || !window.confirm(`将模板“${selected.name}”移入回收站？`)) return
     await deleteEntity(selected.id)
     setSelectedId(null)
+  }
+
+  function confirmPreview() {
+    if (!preview) return
+    if (!preview.isCurrentSource()) {
+      cancelPreview()
+      setError('项目、章节、正文或选区已变化，请重新预览模板。')
+      return
+    }
+    const current = preview
+    cancelPreview()
+    setVisible(false)
+    void onRun(current.preset, current.resolution, current.isCurrentSource)
   }
 
   const systemPrompt = preview?.preset.systemPrompt ?? defaultSystemPrompt
@@ -193,8 +221,8 @@ export function PromptPresetManager({ busy, onRun, presentation = 'panel', defau
         <div className="prompt-preset-actions"><Button disabled={saving || !draft.name.trim() || !draft.prompt.trim()} onClick={() => void save(false)}><Save size={13} />{saving ? '保存中…' : '保存'}</Button>{selected ? <><Button variant="ghost" disabled={saving} onClick={() => void save(true)}><Copy size={13} />复制</Button><Button variant="ghost" onClick={() => void remove()}><Trash2 size={13} />删除</Button></> : null}<span className="preset-action-spacer" /><Button variant="outline" disabled={!draft.name.trim() || !draft.prompt.trim()} onClick={() => void previewDraft(false)}><Eye size={13} />预览</Button><Button disabled={busy || !draft.name.trim() || !draft.prompt.trim()} onClick={() => void previewDraft(true)}><Play size={13} />运行</Button></div>
       </div>
     </div>
-    {preview ? <Modal open title={`Prompt 预览 · ${preview.preset.name}`} onClose={() => setPreview(null)} footer={<><Button variant="outline" onClick={() => setPreview(null)}>取消</Button>{preview.run ? <Button disabled={busy} onClick={() => { const current = preview; setPreview(null); setVisible(false); void onRun(current.preset, current.resolution) }}><Play size={13} />确认运行</Button> : null}</>}><div className="prompt-preview-meta"><span>字符数：{budget.characters.toLocaleString()}</span><span>估算 Token：{budget.estimatedTokens.toLocaleString()}</span><span>安全阈值：{budget.safeLimit.toLocaleString()} 字符{budget.overLimit ? ' · 超过安全阈值，请减少内容' : ''}</span></div><div className="prompt-preview-contexts"><strong>显式上下文项</strong>{preview.resolution.contexts.length ? preview.resolution.contexts.map((context) => <span key={context.variable}>{context.label} · {context.characters.toLocaleString()} 字符</span>) : <span>模板没有引用项目上下文。</span>}</div><h4>System Prompt</h4><pre className="prompt-preview-text">{systemPrompt}</pre><h4>User Prompt</h4><pre className="prompt-preview-text">{preview.resolution.prompt}</pre></Modal> : null}
+    {preview ? <Modal open title={`Prompt 预览 · ${preview.preset.name}`} onClose={cancelPreview} footer={<><Button variant="outline" onClick={cancelPreview}>取消</Button>{preview.run ? <Button disabled={busy} onClick={confirmPreview}><Play size={13} />确认运行</Button> : null}</>}><div className="prompt-preview-meta"><span>字符数：{budget.characters.toLocaleString()}</span><span>估算 Token：{budget.estimatedTokens.toLocaleString()}</span><span>安全阈值：{budget.safeLimit.toLocaleString()} 字符{budget.overLimit ? ' · 超过安全阈值，请减少内容' : ''}</span></div><div className="prompt-preview-contexts"><strong>显式上下文项</strong>{preview.resolution.contexts.length ? preview.resolution.contexts.map((context) => <span key={context.variable}>{context.label} · {context.characters.toLocaleString()} 字符</span>) : <span>模板没有引用项目上下文。</span>}</div><h4>System Prompt</h4><pre className="prompt-preview-text">{systemPrompt}</pre><h4>User Prompt</h4><pre className="prompt-preview-text">{preview.resolution.prompt}</pre></Modal> : null}
   </Panel>
   if (presentation === 'panel') return content
-  return <><Button variant="outline" className="ai-template-launcher" onClick={() => setVisible(true)}><BookOpen size={14} />使用模板</Button><div className="ai-template-dialog"><Modal open={visible} title="写作模板" onClose={() => setVisible(false)}>{content}</Modal></div></>
+  return <><Button variant="outline" className="ai-template-launcher" onClick={() => setVisible(true)}><BookOpen size={14} />使用模板</Button><div className="ai-template-dialog"><Modal open={visible} title="写作模板" onClose={() => { cancelPreview(); setVisible(false) }}>{content}</Modal></div></>
 }
