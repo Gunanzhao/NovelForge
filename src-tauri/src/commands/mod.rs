@@ -55,7 +55,7 @@ pub(crate) use manuscript::{
 pub(crate) use project::{create_project, list_documents, open_project, read_logs, update_project};
 pub(crate) use recovery::{
     discard_recovery, list_history, list_recovery, read_history, read_recovery, restore_history,
-    restore_recovery, RecoveryActionInput, RevisionActionInput,
+    restore_recovery, RecoveryActionInput, RestoreRevisionInput, RevisionActionInput,
 };
 #[allow(unused_imports)]
 pub(crate) use search::search_project;

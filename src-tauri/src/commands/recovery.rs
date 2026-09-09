@@ -83,8 +83,16 @@ pub fn read_history(input: RevisionActionInput) -> Result<String, String> {
     Ok(storage::strip_markdown_frontmatter(&content))
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreRevisionInput {
+    pub project_path: String,
+    pub revision_id: String,
+    pub expected_node_id: String,
+}
+
 #[tauri::command]
-pub fn restore_history(input: RevisionActionInput) -> Result<ProjectData, String> {
+pub fn restore_history(input: RestoreRevisionInput) -> Result<ProjectData, String> {
     let (root, mut connection) = project_connection(&input.project_path)?;
     let (node_id, path): (String, String) = connection
         .query_row(
@@ -93,6 +101,9 @@ pub fn restore_history(input: RevisionActionInput) -> Result<ProjectData, String
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .map_err(|error| format!("版本不存在：{}", error))?;
+    if node_id != input.expected_node_id {
+        return Err("历史版本不属于当前章节，已取消恢复".to_string());
+    }
     let content = fs::read_to_string(storage::safe_relative(&root, &path)?)
         .map_err(|error| format!("无法读取历史内容：{}", error))?;
     manuscript::ensure_body_unlocked(&connection, &node_id)?;

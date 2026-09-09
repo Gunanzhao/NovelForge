@@ -480,6 +480,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   if (command === 'restore_history') {
     const item = store.history.find((history) => history.id === input?.revisionId)
     if (!item) throw new Error('版本不存在')
+    if (item.nodeId !== input?.expectedNodeId) throw new Error('历史版本不属于当前章节，已取消恢复')
     const current = node(store, item.nodeId)
     if (!current) throw new Error('章节不存在')
     if (isNodeLocked(store.data.nodes, current.id)) throw new Error('正文已锁定，请先解锁')

@@ -1711,9 +1711,25 @@ fn restore_history_preserves_current_document() {
         })
         .expect("current revision");
 
-    super::commands::restore_history(super::commands::RevisionActionInput {
+    let rejected = super::commands::restore_history(super::commands::RestoreRevisionInput {
+        project_path: project_path.clone(),
+        revision_id: current_revision_id.clone(),
+        expected_node_id: "another-chapter".to_string(),
+    });
+    assert!(rejected.unwrap_err().contains("不属于当前章节"));
+    assert_eq!(
+        super::commands::get_document(super::models::NodeActionInput {
+            project_path: project_path.clone(),
+            node_id: chapter.id.clone(),
+        })
+        .unwrap()
+        .content,
+        "最新稿"
+    );
+    super::commands::restore_history(super::commands::RestoreRevisionInput {
         project_path: project_path.clone(),
         revision_id: current_revision_id,
+        expected_node_id: chapter.id.clone(),
     })
     .expect("restore history");
 

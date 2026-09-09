@@ -1,6 +1,6 @@
 import { Disclosure } from './Disclosure'
 import { linkedAttachments } from '../lib/attachment-data'
-import { useEffect, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { ChevronDown, ChevronUp, Clipboard, GitCompare, History, Lightbulb, RotateCcw } from 'lucide-react'
 import { projectApi } from '../lib/api'
 import { cleanWritingWhitespace, convertFullwidth, convertHalfwidth, convertPunctuation, indentParagraphs, wikiTargets, writingHints } from '../lib/markdown'
@@ -18,6 +18,11 @@ import { ChapterChecklistInspector } from './ChapterWorkflow'
 import { useContextMenu } from './ContextMenu'
 
 export function Inspector() {
+  const identity = useAppStore(state => JSON.stringify([state.projectPath, state.projectSession, state.document?.node.id]))
+  return <InspectorContent key={identity} />
+}
+
+function InspectorContent() {
   const document = useAppStore((state) => state.document)
   const data = useAppStore((state) => state.data)
   const projectPath = useAppStore((state) => state.projectPath)
@@ -30,10 +35,17 @@ export function Inspector() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [history, setHistory] = useState<Awaited<ReturnType<typeof projectApi.listHistory>>>([])
   const [historyPreview, setHistoryPreview] = useState<{ id: string; content: string; mode: 'view' | 'diff' } | null>(null)
+  const mounted = useRef(true)
+  const previewRequest = useRef(0)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  const session = captureProjectSession()
+  const isCurrent = () => mounted.current && isCurrentProjectSession(session) && useAppStore.getState().document?.node.id === document?.node.id
 
   useEffect(() => {
+    let active = true
     if (!projectPath || !document) { setHistory([]); return }
-    void projectApi.listHistory({ projectPath, nodeId: document.node.id }).then(setHistory).catch(setError)
+    void projectApi.listHistory({ projectPath, nodeId: document.node.id }).then(items => { if (active) setHistory(items.filter(item => item.nodeId === document.node.id)) }).catch(error => { if (active) setError(error) })
+    return () => { active = false }
   }, [document, projectPath, setError])
 
   if (!document || !data || !projectPath) return <aside className="inspector"><div className="inspector-inner"><div className="empty-state"><Lightbulb size={22} /><div><strong>辅助栏</strong><span>选择章节后，这里会显示字数、设定链接、写作提示和版本历史。</span></div></div></div></aside>
@@ -71,21 +83,26 @@ export function Inspector() {
   }
 
   async function readRevision(id: string, mode: 'view' | 'diff' = 'view') {
+    if (!isCurrent() || !history.some(item => item.id === id)) return
+    const request = ++previewRequest.current
     try {
       const content = await projectApi.readHistory({ projectPath: currentProjectPath, revisionId: id })
-      setHistoryPreview({ id, content, mode })
-    } catch (error) { setError(error) }
+      if (isCurrent() && request === previewRequest.current) setHistoryPreview({ id, content, mode })
+    } catch (error) { if (isCurrent()) setError(error) }
   }
 
   async function copyRevision(id: string) {
+    if (!isCurrent() || !history.some(item => item.id === id)) return
+    const request = ++previewRequest.current
     try {
       const content = await projectApi.readHistory({ projectPath: currentProjectPath, revisionId: id })
+      if (!isCurrent() || request !== previewRequest.current) return
       if (!await writeClipboardText(content)) {
         setError('无法访问系统剪贴板，请改用 Ctrl+C。')
         return
       }
-      setHistoryPreview({ id, content, mode: 'view' })
-    } catch (error) { setError(error) }
+      if (isCurrent() && request === previewRequest.current) setHistoryPreview({ id, content, mode: 'view' })
+    } catch (error) { if (isCurrent()) setError(error) }
   }
 
   function openHistoryMenu(event: ReactMouseEvent<HTMLDivElement>, item: typeof history[number]) {
@@ -100,15 +117,15 @@ export function Inspector() {
   }
 
   async function restoreRevision(id: string) {
-    const session = captureProjectSession()
+    if (!isCurrent() || !history.some(item => item.id === id && item.nodeId === currentDocument.node.id)) return
     if (!window.confirm('恢复这个历史版本？当前内容会先生成新的历史快照。')) return
     const currentNodeId = currentDocument.node.id
     try {
       const store = useAppStore.getState()
       if (store.saveState !== 'saved' && !await store.saveCurrentDocument('恢复前保存')) return
-      if (!isCurrentProjectSession(session)) return
+      if (!isCurrent()) return
       const version = useAppStore.getState().documentVersion
-      const result = await projectApi.restoreHistory({ projectPath: currentProjectPath, revisionId: id })
+      const result = await projectApi.restoreHistory({ projectPath: currentProjectPath, revisionId: id, expectedNodeId: currentNodeId })
       if (!isCurrentProjectSession(session)) return
       await refreshData(result, true, session)
       if (useAppStore.getState().document?.node.id === currentNodeId && useAppStore.getState().documentVersion === version) await useAppStore.getState().selectNode(currentNodeId, true)
@@ -127,7 +144,7 @@ export function Inspector() {
       <Disclosure title="剧情线" storageKey="inspector:arcs" className="inspector-disclosure inspector-widget"><StoryArcInspector /></Disclosure>
       <Disclosure title="章节完成" storageKey="inspector:checklist" className="inspector-disclosure inspector-widget"><ChapterChecklistInspector /></Disclosure>
       <div className="inspector-section"><NameGenerator /></div>
-      <div className="inspector-section"><button className="inspector-collapse" onClick={() => setHistoryOpen(!historyOpen)}><span><History size={14} />版本历史</span>{historyOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>{historyOpen ? <div className="history-list" style={{ marginTop: 11 }}>{history.length ? history.map((item) => <div className="history-item" key={item.id} onContextMenu={(event) => openHistoryMenu(event, item)}><div><strong>{item.reason}</strong><small>{formatDate(item.createdAt)} · {formatNumber(item.wordCount)} 字</small></div><span><Button variant="ghost" onClick={() => void readRevision(item.id)}>查看</Button><Button variant="ghost" onClick={() => void readRevision(item.id, 'diff')}><GitCompare size={12} />Diff</Button><Button variant="ghost" onClick={() => void copyRevision(item.id)}><Clipboard size={12} />复制</Button><Button variant="ghost" onClick={() => void restoreRevision(item.id)}><RotateCcw size={12} />恢复</Button></span></div>) : <span className="field-hint">保存一次后会在这里留下快照。</span>}{historyPreview ? historyPreview.mode === 'diff' ? <pre className="history-preview history-diff">{diffLines(historyPreview.content, document.content).map((line, index) => <span className={'diff-line ' + line.kind} key={index}>{line.kind === 'same' ? '  ' : line.kind === 'added' ? '+ ' : '- '}{line.text}{'\\n'}</span>)}</pre> : <pre className="history-preview">{historyPreview.content}</pre> : null}</div> : null}</div>
+      <div className="inspector-section"><button className="inspector-collapse" onClick={() => setHistoryOpen(!historyOpen)}><span><History size={14} />版本历史</span>{historyOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>{historyOpen ? <div className="history-list" style={{ marginTop: 11 }}>{history.length ? history.map((item) => <div className="history-item" key={item.id} onContextMenu={(event) => openHistoryMenu(event, item)}><div><strong>{item.reason}</strong><small>{formatDate(item.createdAt)} · {formatNumber(item.wordCount)} 字</small></div><span><Button variant="ghost" onClick={() => void readRevision(item.id)}>查看</Button><Button variant="ghost" onClick={() => void readRevision(item.id, 'diff')}><GitCompare size={12} />Diff</Button><Button variant="ghost" onClick={() => void copyRevision(item.id)}><Clipboard size={12} />复制</Button><Button variant="ghost" onClick={() => void restoreRevision(item.id)}><RotateCcw size={12} />恢复</Button></span></div>) : <span className="field-hint">保存一次后会在这里留下快照。</span>}{historyPreview ? historyPreview.mode === 'diff' ? <pre className="history-preview history-diff">{diffLines(historyPreview.content, document.content).map((line, index) => <span className={'diff-line ' + line.kind} key={index}>{line.kind === 'same' ? '  ' : line.kind === 'added' ? '+ ' : '- '}{line.text}{'\n'}</span>)}</pre> : <pre className="history-preview">{historyPreview.content}</pre> : null}</div> : null}</div>
     </div>
   </aside>
 }
