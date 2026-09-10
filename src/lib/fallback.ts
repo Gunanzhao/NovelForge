@@ -463,13 +463,30 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
       id: uid(), nodeId: id, nodeTitle: current.title, reason,
       wordCount: countWords(content), createdAt: now, path: 'fallback://history/' + id, content,
     }
-    store.history.unshift(revision)
+    const latest = store.history.find(item => item.nodeId === id)
+    if (!['手动保存', '命令面板保存', '右键菜单保存'].includes(reason) && (!latest || (latest.content !== content && (reason !== '自动保存' || Date.now() - Date.parse(latest.createdAt) >= 300_000)))) store.history.unshift(revision)
     store.documents[id] = content
     store.activities.push({ createdAt: now, deltaWords: countWords(content) - countWords(old) })
     current.updatedAt = now
     updateTime(store.data)
     persist(projectPath, store)
     return { node: current, content } as T
+  }
+  if (command === 'create_history_snapshot') {
+    const current = node(store, input?.nodeId as string)
+    if (!current || current.kind === 'volume') throw new Error('章节不存在')
+    const content = input?.content as string
+    const kind = input?.kind
+    const name = String(input?.name ?? '').trim()
+    if (typeof content !== 'string' || !['automatic', 'checkpoint', 'named', 'protected'].includes(String(kind))) throw new Error('快照参数无效')
+    if (name.length > 100 || (kind === 'named' && !name)) throw new Error('请输入不超过100字的版本名称')
+    const reason = kind === 'automatic' ? '自动保存' : kind === 'checkpoint' ? '离开前保存' : kind === 'named' ? '命名版本：' + name : '操作前保护：' + name
+    const latest = store.history.find(item => item.nodeId === current.id)
+    if (latest?.content === content && (kind !== 'named' || latest.reason === reason)) return undefined as T
+    if (latest && kind === 'automatic' && Date.now() - Date.parse(latest.createdAt) < 300_000) return undefined as T
+    store.history.unshift({ id: uid(), nodeId: current.id, nodeTitle: current.title, reason, content, wordCount: countWords(content), createdAt: new Date().toISOString(), path: 'fallback://history/' + current.id })
+    persist(projectPath, store)
+    return undefined as T
   }
   if (command === 'list_history') return store.history.filter((item) => item.nodeId === input?.nodeId).map((item) => ({ id: item.id, nodeId: item.nodeId, nodeTitle: item.nodeTitle, reason: item.reason, wordCount: item.wordCount, createdAt: item.createdAt, path: item.path })) as T
   if (command === 'read_history') {

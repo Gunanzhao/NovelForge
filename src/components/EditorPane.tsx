@@ -1,3 +1,4 @@
+import { protectBeforeChange } from '../lib/history'
 import { autoNameExtension } from '../lib/auto-name-extension'
 import { NameRecognitionCard, type NameCard } from './NameRecognition'
 import type { AutoNameMatch } from '../lib/auto-names'
@@ -6,7 +7,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import CodeMirror from '@uiw/react-codemirror'
 import { invertedEffects, isolateHistory, redo, undo } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
-import { EditorState, RangeSetBuilder } from '@codemirror/state'
+import { Annotation, EditorState, RangeSetBuilder } from '@codemirror/state'
 import { isNodeLocked } from '../lib/node-lock'
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import {
@@ -28,6 +29,7 @@ import { useContextMenu } from './ContextMenu'
 import { MarkdownPreview } from './MarkdownPreview'
 
 // Use the browser's per-line selection instead of CodeMirror's merged rectangle layer.
+const historyProtected = Annotation.define<boolean>()
 const editorBasicSetup = { drawSelection: false, allowMultipleSelections: false, rectangularSelection: false }
 
 function wikiDecorationSet(source: string): DecorationSet {
@@ -190,6 +192,14 @@ export function EditorPane() {
     invertedEffects.of(transaction => transaction.effects.filter(effect => effect.is(aiAcceptanceEffect)).map(effect => aiAcceptanceEffect.of({ ...effect.value, accepted: !effect.value.accepted }))),
     EditorState.transactionFilter.of((transaction) => {
       const current = useAppStore.getState()
+      if (transaction.docChanged && transaction.isUserEvent('input.replace.all') && !transaction.annotation(historyProtected)) {
+        const view = editorViewRef.current
+        const source = transaction.startState.doc.toString()
+        void protectBeforeChange(source, '全部替换').then(() => {
+          if (view?.dom.isConnected && view.state.doc.toString() === source) view.dispatch({ changes: transaction.changes, selection: transaction.newSelection, annotations: historyProtected.of(true), userEvent: 'input.replace.all' })
+        }).catch(error => useAppStore.getState().setError(error))
+        return []
+      }
       return transaction.docChanged && isNodeLocked(current.data?.nodes ?? [], current.document?.node.id) ? [] : transaction
     }),
     ...wikiEditorExtension(resolveWikiTarget),

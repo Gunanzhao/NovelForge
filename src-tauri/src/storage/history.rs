@@ -48,7 +48,7 @@ pub fn recovery_items(root: &Path, connection: &Connection) -> Result<Vec<Recove
 
 pub fn history_items(connection: &Connection, node_id: &str) -> Result<Vec<HistoryItem>, String> {
     let mut statement = connection.prepare(
-        "SELECT id, node_id, node_title, reason, word_count, created_at, file_path FROM revisions WHERE node_id = ?1 ORDER BY created_at DESC LIMIT 100",
+        "SELECT id, node_id, node_title, reason, word_count, created_at, file_path FROM revisions WHERE node_id = ?1 ORDER BY created_at DESC, rowid DESC",
     ).map_err(|error| format!("读取版本历史失败：{}", error))?;
     let rows = statement
         .query_map(params![node_id], |row| {
@@ -99,4 +99,36 @@ pub fn write_recovery(
     let path = safe_relative(root, &relative)?;
     atomic_write(&path, content.as_bytes())?;
     Ok((filename, path.to_string_lossy().to_string()))
+}
+
+/// Schedule history independently of body saves; never delete existing snapshots.
+pub fn needs_snapshot(
+    root: &Path,
+    connection: &Connection,
+    node_id: &str,
+    content: &str,
+    reason: &str,
+) -> Result<bool, String> {
+    if matches!(reason, "手动保存" | "命令面板保存" | "右键菜单保存") {
+        return Ok(false);
+    }
+    let latest: Option<(String, String, String)> = connection.query_row(
+        "SELECT file_path, created_at, reason FROM revisions WHERE node_id = ?1 ORDER BY created_at DESC, rowid DESC LIMIT 1",
+        params![node_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    ).optional().map_err(|e| format!("读取最近历史失败：{}", e))?;
+    let Some((path, time, previous_reason)) = latest else {
+        return Ok(true);
+    };
+    let previous = fs::read_to_string(safe_relative(root, &path)?)
+        .map_err(|e| format!("读取最近快照失败：{}", e))?;
+    let named = reason.starts_with("命名版本：");
+    if previous == content && (!named || previous_reason == reason) {
+        return Ok(false);
+    }
+    if reason == "自动保存" || reason.is_empty() {
+        if let Some(time) = parse_timestamp(&time) {
+            return Ok(Utc::now().signed_duration_since(time).num_seconds() >= 300);
+        }
+    }
+    Ok(true)
 }

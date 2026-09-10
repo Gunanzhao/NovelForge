@@ -7,7 +7,7 @@ import type { NodeRecord, ProjectData, AiCompletionResult } from '../src/lib/typ
 const mocks = vi.hoisted(() => ({
   status: vi.fn(), models: vi.fn(), login: vi.fn(), generate: vi.fn(), cancel: vi.fn(), aiComplete: vi.fn(),
 }))
-vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: { aiComplete: mocks.aiComplete } }))
+vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: { createHistorySnapshot: vi.fn(async () => {}), aiComplete: mocks.aiComplete } }))
 vi.mock('../src/lib/codex', () => ({ codexApi: mocks }))
 import { AiAssistantView } from '../src/components/AiAssistantView'
 import { readAiPreferences, writeAiPreferences } from '../src/lib/ai-data'
@@ -47,7 +47,7 @@ describe('Codex writing integration', () => {
     expect(await screen.findByDisplayValue('风声')).toBeTruthy()
     expect(screen.queryByRole('button', { name: '追加到正文' })).toBeNull()
     await act(async () => finish({ content: '风声渐紧。', model: 'writer' }))
-    fireEvent.click(await screen.findByRole('button', { name: '追加到正文' }))
+    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: '追加到正文' })) })
     expect(useAppStore.getState().document?.content).toContain('风声渐紧。')
     expect(mocks.aiComplete).not.toHaveBeenCalled()
   })
@@ -69,7 +69,7 @@ describe('Codex writing integration', () => {
     fireEvent.click(screen.getByRole('button', { name: '运行辅助' }))
     await screen.findByDisplayValue('生成正文')
     act(() => useAppStore.setState({ document: { node: chapter, content: '用户继续写作。' } }))
-    fireEvent.click(screen.getByRole('button', { name: '追加到正文' }))
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '追加到正文' })) })
     expect(useAppStore.getState().document?.content).toBe('用户继续写作。')
     expect(useAppStore.getState().error).toContain('已变化')
   })
@@ -115,7 +115,7 @@ describe('Codex writing integration', () => {
     fireEvent.click(screen.getByRole('button', { name: '运行辅助' }))
     await screen.findByDisplayValue('细雨长夜')
     act(() => useAppStore.setState({ editorSelection: { nodeId: 'chapter', from: 1, to: 2, text: '夜' } }))
-    fireEvent.click(screen.getByRole('button', { name: '替换选区' }))
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '替换选区' })) })
     expect(useAppStore.getState().error).toBeNull()
     expect(useAppStore.getState().document?.content).toBe('细雨长夜。')
   })

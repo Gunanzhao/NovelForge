@@ -2,9 +2,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { EditorView } from '@codemirror/view'
 import { undo, redo } from '@codemirror/commands'
-import { selectNextOccurrence } from '@codemirror/search'
-const mocks = vi.hoisted(() => ({ aiComplete: vi.fn() }))
-vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: { aiComplete: mocks.aiComplete } }))
+import { openSearchPanel, replaceAll, SearchQuery, setSearchQuery, selectNextOccurrence } from '@codemirror/search'
+const mocks = vi.hoisted(() => ({ createHistorySnapshot: vi.fn(async () => {}), aiComplete: vi.fn() }))
+vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: { createHistorySnapshot: mocks.createHistorySnapshot, aiComplete: mocks.aiComplete } }))
 import { EditorPane } from '../src/components/EditorPane'
 import { AiAssistantView } from '../src/components/AiAssistantView'
 import { ContextMenuProvider } from '../src/components/ContextMenu'
@@ -67,7 +67,7 @@ it('accepts differences through one editor transaction and supports undo and red
   fireEvent.click(screen.getByRole('button', { name: '运行辅助' }))
   await screen.findByDisplayValue('风很暖。灯很亮。')
   act(() => editor().dispatch({ selection: { anchor: 0 } }))
-  fireEvent.click(screen.getByRole('button', { name: '替换选区' }))
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: '替换选区' })) })
   expect(editor().state.doc.toString()).toBe('前文。风很暖。灯很亮。后文。')
   act(() => { undo(editor()) })
   expect(editor().state.doc.toString()).toBe(content)
@@ -84,7 +84,7 @@ it('preserves unrelated editor changes and reviews each hunk separately', async 
   await screen.findByDisplayValue('风很暖。灯很亮。')
   act(() => editor().dispatch({ changes: [{ from: 0, insert: '开头。' }, { from: content.length, insert: '结尾。' }] }))
   fireEvent.click(screen.getByRole('button', { name: /修改对比/ }))
-  fireEvent.click(screen.getAllByRole('button', { name: '接受此项' })[0])
+  await act(async () => { fireEvent.click(screen.getAllByRole('button', { name: '接受此项' })[0]) })
   fireEvent.click(screen.getByRole('button', { name: '保留原文' }))
   expect(editor().state.doc.toString()).toBe('开头。前文。风很暖。灯很暗。后文。结尾。')
 })
@@ -99,7 +99,7 @@ it('retains a pending request when changing workbench presentation and binds ins
   await act(async () => finish({ content: '续写结果', model: 'writer' }))
   expect(screen.getByDisplayValue('续写结果')).toBeTruthy()
   expect(mocks.aiComplete).toHaveBeenCalledTimes(1)
-  fireEvent.click(screen.getByRole('button', { name: '插入原光标处' }))
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: '插入原光标处' })) })
   expect(useAppStore.getState().document?.content).toBe(content + '续写结果')
 })
 it('selects the chapter when switching to summary after expanding an inline selection task', async () => {
@@ -120,7 +120,7 @@ it('blocks application to locked chapters even when the result was generated bef
   setup()
   await act(async () => useAiTask.getState().start(captureAiTarget('chapter'), 'rewrite', async () => ({ preferences: { mode: 'offline', endpoint: '', model: '' }, apiKey: '', systemPrompt: '', prompt: '润色', local: { content: '新正文', model: 'local' } })))
   act(() => useAppStore.setState({ data: { ...data, nodes: [{ ...node, status: 'locked' }] } }))
-  act(() => useAiTask.getState().accept())
+  await act(async () => useAiTask.getState().accept())
   expect(editor().state.doc.toString()).toBe(content)
   expect(useAppStore.getState().error).toContain('锁定')
 })
@@ -140,12 +140,12 @@ it.each(['风很温暖。灯很明亮。', '风冷。灯暗。', '风很冷。�
   setup()
   act(() => editor().dispatch({ selection: { anchor: 3, head: 11 } }))
   await act(async () => useAiTask.getState().start(captureAiTarget('selection'), 'rewrite', async () => ({ preferences: { mode: 'offline', endpoint: '', model: '' }, apiKey: '', systemPrompt: '', prompt: '测试', local: { content: replacement, model: 'local' } })))
-  act(() => useAiTask.getState().accept())
+  await act(async () => useAiTask.getState().accept())
   expect(editor().state.doc.toString()).toBe('前文。' + replacement + '后文。')
   act(() => { undo(editor()) })
   expect(editor().state.doc.toString()).toBe(content)
   expect(useAiTask.getState().edits.every(edit => edit.state === 'pending' && !edit.conflict)).toBe(true)
-  act(() => useAiTask.getState().accept())
+  await act(async () => useAiTask.getState().accept())
   expect(editor().state.doc.toString()).toBe('前文。' + replacement + '后文。')
 })
 
@@ -153,11 +153,11 @@ it('can revise and reapply a suggestion after undo without carrying a stale conf
   setup()
   act(() => editor().dispatch({ selection: { anchor: 3, head: 11 } }))
   await act(async () => useAiTask.getState().start(captureAiTarget('selection'), 'rewrite', async () => ({ preferences: { mode: 'offline', endpoint: '', model: '' }, apiKey: '', systemPrompt: '', prompt: '测试', local: { content: '风很温暖。灯很亮。', model: 'local' } })))
-  act(() => useAiTask.getState().accept())
+  await act(async () => useAiTask.getState().accept())
   act(() => { undo(editor()) })
   act(() => useAiTask.getState().editResult('风很轻。灯很亮。'))
   expect(useAiTask.getState().edits.some(edit => edit.conflict)).toBe(false)
-  act(() => useAiTask.getState().accept())
+  await act(async () => useAiTask.getState().accept())
   expect(editor().state.doc.toString()).toBe('前文。风很轻。灯很亮。后文。')
 })
 
@@ -165,14 +165,14 @@ it('does not mark a revised suggestion accepted when redoing an older result', a
   setup()
   act(() => editor().dispatch({ selection: { anchor: 3, head: 11 } }))
   await act(async () => useAiTask.getState().start(captureAiTarget('selection'), 'rewrite', async () => ({ preferences: { mode: 'offline', endpoint: '', model: '' }, apiKey: '', systemPrompt: '', prompt: '测试', local: { content: '风很温暖。灯很亮。', model: 'local' } })))
-  act(() => useAiTask.getState().accept())
+  await act(async () => useAiTask.getState().accept())
   act(() => { undo(editor()) })
   act(() => useAiTask.getState().editResult('风很轻。灯很亮。'))
   act(() => { redo(editor()) })
   expect(editor().state.doc.toString()).toBe('前文。风很温暖。灯很亮。后文。')
   expect(useAiTask.getState().edits.every(edit => edit.state === 'pending')).toBe(true)
   expect(useAiTask.getState().edits.some(edit => edit.conflict)).toBe(true)
-  act(() => useAiTask.getState().accept())
+  await act(async () => useAiTask.getState().accept())
   expect(editor().state.doc.toString()).toBe('前文。风很温暖。灯很亮。后文。')
 })
 
@@ -185,4 +185,21 @@ it.each(['polish', 'rewrite', 'expand', 'shrink'])('does not offer a whole-chapt
   expect(screen.getByText(/仅处理选区；如需处理整章/)).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: '摘要' }))
   expect((screen.getByRole('button', { name: '使用整章' }) as HTMLButtonElement).disabled).toBe(false)
+})
+
+it('writes a protection snapshot before replacing all matches and preserves undo', async () => {
+  let finish!: () => void
+  mocks.createHistorySnapshot.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  setup()
+  act(() => {
+    openSearchPanel(editor())
+    editor().dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: '很', replace: '非常' })) })
+    replaceAll(editor())
+  })
+  expect(editor().state.doc.toString()).toBe(content)
+  expect(mocks.createHistorySnapshot).toHaveBeenCalledWith(expect.objectContaining({ content, kind: 'protected', name: '全部替换' }))
+  await act(async () => finish())
+  expect(editor().state.doc.toString()).toBe(content.replaceAll('很', '非常'))
+  act(() => { undo(editor()) })
+  expect(editor().state.doc.toString()).toBe(content)
 })

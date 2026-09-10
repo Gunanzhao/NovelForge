@@ -1,6 +1,6 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-const mocks = vi.hoisted(() => ({ getDocument: vi.fn(), aiComplete: vi.fn(), listHistory: vi.fn(), readHistory: vi.fn(), restoreHistory: vi.fn() }))
+const mocks = vi.hoisted(() => ({ createHistorySnapshot: vi.fn(async () => {}), getDocument: vi.fn(), aiComplete: vi.fn(), listHistory: vi.fn(), readHistory: vi.fn(), restoreHistory: vi.fn() }))
 vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: mocks }))
 import { Inspector } from '../src/components/Inspector'
 vi.mock('../src/components/NameGenerator', () => ({ NameGenerator: () => null }))
@@ -41,4 +41,20 @@ it('clears chapter A history and preview while chapter B history is loading', as
   expect(screen.queryByText('A章旧内容')).toBeNull()
   expect(screen.queryByText('A章历史')).toBeNull()
   expect(mocks.restoreHistory).not.toHaveBeenCalled()
+})
+
+it('saves a named version of the current unsaved body and exposes old named versions', async () => {
+  const items = Array.from({ length: 101 }, (_, i) => ({ id: 'version-' + i, nodeId: node.id, nodeTitle: '章', reason: i === 100 ? '命名版本：旧结局' : '自动保存', wordCount: 4, createdAt: '2026-01-01T01:02:03Z', path: 'history/test.md' }))
+  mocks.listHistory.mockResolvedValue(items)
+  render(<ContextMenuProvider fallbackItems={[]}><Inspector /></ContextMenuProvider>)
+  fireEvent.click(screen.getByRole('button', { name: '版本历史' }))
+  await screen.findByRole('button', { name: /加载更早版本/ })
+  fireEvent.change(screen.getByRole('combobox', { name: '筛选历史版本' }), { target: { value: 'named' } })
+  expect(screen.getByText('命名版本：旧结局')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: '保存版本' }))
+  const dialog = screen.getByRole('dialog', { name: '保存命名版本' })
+  fireEvent.change(within(dialog).getByLabelText('版本名称'), { target: { value: '结局修改前' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: '保存版本' }))
+  await waitFor(() => expect(mocks.createHistorySnapshot).toHaveBeenCalledWith({ projectPath: 'A', nodeId: node.id, content: 'A原选区与正文', kind: 'named', name: '结局修改前' }))
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: '保存命名版本' })).toBeNull())
 })

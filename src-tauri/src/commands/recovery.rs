@@ -111,3 +111,37 @@ pub fn restore_history(input: RestoreRevisionInput) -> Result<ProjectData, Strin
     save_document_internal(&root, &mut connection, &node_id, &content, "恢复历史版本")?;
     project_data(&root, &connection)
 }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotInput {
+    pub project_path: String,
+    pub node_id: String,
+    pub content: String,
+    pub kind: SnapshotKind,
+    pub name: Option<String>,
+}
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SnapshotKind {
+    Automatic,
+    Checkpoint,
+    Named,
+    Protected,
+}
+#[tauri::command]
+pub fn create_history_snapshot(input: SnapshotInput) -> Result<(), String> {
+    let (root, connection) = project_connection(&input.project_path)?;
+    let name = input.name.as_deref().unwrap_or("").trim();
+    if name.chars().count() > 100 {
+        return Err("版本名称不能超过100字".into());
+    }
+    let reason = match input.kind {
+        SnapshotKind::Automatic => "自动保存".to_string(),
+        SnapshotKind::Checkpoint => "离开前保存".to_string(),
+        SnapshotKind::Named if name.is_empty() => return Err("请输入版本名称".into()),
+        SnapshotKind::Named => format!("命名版本：{}", name),
+        SnapshotKind::Protected => format!("操作前保护：{}", name),
+    };
+    manuscript::create_content_snapshot(&root, &connection, &input.node_id, &input.content, &reason)
+}

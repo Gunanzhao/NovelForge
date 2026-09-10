@@ -50,6 +50,7 @@ export const projectApi = {
   readRecovery: (input: { projectPath: string; recoveryId: string }) => command<string>('read_recovery', { input }),
   restoreRecovery: (input: { projectPath: string; recoveryId: string }) => command<ProjectData>('restore_recovery', { input }),
   discardRecovery: (input: { projectPath: string; recoveryId: string }) => command<RecoveryItem[]>('discard_recovery', { input }),
+  createHistorySnapshot: (input: { projectPath: string; nodeId: string; content: string; kind: 'automatic' | 'checkpoint' | 'named' | 'protected'; name?: string }) => command<void>('create_history_snapshot', { input }),
   listHistory: (input: { projectPath: string; nodeId: string }) => command<HistoryItem[]>('list_history', { input }),
   readHistory: (input: { projectPath: string; revisionId: string }) => command<string>('read_history', { input }),
   restoreHistory: (input: { projectPath: string; revisionId: string; expectedNodeId: string }) => command<ProjectData>('restore_history', { input }),

@@ -812,6 +812,8 @@ pub(crate) fn save_document_internal(
     if node.deleted_at.is_some() || node.kind == "volume" {
         return Err("只有未删除的章节或小节可以编辑".to_string());
     }
+    let keep_history =
+        storage::history::needs_snapshot(root, connection, node_id, content, reason)?;
     let (_recovery_id, recovery_path) = storage::write_recovery(root, node_id, content)?;
     let target = storage::safe_relative(root, &node.file_path)
         .map_err(|error| format!("{}；恢复文件已保留", error))?;
@@ -836,7 +838,11 @@ pub(crate) fn save_document_internal(
     storage::atomic_write(&target, persisted_content.as_bytes())
         .map_err(|error| format!("{}；恢复文件已保留", error))?;
     let revision_id = storage::new_id();
-    let revision_path = match storage::copy_history(root, node_id, &revision_id, content) {
+    let revision_path = match if keep_history {
+        storage::copy_history(root, node_id, &revision_id, content).map(Some)
+    } else {
+        Ok(None)
+    } {
         Ok(path) => path,
         Err(error) => {
             let _ = storage::append_log(root, "ERROR", "document_save_failed");
@@ -856,7 +862,8 @@ pub(crate) fn save_document_internal(
             .transaction()
             .map_err(|error| format!("无法开始保存事务：{}", error))?;
         let created_at = storage::now();
-        transaction
+        if let Some(ref revision_path) = revision_path {
+            transaction
             .execute(
                 "INSERT INTO revisions (id, node_id, node_title, reason, word_count, created_at, file_path) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
@@ -870,6 +877,7 @@ pub(crate) fn save_document_internal(
                 ],
             )
             .map_err(|error| format!("记录历史快照失败：{}", error))?;
+        }
         let delta = storage::word_count(content) as i64 - storage::word_count(&old_content) as i64;
         transaction
             .execute(
@@ -897,8 +905,10 @@ pub(crate) fn save_document_internal(
     })();
     if let Err(error) = database_result {
         let _ = storage::append_log(root, "ERROR", "document_save_failed");
-        let cleanup =
-            storage::remove_file_if_exists(&storage::safe_relative(root, &revision_path)?);
+        let cleanup = match revision_path {
+            Some(ref path) => storage::remove_file_if_exists(&storage::safe_relative(root, path)?),
+            None => Ok(()),
+        };
         let rollback =
             restore_document_after_save_failure(&target, target_existed, &old_raw_content);
         let mut detail = error;
@@ -943,8 +953,25 @@ pub(crate) fn preserve_current_revision(
     let current_content =
         fs::read_to_string(&target).map_err(|error| format!("无法读取恢复前的正文：{}", error))?;
     let current_content = storage::strip_markdown_frontmatter(&current_content);
+    create_content_snapshot(root, connection, node_id, &current_content, reason)
+}
+
+pub(crate) fn create_content_snapshot(
+    root: &Path,
+    connection: &Connection,
+    node_id: &str,
+    current_content: &str,
+    reason: &str,
+) -> Result<(), String> {
+    let node = storage::node_from_id(connection, node_id)?.ok_or("章节不存在")?;
+    if node.deleted_at.is_some() || node.kind == "volume" {
+        return Err("章节不可用于历史快照".into());
+    }
+    if !storage::history::needs_snapshot(root, connection, node_id, current_content, reason)? {
+        return Ok(());
+    }
     let revision_id = storage::new_id();
-    let revision_path = storage::copy_history(root, node_id, &revision_id, &current_content)?;
+    let revision_path = storage::copy_history(root, node_id, &revision_id, current_content)?;
     let created_at = storage::now();
     let insert_result = connection.execute(
         "INSERT INTO revisions (id, node_id, node_title, reason, word_count, created_at, file_path) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -953,7 +980,7 @@ pub(crate) fn preserve_current_revision(
             node.id,
             node.title,
             reason,
-            storage::word_count(&current_content) as i64,
+            storage::word_count(current_content) as i64,
             created_at,
             revision_path
         ],

@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type { DocumentData, NodeRecord, ProjectData } from '../src/lib/types'
 
 const api = vi.hoisted(() => ({
-  getDocument: vi.fn(), saveDocument: vi.fn(), open: vi.fn(), create: vi.fn(), stats: vi.fn(),
+  createHistorySnapshot: vi.fn(async () => {}), getDocument: vi.fn(), saveDocument: vi.fn(), open: vi.fn(), create: vi.fn(), stats: vi.fn(),
   createNode: vi.fn(), renameNode: vi.fn(), setNodeStatus: vi.fn(), reorderNode: vi.fn(), moveNode: vi.fn(), copyNode: vi.fn(), deleteNode: vi.fn(),
   upsertEntity: vi.fn(), deleteEntity: vi.fn(), listTrash: vi.fn(), restoreTrash: vi.fn(), permanentDelete: vi.fn(), emptyTrash: vi.fn(), updateProject: vi.fn(), exportProject: vi.fn(),
 }))
@@ -42,6 +42,7 @@ it('keeps the latest chapter request when reads complete out of order', async ()
   const slow = deferred<DocumentData>()
   api.getDocument.mockReturnValueOnce(slow.promise)
   const first = useAppStore.getState().selectNode('b')
+  await vi.waitFor(() => expect(api.getDocument).toHaveBeenCalled())
   await useAppStore.getState().selectNode('c')
   slow.resolve({ node: b, content: 'old B' }); await first
   expect(useAppStore.getState().document?.node.id).toBe('c')
@@ -101,6 +102,7 @@ it('does not resurrect a project after it was closed during opening', async () =
 it('saves input entered during a project open before switching', async () => {
   const slow = deferred<ProjectData>(); api.open.mockReturnValueOnce(slow.promise)
   const pending = useAppStore.getState().openProject('other')
+  await vi.waitFor(() => expect(api.open).toHaveBeenCalled())
   useAppStore.getState().updateContent('typed during open')
   slow.resolve({ ...project, project: { ...project.project, id: 'other' } }); await pending
   expect(api.saveDocument).toHaveBeenCalledWith(expect.objectContaining({ projectPath: 'P', content: 'typed during open' }))
@@ -118,4 +120,20 @@ it('does not export after a failed save', async () => {
   api.saveDocument.mockRejectedValue(new Error('disk error')); useAppStore.getState().updateContent('new')
   await expect(useAppStore.getState().exportProject('markdown')).rejects.toThrow('已取消导出')
   expect(api.exportProject).not.toHaveBeenCalled()
+})
+
+it('flushes clean body content to history before leaving, and blocks leaving if that snapshot fails', async () => {
+  await useAppStore.getState().selectNode('b')
+  expect(api.createHistorySnapshot).toHaveBeenCalledWith(expect.objectContaining({ nodeId: 'a', content: 'original', kind: 'checkpoint' }))
+  api.createHistorySnapshot.mockRejectedValueOnce(new Error('历史保存失败'))
+  expect(await useAppStore.getState().closeProject()).toBe(false)
+  expect(useAppStore.getState().projectPath).toBe('P')
+})
+it('keeps edits made while the final checkpoint is being written', async () => {
+  const slow = deferred<void>()
+  api.createHistorySnapshot.mockReturnValueOnce(slow.promise)
+  const closing = useAppStore.getState().closeProject()
+  useAppStore.getState().updateContent('关闭前继续输入')
+  slow.resolve(); expect(await closing).toBe(false)
+  expect(useAppStore.getState().document?.content).toBe('关闭前继续输入')
 })

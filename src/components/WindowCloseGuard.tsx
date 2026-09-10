@@ -21,7 +21,7 @@ export function WindowCloseGuard() {
     try {
       if (!await confirmDraftNavigation()) return
       const store = useAppStore.getState()
-      if (store.document && store.saveState !== 'saved' && !await store.saveCurrentDocument('关闭窗口前保存')) {
+      if (store.document && !await store.saveCurrentDocument('关闭窗口前保存')) {
         setFailed(true)
         return
       }

@@ -1,3 +1,4 @@
+import { protectBeforeChange } from '../lib/history'
 import { create } from 'zustand'
 import { ChangeSet, type ChangeDesc } from '@codemirror/state'
 import { isDesktop, projectApi } from '../lib/api'
@@ -43,10 +44,10 @@ interface AiTask {
   clear: () => void
   editResult: (content: string) => void
   observe: (before: string, after: string, changes?: ChangeSet, acceptance?: AiAcceptance) => void
-  accept: (id?: string) => void
+  accept: (id?: string) => Promise<void>
   reject: (id: string) => void
-  insert: (position: 'target' | 'after' | 'end') => void
-  replace: () => void
+  insert: (position: 'target' | 'after' | 'end') => Promise<void>
+  replace: () => Promise<void>
 }
 
 export function captureAiTarget(kind: AiTarget['kind'], range?: { from: number; to: number }): AiTarget {
@@ -151,30 +152,38 @@ export const useAiTask = create<AiTask>((set, get) => ({
       return { ...edit, ...mapAiRange(edit, changes) }
     }) })
   },
-  accept(id) {
+  async accept(id) {
     const { target, source, edits, phase } = get()
     if (!target || phase !== 'complete') return
     try {
       const selected = edits.filter(edit => edit.state === 'pending' && (id === undefined || edit.id === id))
       if (!selected.length) return
       const { content, changes } = applyAiEdits(source, selected)
+      const token = get().token
+      await protectBeforeChange(source, 'AI 修改', token)
+      if (get().token !== token || get().phase !== 'complete') return
+      if (get().edits !== edits) throw new Error('建议或正文已变化，请重新接受。')
       writeChanges(target, source, content, changes, { token: get().token, ids: selected.map(edit => edit.id), accepted: true })
       set({ error: '' })
     } catch (error) { set({ error: String(error) }); useAppStore.getState().setError(error) }
   },
   reject(id) { set(state => ({ edits: state.edits.map(edit => edit.id === id && edit.state === 'pending' ? { ...edit, state: 'rejected' } : edit) })) },
-  replace() {
+  async replace() {
     const { target, source, result, phase } = get()
     if (!target || !result || phase !== 'complete') return
     try {
       if (target.conflict) throw new Error('目标正文已变化，不能覆盖。')
       const edit: AiEdit = { id: 'replace', ...target, before: source.slice(target.from, target.to), after: result.content, state: 'pending' }
       const { content, changes } = applyAiEdits(source, [edit])
+      const token = get().token
+      await protectBeforeChange(source, 'AI 修改', token)
+      if (get().token !== token || get().phase !== 'complete') return
+      if (get().result !== result) throw new Error('生成结果已变化，请重试。')
       writeChanges(target, source, content, changes)
       set({ phase: 'idle', error: '' })
     } catch (error) { set({ error: String(error) }); useAppStore.getState().setError(error) }
   },
-  insert(position) {
+  async insert(position) {
     const { target, source, result, phase } = get()
     if (!target || !result || phase !== 'complete') return
     try {
@@ -182,6 +191,10 @@ export const useAiTask = create<AiTask>((set, get) => ({
       const at = position === 'end' ? source.length : position === 'after' ? target.to : target.from
       const text = position === 'end' ? '\n\n' + result.content.trim() + '\n' : result.content
       const changes = ChangeSet.of({ from: at, insert: text }, source.length)
+      const token = get().token
+      await protectBeforeChange(source, 'AI 修改', token)
+      if (get().token !== token || get().phase !== 'complete') return
+      if (get().result !== result) throw new Error('生成结果已变化，请重试。')
       writeChanges(target, source, source.slice(0, at) + text + source.slice(at), changes)
       set({ phase: 'idle', error: '' })
     } catch (error) { set({ error: String(error) }); useAppStore.getState().setError(error) }

@@ -229,7 +229,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (dirtyDrafts().length && !await confirmDraftNavigation()) return
     const request = ++transitionGeneration
     try {
-      if (get().document && get().saveState !== 'saved') {
+      if (get().document) {
         const saved = await get().saveCurrentDocument('切换项目前保存')
         if (!saved) throw new Error('当前正文保存失败，已取消创建新项目')
       }
@@ -242,7 +242,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         catch (error) { checklistError = error }
       }
       if (request !== transitionGeneration) return
-      if (get().document && get().saveState !== 'saved' && !await get().saveCurrentDocument('切换项目前保存')) throw new Error('当前正文保存失败，已保留当前项目')
+      if (get().document && !await get().saveCurrentDocument('切换项目前保存')) throw new Error('当前正文保存失败，已保留当前项目')
       if (request !== transitionGeneration) return
       const previousPath = get().projectPath
       if (previousPath && previousPath !== input.path) await projectApi.release?.(previousPath)
@@ -265,14 +265,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (dirtyDrafts().length && !await confirmDraftNavigation()) return
     const request = ++transitionGeneration
     try {
-      if (get().document && get().saveState !== 'saved') {
+      if (get().document) {
         const saved = await get().saveCurrentDocument('切换项目前保存')
         if (!saved) throw new Error('当前正文保存失败，已取消打开其他项目')
       }
       if (request !== transitionGeneration) return
       const data = await projectApi.open(path)
       if (request !== transitionGeneration) return
-      if (get().document && get().saveState !== 'saved' && !await get().saveCurrentDocument('切换项目前保存')) throw new Error('当前正文保存失败，已保留当前项目')
+      if (get().document && !await get().saveCurrentDocument('切换项目前保存')) throw new Error('当前正文保存失败，已保留当前项目')
       if (request !== transitionGeneration) return
       const previousPath = get().projectPath
       if (previousPath && previousPath !== path) await projectApi.release?.(previousPath)
@@ -294,7 +294,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   closeProject: async () => {
     if (dirtyDrafts().length && !await confirmDraftNavigation()) return false
     const request = ++transitionGeneration
-    if (get().document && get().saveState !== 'saved') {
+    if (get().document) {
       const saved = await get().saveCurrentDocument('关闭项目前保存')
       if (!saved) return false
     }
@@ -328,7 +328,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const path = get().projectPath
     if (!path) return
     const current = get().document
-    if (current && current.node.id !== nodeId && get().saveState !== 'saved') {
+    if (current && current.node.id !== nodeId) {
       const saved = await get().saveCurrentDocument('切换章节前保存')
       if (!saved) return
     }
@@ -359,12 +359,28 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   saveCurrentDocument: async (reason = '自动保存') => {
     const current = get()
+    if (current.document && current.projectPath && current.saveState === 'saved' && /(?:切换|关闭).*前保存/u.test(reason)) {
+      try {
+        await projectApi.createHistorySnapshot({ projectPath: current.projectPath, nodeId: current.document.node.id, content: current.document.content, kind: 'checkpoint' })
+        const after = get()
+        if (after.projectSession !== current.projectSession || after.projectPath !== current.projectPath || after.document?.node.id !== current.document.node.id || after.documentVersion !== current.documentVersion || after.document.content !== current.document.content) throw new Error('保存版本期间正文或章节已变化，请重试切换或关闭。')
+        return true
+      } catch (error) { get().setError(error); return false }
+    }
     if (isNodeLocked(current.data?.nodes ?? [], current.document?.node.id)) {
       if (current.saveState === 'saved') return true
       get().setError('正文已锁定，未保存的内容仍保留在编辑器，请先解锁。')
       return false
     }
-    if (activeSave) return activeSave
+    if (activeSave) {
+      const saved = await activeSave
+      if (!saved) return false
+      if (/(?:切换|关闭).*前保存/u.test(reason)) {
+        if (get().projectSession !== current.projectSession || get().document?.node.id !== current.document?.node.id) return false
+        return get().saveCurrentDocument(reason)
+      }
+      return true
+    }
     activeSave = (async () => {
       while (true) {
         const { projectPath, document, documentVersion } = get()

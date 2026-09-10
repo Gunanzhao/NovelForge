@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { ChangeSet } from '@codemirror/state'
-const mocks = vi.hoisted(() => ({ generate: vi.fn(), cancel: vi.fn(), aiCancel: vi.fn(async () => {}), aiComplete: vi.fn() }))
-vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: { aiComplete: mocks.aiComplete, aiCancel: mocks.aiCancel } }))
+const mocks = vi.hoisted(() => ({ createHistorySnapshot: vi.fn(async () => {}), generate: vi.fn(), cancel: vi.fn(), aiCancel: vi.fn(async () => {}), aiComplete: vi.fn() }))
+vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: { createHistorySnapshot: mocks.createHistorySnapshot, aiComplete: mocks.aiComplete, aiCancel: mocks.aiCancel } }))
 vi.mock('../src/lib/codex', () => ({ codexApi: mocks }))
 import { useAiTask, captureAiTarget, registerAiEditor, type AiRequest } from '../src/stores/ai-task'
 import { useAppStore } from '../src/stores/app-store'
@@ -17,7 +17,7 @@ it('applies to the captured selection after cursor movement and unrelated edits'
   await useAiTask.getState().start(captureAiTarget('selection'), 'rewrite', async () => request())
   useAppStore.getState().setEditorSelection({ nodeId: 'chapter', from: 0, to: 0, text: '' })
   useAppStore.getState().updateContent('新增。' + useAppStore.getState().document!.content)
-  useAiTask.getState().accept()
+  await useAiTask.getState().accept()
   expect(useAppStore.getState().document?.content).toBe('新增。前文。风很暖。灯很亮。后文。')
 })
 it('accepts one hunk, rejects another, and preserves an independently edited passage', async () => {
@@ -25,10 +25,10 @@ it('accepts one hunk, rejects another, and preserves an independently edited pas
   const [first, second] = useAiTask.getState().edits
   useAppStore.getState().updateContent('前文。风很凉。灯很暗。后文。')
   expect(useAiTask.getState().edits[0].conflict).toBe(true)
-  useAiTask.getState().accept(first.id)
+  await useAiTask.getState().accept(first.id)
   expect(useAppStore.getState().document?.content).toContain('风很凉')
   useAiTask.getState().reject(first.id)
-  useAiTask.getState().accept(second.id)
+  await useAiTask.getState().accept(second.id)
   expect(useAppStore.getState().document?.content).toBe('前文。风很凉。灯很亮。后文。')
 })
 it('maps exact disjoint editor changes during streaming and does not conflict with the middle target', async () => {
@@ -41,7 +41,7 @@ it('maps exact disjoint editor changes during streaming and does not conflict wi
   useAiTask.getState().observe(before, after, ChangeSet.of([{ from: 0, insert: '开场。' }, { from: before.length, insert: '结尾。' }], before.length))
   useAppStore.getState().updateContent(after)
   finish({ content: '风很暖。灯很亮。', model: 'writer' }); await running
-  useAiTask.getState().accept()
+  await useAiTask.getState().accept()
   expect(useAppStore.getState().document?.content).toBe('开场。前文。风很暖。灯很亮。后文。结尾。')
 })
 it('keeps one shared request across view changes, and discards late output after cancellation', async () => {
@@ -64,7 +64,7 @@ it('cancels chapter switches, clears project switches, and never writes to the w
   await Promise.resolve()
   useAppStore.setState({ document: { node: { ...node, id: 'other' }, content: '另一章' } })
   finish({ content: '旧结果', model: 'writer' }); await run
-  useAiTask.getState().accept(); expect(useAppStore.getState().document?.content).toBe('另一章')
+  await useAiTask.getState().accept(); expect(useAppStore.getState().document?.content).toBe('另一章')
   useAppStore.setState({ projectSession: 2 }); expect(useAiTask.getState().target).toBeNull()
 })
 it('uses a registered editor transaction and inserts at the original cursor only once', async () => {
@@ -77,7 +77,7 @@ it('uses a registered editor transaction and inserts at the original cursor only
   const unregister = registerAiEditor(target, writer)
   await useAiTask.getState().start(target, 'generate', async () => request('插入'))
   useAppStore.getState().setEditorSelection({ nodeId: node.id, from: 0, to: 0, text: '' })
-  useAiTask.getState().insert('target'); useAiTask.getState().insert('target')
+  await useAiTask.getState().insert('target'); await useAiTask.getState().insert('target')
   expect(writer).toHaveBeenCalledTimes(1)
   expect(useAppStore.getState().document?.content).toBe('前文。插入风很冷。灯很暗。后文。')
   unregister()
@@ -90,7 +90,7 @@ it('preserves partial text for inspection but blocks every manuscript applicatio
   expect(useAiTask.getState().phase).toBe('incomplete')
   expect(useAiTask.getState().result?.content).toBe('被截断的半段正文')
   expect(useAiTask.getState().edits).toEqual([])
-  useAiTask.getState().accept(); useAiTask.getState().replace(); useAiTask.getState().insert('after')
+  await useAiTask.getState().accept(); await useAiTask.getState().replace(); await useAiTask.getState().insert('after')
   useAiTask.getState().editResult('手工改写也不能绕过完整性检查')
   expect(useAppStore.getState().document?.content).toBe(original)
   expect(useAiTask.getState().result?.content).toBe('被截断的半段正文')
@@ -107,4 +107,32 @@ it('cancels the provider request by the exact generation id', async () => {
   expect(mocks.aiCancel).toHaveBeenCalledWith(id)
   finish({content:'迟到结果',model:'writer'});await running
   expect(useAiTask.getState().result).toBeNull()
+})
+
+it('persists one protection snapshot for multiple accepted hunks of the same AI result', async () => {
+  const original = useAppStore.getState().document!.content
+  await useAiTask.getState().start(captureAiTarget('selection'), 'rewrite', async () => request())
+  const [first, second] = useAiTask.getState().edits
+  await useAiTask.getState().accept(first.id)
+  await useAiTask.getState().accept(second.id)
+  expect(mocks.createHistorySnapshot).toHaveBeenCalledTimes(1)
+  expect(mocks.createHistorySnapshot).toHaveBeenCalledWith(expect.objectContaining({ kind: 'protected', content: original }))
+  expect(useAppStore.getState().document?.content).toBe('前文。风很暖。灯很亮。后文。')
+})
+it('does not apply AI changes if writing the protection snapshot fails', async () => {
+  const original = useAppStore.getState().document!.content
+  mocks.createHistorySnapshot.mockRejectedValueOnce(new Error('快照磁盘不可写'))
+  await useAiTask.getState().start(captureAiTarget('selection'), 'rewrite', async () => request())
+  await useAiTask.getState().accept()
+  expect(useAppStore.getState().document?.content).toBe(original)
+  expect(useAiTask.getState().error).toContain('快照磁盘不可写')
+})
+it('does not apply an AI edit to a chapter changed while its snapshot was pending', async () => {
+  let finish!: () => void
+  mocks.createHistorySnapshot.mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  await useAiTask.getState().start(captureAiTarget('selection'), 'rewrite', async () => request())
+  const applying = useAiTask.getState().accept()
+  useAppStore.getState().updateContent('用户在等待期间修改正文')
+  finish(); await applying
+  expect(useAppStore.getState().document?.content).toBe('用户在等待期间修改正文')
 })

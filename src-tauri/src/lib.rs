@@ -63,6 +63,7 @@ pub fn run() {
             commands::recovery::restore_recovery,
             commands::recovery::discard_recovery,
             commands::recovery::list_history,
+            commands::recovery::create_history_snapshot,
             commands::recovery::read_history,
             commands::recovery::restore_history,
             commands::entities::upsert_entity,

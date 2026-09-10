@@ -3162,3 +3162,93 @@ fn permanent_delete_rejects_external_database_path() {
     let _ = fs::remove_dir_all(root);
     let _ = fs::remove_dir_all(outside);
 }
+
+#[test]
+fn history_snapshot_policy_keeps_body_saves_fast_and_preserves_milestones() {
+    use super::commands::recovery::{create_history_snapshot, SnapshotInput, SnapshotKind};
+    let root = test_root("history-policy");
+    let project_path = root.join("project").to_string_lossy().to_string();
+    let created = super::commands::create_project(super::models::ProjectInput {
+        path: project_path.clone(),
+        title: "历史策略".into(),
+        author: "测试".into(),
+        description: String::new(),
+        genre: String::new(),
+        target_words: 1000,
+    })
+    .unwrap();
+    let chapter = created
+        .nodes
+        .iter()
+        .find(|node| node.kind == "chapter")
+        .unwrap();
+    let save = |content: &str, reason: &str| {
+        super::commands::save_document(super::models::SaveDocumentInput {
+            project_path: project_path.clone(),
+            node_id: chapter.id.clone(),
+            content: content.into(),
+            reason: reason.into(),
+        })
+        .unwrap()
+    };
+    let list = || {
+        super::commands::list_history(super::models::NodeActionInput {
+            project_path: project_path.clone(),
+            node_id: chapter.id.clone(),
+        })
+        .unwrap()
+    };
+    save("初稿", "自动保存");
+    assert_eq!(list().len(), 1);
+    save("初稿", "自动保存");
+    save("修改", "手动保存");
+    save("新稿", "自动保存");
+    assert_eq!(list().len(), 1);
+    assert_eq!(
+        super::commands::get_document(super::models::NodeActionInput {
+            project_path: project_path.clone(),
+            node_id: chapter.id.clone()
+        })
+        .unwrap()
+        .content,
+        "新稿"
+    );
+    let connection = rusqlite::Connection::open(
+        std::path::Path::new(&project_path).join(".novelforge/database.sqlite"),
+    )
+    .unwrap();
+    connection
+        .execute(
+            "UPDATE revisions SET created_at = '2000-01-01T00:00:00.000Z'",
+            [],
+        )
+        .unwrap();
+    save("新稿", "自动保存");
+    assert_eq!(list().len(), 2);
+    save("离开稿", "切换章节前保存");
+    assert_eq!(list().len(), 3);
+    let snapshot = |kind, name: &str, content: &str| {
+        create_history_snapshot(SnapshotInput {
+            project_path: project_path.clone(),
+            node_id: chapter.id.clone(),
+            content: content.into(),
+            kind,
+            name: Some(name.into()),
+        })
+    };
+    snapshot(SnapshotKind::Checkpoint, "", "离开稿").unwrap();
+    assert_eq!(list().len(), 3);
+    snapshot(SnapshotKind::Named, "结局修改前", "离开稿").unwrap();
+    snapshot(SnapshotKind::Named, "结局修改前", "离开稿").unwrap();
+    assert_eq!(list().len(), 4);
+    snapshot(SnapshotKind::Protected, "AI 修改", "未保存的新内容").unwrap();
+    snapshot(SnapshotKind::Protected, "AI 修改", "未保存的新内容").unwrap();
+    assert_eq!(list().len(), 5);
+    assert!(snapshot(SnapshotKind::Named, "", "正文").is_err());
+    for i in 0..101 {
+        snapshot(SnapshotKind::Named, &format!("里程碑{}", i), "正文").unwrap();
+    }
+    assert_eq!(list().len(), 106, "Older named versions remain accessible");
+    drop(connection);
+    let _ = fs::remove_dir_all(root);
+}
