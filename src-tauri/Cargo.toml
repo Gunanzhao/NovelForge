@@ -1,6 +1,6 @@
 [package]
 name = "novelforge"
-version = "1.1.1-rc.4"
+version = "1.1.1-rc.5"
 description = "本地优先的中文小说创作工作台"
 authors = ["NovelForge"]
 edition = "2021"

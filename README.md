@@ -2,18 +2,30 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.1.1-rc.4（预发布）**。
+当前版本：**1.1.1-rc.5（预发布）**。
 
 [![main CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Amain)
 
 ## 下载
 
-- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.4/NovelForge_1.1.1-rc.4_x64-setup.exe)
-- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.4/novelforge.exe)
-- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.4/SHA256SUMS.txt)
+- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.5/NovelForge_1.1.1-rc.5_x64-setup.exe)
+- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.5/novelforge.exe)
+- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.5/SHA256SUMS.txt)
 - [版本说明与历史 Release](https://github.com/Gunanzhao/NovelForge/releases)
 
 已有安装版用户运行新安装包升级；直接运行独立 EXE 不会更新旧快捷方式。桌面版需要 Windows WebView2。
+
+## 1.1.1-rc.5 相比 1.1.1-rc.4
+
+- **历史快照独立保存**：正文仍在停止输入约 0.9 秒后自动保存；自动历史至少间隔 5 分钟，相同正文不重复建版本。Ctrl+S、工具栏和命令面板保存只写正文，减少密集的重复历史。
+- **离开前补存**：切换章节、项目或正常关闭窗口时，补存尚未进入历史的最新正文；保存失败或等待期间正文发生变化时阻止离开，保留当前编辑内容。
+- **命名版本与历史查看**：新增“保存版本”，可保存“修改结局前”等命名里程碑；显示到秒，支持来源筛选和加载更早版本。新名称可建立独立里程碑，同名同内容的连续保存去重。
+- **关键操作保护**：接受 AI 结果、全部替换和批量整理正文前，先保存保护快照；快照失败或正文、章节变化时取消修改。同一 AI 结果逐项接受共用一份保护记录，保留编辑器撤销重做能力。
+- **辅助栏拖拽**：AI 辅助页签补上宽度拖拽控件，支持鼠标与方向键调整；章节信息和 AI 辅助共用保存的栏宽，切换及重启后保持。历史按钮在窄栏下合理换行，避免单字竖排。
+
+本阶段保留全部已有历史、命名版本和保护版本，**不自动清理旧稿**。5 分钟是历史快照间隔，不是正文保存间隔；异常退出不能保证最后一次未完成写入已进入历史。
+
+[完整代码对比](https://github.com/Gunanzhao/NovelForge/compare/v1.1.1-rc.4...v1.1.1-rc.5)
 
 ## 1.1.1-rc.4 相比 1.1.1-rc.3
 
