@@ -812,9 +812,9 @@ pub(crate) fn save_document_internal(
     if node.deleted_at.is_some() || node.kind == "volume" {
         return Err("只有未删除的章节或小节可以编辑".to_string());
     }
-    let keep_history =
-        storage::history::needs_snapshot(root, connection, node_id, content, reason)?;
     let (_recovery_id, recovery_path) = storage::write_recovery(root, node_id, content)?;
+    let keep_history = storage::history::needs_snapshot(root, connection, node_id, content, reason)
+        .map_err(|error| format!("{}；当前正文恢复副本已保留：{}", error, recovery_path))?;
     let target = storage::safe_relative(root, &node.file_path)
         .map_err(|error| format!("{}；恢复文件已保留", error))?;
     let target_existed = target.exists();
@@ -933,6 +933,7 @@ pub(crate) fn save_document_internal(
     let updated = storage::node_from_id(connection, node_id)?
         .ok_or_else(|| "保存后无法读取章节".to_string())?;
     Ok(DocumentData {
+        history_created: keep_history,
         node: updated,
         content: content.to_string(),
     })
@@ -1006,6 +1007,7 @@ pub fn get_document(input: crate::models::NodeActionInput) -> Result<DocumentDat
     let content = fs::read_to_string(storage::safe_relative(&root, &node.file_path)?)
         .map_err(|error| format!("读取正文失败：{}", error))?;
     Ok(DocumentData {
+        history_created: false,
         node,
         content: storage::strip_markdown_frontmatter(&content),
     })

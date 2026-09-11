@@ -115,6 +115,9 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .name-options summary { cursor: pointer; font-size: 12px; }
 .name-options .field-grid { margin-top: 12px; }
 .name-checks, .name-preset-save { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 11px; }
+.name-checks { padding-left: 8px; gap: 10px 16px; }
+.name-checks > label { display: inline-flex; align-items: center; gap: 6px; line-height: 1.5; }
+.name-checks > label > input[type=checkbox] { flex: 0 0 auto; margin: 0; }
 .name-preset-save > span, .name-preset-save > input { flex: 1; min-width: 140px; }
 .name-generator-dialog .name-suggestion { gap: 10px; padding: 9px; }
 .name-generator-dialog .name-suggestion > span:first-child { min-width: 0; overflow-wrap: anywhere; }

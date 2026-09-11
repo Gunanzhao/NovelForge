@@ -1,6 +1,6 @@
 {
   "name": "novelforge",
-  "version": "1.1.1-rc.5",
+  "version": "1.1.1-rc.6",
   "description": "NovelForge - 本地优先的中文长篇小说创作工作台",
   "private": true,
   "type": "module",

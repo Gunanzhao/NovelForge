@@ -30,6 +30,7 @@ function persistPreferences(preferences: WorkspacePreferences, theme: ThemeMode)
   } catch { return '偏好未保存到本机；本次窗口内仍生效。' }
 }
 const RECENT_KEY = 'novelforge:recent-projects'
+let statsGeneration = 0
 let searchGeneration = 0
 let selectionGeneration = 0
 let transitionGeneration = 0
@@ -48,6 +49,23 @@ export function captureProjectSession(): ProjectSession {
 export function isCurrentProjectSession(session: ProjectSession) {
   const state = useAppStore.getState()
   return state.projectPath === session.path && state.data?.project.id === session.id && state.projectSession === session.generation
+}
+
+export function isCurrentDocumentSaved() {
+  const state = useAppStore.getState()
+  return !state.document || state.saveState === 'saved'
+}
+
+async function releaseForTransition(path: string | null, isCurrent: () => boolean) {
+  const before = useAppStore.getState()
+  if (!isCurrentDocumentSaved()) throw new Error('正文仍有新修改，已取消离开，请重试。')
+  if (path) await projectApi.release?.(path)
+  const after = useAppStore.getState()
+  if (!isCurrent() || after.projectSession !== before.projectSession || after.documentVersion !== before.documentVersion || !isCurrentDocumentSaved()) {
+    // Reacquire the current project's lease without replacing any editor content.
+    if (path && after.projectPath === path && after.document) await projectApi.getDocument({ projectPath: path, nodeId: after.document.node.id })
+    throw new Error('关闭项目期间正文或项目已变化，已保留当前内容，请重试。')
+  }
 }
 
 function readRecent(): RecentProject[] {
@@ -245,7 +263,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (get().document && !await get().saveCurrentDocument('切换项目前保存')) throw new Error('当前正文保存失败，已保留当前项目')
       if (request !== transitionGeneration) return
       const previousPath = get().projectPath
-      if (previousPath && previousPath !== input.path) await projectApi.release?.(previousPath)
+      await releaseForTransition(previousPath !== input.path ? previousPath : null, () => request === transitionGeneration)
       if (request !== transitionGeneration) return
       ++selectionGeneration
       set((state) => ({ projectPath: input.path, projectSession: state.projectSession + 1, data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
@@ -275,7 +293,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (get().document && !await get().saveCurrentDocument('切换项目前保存')) throw new Error('当前正文保存失败，已保留当前项目')
       if (request !== transitionGeneration) return
       const previousPath = get().projectPath
-      if (previousPath && previousPath !== path) await projectApi.release?.(previousPath)
+      await releaseForTransition(previousPath !== path ? previousPath : null, () => request === transitionGeneration)
       if (request !== transitionGeneration) return
       ++selectionGeneration
       set((state) => ({ projectPath: path, projectSession: state.projectSession + 1, data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
@@ -299,7 +317,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!saved) return false
     }
     if (request !== transitionGeneration) return false
-    if (get().projectPath) await projectApi.release?.(get().projectPath!)
+    try { await releaseForTransition(get().projectPath, () => request === transitionGeneration) }
+    catch (error) { if (request === transitionGeneration) get().setError(error); return false }
     ++selectionGeneration
     set((state) => ({
       projectPath: null,
@@ -331,6 +350,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (current && current.node.id !== nodeId) {
       const saved = await get().saveCurrentDocument('切换章节前保存')
       if (!saved) return
+      if (!isCurrentDocumentSaved()) { get().setError('正文仍有新修改，已取消切换。'); return }
     }
     if (request !== selectionGeneration || !isCurrentProjectSession(session)) return
     const selected = get().data?.nodes.find((node) => node.id === nodeId)
@@ -375,7 +395,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (activeSave) {
       const saved = await activeSave
       if (!saved) return false
-      if (/(?:切换|关闭).*前保存/u.test(reason)) {
+      if (get().saveState !== 'saved' || /(?:切换|关闭).*前保存/u.test(reason)) {
         if (get().projectSession !== current.projectSession || get().document?.node.id !== current.document?.node.id) return false
         return get().saveCurrentDocument(reason)
       }
@@ -408,7 +428,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             set({ saveState: 'idle' })
             continue
           }
-          await get().refreshStats()
+          if (saved.historyCreated) window.dispatchEvent(new Event('novelforge:history-changed'))
+          void get().refreshStats()
           if (reason !== '自动保存' && isCurrentProjectSession(session)) notify({ message: '正文已保存', session: session.generation })
           return true
         } catch (error) {
@@ -470,10 +491,39 @@ export const useAppStore = create<AppState>((set, get) => ({
     const session = captureProjectSession()
     const projectPath = get().projectPath
     if (!projectPath) return
-    try {
-      const data = await projectApi.renameNode({ projectPath, nodeId, title })
-      await get().refreshData(data, true, session)
-    } catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
+    while (activeSave) { if (!await activeSave) return }
+    if (!isCurrentProjectSession(session)) return
+    if (get().document?.node.id === nodeId && get().saveState !== 'saved' && !await get().saveCurrentDocument('重命名前保存')) return
+    if (!isCurrentProjectSession(session)) return
+    if (get().document?.node.id === nodeId && !isCurrentDocumentSaved()) { get().setError('重命名前正文又有修改，请重试。'); return }
+    const before = get().document?.node.id === nodeId ? get().document : null
+    const rename = async () => {
+      try {
+        const data = await projectApi.renameNode({ projectPath, nodeId, title, expectedContent: before?.persistedContent ?? before?.content })
+        if (!isCurrentProjectSession(session)) return true
+        const renamed = data.renamedDocument
+        if (before && renamed && get().document?.node.id === nodeId) {
+          set(state => {
+            const current = state.document!
+            let content = current.content
+            if (content === before.content) content = renamed.content
+            else if (before.content.startsWith('# ')) {
+              const end = before.content.indexOf('\n')
+              const oldHeading = end < 0 ? before.content : before.content.slice(0, end)
+              if (content.split('\n')[0] === oldHeading) content = renamed.content.split('\n')[0] + content.slice(oldHeading.length)
+            } else if (!content.startsWith('# ') && renamed.content.endsWith(before.content)) {
+              content = renamed.content.slice(0, renamed.content.length - before.content.length) + content
+            }
+            return { document: { ...renamed, content, persistedContent: renamed.content }, documentVersion: state.documentVersion + 1, saveState: content === renamed.content ? 'saved' : 'idle' }
+          })
+        }
+        await get().refreshData(data, true, session)
+        return true
+      } catch (error) { if (isCurrentProjectSession(session)) get().setError(error); return false }
+    }
+    // Autosave must wait until the returned disk baseline has been applied.
+    activeSave = rename().finally(() => { activeSave = null })
+    await activeSave
   },
 
   setNodeStatus: async (nodeId, status) => {
@@ -628,11 +678,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   refreshStats: async () => {
+    const generation = ++statsGeneration
     const session = captureProjectSession()
     const nodeId = get().document?.node.id
     const projectPath = get().projectPath
     if (!projectPath) return
-    try { const stats = await projectApi.stats(projectPath, nodeId); if (isCurrentProjectSession(session) && get().document?.node.id === nodeId) set({ stats }) }
+    try { const stats = await projectApi.stats(projectPath, nodeId); if (generation === statsGeneration && isCurrentProjectSession(session) && get().document?.node.id === nodeId) set({ stats }) }
     catch (error) { if (isCurrentProjectSession(session)) get().setError(error) }
   },
 

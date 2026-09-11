@@ -12,7 +12,7 @@ const server = createServer(async (request, response) => {
   let body = ''; for await (const chunk of request) body += chunk
   requests.push(JSON.parse(body))
   response.setHeader('Content-Type', 'application/json')
-  response.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify([{ name: '林潮生', explanation: '潮汐与新生的创作意象' }, { name: '林海澜', explanation: '海洋文明的创作意象' }]) } }] }))
+  response.end(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify([{ name: '林潮生', explanation: '潮汐与新生的创作意象' }, { name: '林海澜', explanation: '海洋文明的创作意象' }]) } }] }))
 })
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
 const child = spawn(resolve('src-tauri/target/release/novelforge.exe'), [], { windowsHide: true, stdio: 'ignore', env: { ...process.env, WEBVIEW2_USER_DATA_FOLDER: resolve(run, 'profile'), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=9457' } })

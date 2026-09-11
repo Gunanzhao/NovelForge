@@ -470,7 +470,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     current.updatedAt = now
     updateTime(store.data)
     persist(projectPath, store)
-    return { node: current, content } as T
+    return { node: current, content, historyCreated: store.history[0]?.id === revision.id } as T
   }
   if (command === 'create_history_snapshot') {
     const current = node(store, input?.nodeId as string)
@@ -487,6 +487,14 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     store.history.unshift({ id: uid(), nodeId: current.id, nodeTitle: current.title, reason, content, wordCount: countWords(content), createdAt: new Date().toISOString(), path: 'fallback://history/' + current.id })
     persist(projectPath, store)
     return undefined as T
+  }
+  if (command === 'list_history_page') {
+    const filter = input?.filter ?? 'all'
+    if (!['all', 'named', 'automatic', 'protected'].includes(String(filter))) throw new Error('历史来源筛选无效')
+    const all = store.history.filter(item => item.nodeId === input?.nodeId)
+    const start = input?.before ? all.findIndex(item => item.id === input.before) + 1 : 0
+    if (input?.before && start === 0) return [] as T
+    return all.slice(start).filter(item => filter === 'all' || (filter === 'named' ? item.reason.startsWith('命名版本：') : filter === 'automatic' ? item.reason === '自动保存' : item.reason.includes('保护') || item.reason.includes('恢复前'))).slice(0, 101).map(item => ({ id: item.id, nodeId: item.nodeId, nodeTitle: item.nodeTitle, reason: item.reason, wordCount: item.wordCount, createdAt: item.createdAt, path: item.path })) as T
   }
   if (command === 'list_history') return store.history.filter((item) => item.nodeId === input?.nodeId).map((item) => ({ id: item.id, nodeId: item.nodeId, nodeTitle: item.nodeTitle, reason: item.reason, wordCount: item.wordCount, createdAt: item.createdAt, path: item.path })) as T
   if (command === 'read_history') {

@@ -23,7 +23,7 @@ const server=createServer((request,response)=>{
   request.on('data',chunk=>{body+=chunk})
   request.on('end',()=>{
     requests.push(JSON.parse(body))
-    setTimeout(()=>{response.writeHead(200,{'Content-Type':'application/json'});response.end(JSON.stringify({choices:[{message:{content:'风很暖。灯很亮。'}}],model:'synthetic-writer'}))},800)
+    setTimeout(()=>{response.writeHead(200,{'Content-Type':'application/json'});response.end(JSON.stringify({choices:[{message:{content:'风很暖。灯很亮。'},finish_reason:'stop'}],model:'synthetic-writer'}))},800)
   })
 })
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve))
@@ -69,6 +69,7 @@ try {
   await ev(`editor().dispatch({changes:[{from:0,insert:'开场。'},{from:editor().state.doc.length,insert:'结尾。'}]})`)
   await click('修改对比 · 2');await capture('inline-diff')
   await click('接受此项')
+  await waitFor(`editor().state.doc.toString().includes('风很暖。灯很暗。')`)
   const first=await ev(`editor().state.doc.toString()`)
   assert.ok(first.includes('风很暖。灯很暗。'))
   await ev('editor().focus()')

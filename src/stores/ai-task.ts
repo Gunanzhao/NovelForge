@@ -110,7 +110,7 @@ export const useAiTask = create<AiTask>((set, get) => ({
       } else result = local
       if (!valid()) return
       if (result.incomplete) {
-        set({ result, edits: [], phase: 'incomplete', id: null, error: '模型未完整生成正文，以下仅为部分结果，可复制查看，不能直接应用到正文。请调整输出上限或模型设置后重新生成。' })
+        set({ result, edits: [], phase: 'incomplete', id: null, error: '无法确认模型已完整生成正文，以下结果仅供查看和复制，不能直接应用。请检查输出上限及服务返回的完成标志后重试。' })
         return
       }
       const mapping = get().mapping!

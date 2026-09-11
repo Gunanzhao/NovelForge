@@ -36,7 +36,16 @@ export const projectApi = {
   create: (input: ProjectInput) => command<ProjectData>('create_project', { input }),
   open: (path: string) => command<ProjectData>('open_project', { path }),
   createNode: (input: NodeInput) => command<ProjectData>('create_node', { input }),
-  renameNode: (input: { projectPath: string; nodeId: string; title: string }) => command<ProjectData>('rename_node', { input }),
+  renameNode: async (input: { projectPath: string; nodeId: string; title: string; expectedContent?: string }): Promise<ProjectData & { renamedDocument?: DocumentData }> => {
+    if (!isDesktop) {
+      const data = await command<ProjectData>('rename_node', { input })
+      const renamedDocument = data.nodes.find(node => node.id === input.nodeId)?.kind !== 'volume'
+        ? await command<DocumentData>('get_document', { input }) : undefined
+      return { ...data, renamedDocument }
+    }
+    const result = await command<{ data: ProjectData; document: DocumentData | null }>('rename_node_checked', { input, expectedContent: input.expectedContent }, false)
+    return { ...result.data, renamedDocument: result.document ?? undefined }
+  },
   setNodeStatus: (input: { projectPath: string; nodeId: string; status: string }) => command<ProjectData>('set_node_status', { input }),
   reorderNode: (input: { projectPath: string; nodeId: string; direction: string }) => command<ProjectData>('reorder_node', { input }),
   moveNode: (input: MoveNodeInput) => command<ProjectData>('move_node', { input }),
@@ -51,6 +60,7 @@ export const projectApi = {
   restoreRecovery: (input: { projectPath: string; recoveryId: string }) => command<ProjectData>('restore_recovery', { input }),
   discardRecovery: (input: { projectPath: string; recoveryId: string }) => command<RecoveryItem[]>('discard_recovery', { input }),
   createHistorySnapshot: (input: { projectPath: string; nodeId: string; content: string; kind: 'automatic' | 'checkpoint' | 'named' | 'protected'; name?: string }) => command<void>('create_history_snapshot', { input }),
+  listHistoryPage: (input: { projectPath: string; nodeId: string; before?: string; filter: string }) => command<HistoryItem[]>('list_history_page', { input }),
   listHistory: (input: { projectPath: string; nodeId: string }) => command<HistoryItem[]>('list_history', { input }),
   readHistory: (input: { projectPath: string; revisionId: string }) => command<string>('read_history', { input }),
   restoreHistory: (input: { projectPath: string; revisionId: string; expectedNodeId: string }) => command<ProjectData>('restore_history', { input }),

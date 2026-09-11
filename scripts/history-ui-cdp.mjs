@@ -1,7 +1,7 @@
 /* global Buffer, console, fetch, process, setTimeout, WebSocket */
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync, renameSync } from 'node:fs'
 import { resolve } from 'node:path'
 const run = resolve('tmp/history-ui-' + Date.now())
 mkdirSync(run, { recursive: true })
@@ -34,6 +34,13 @@ try {
   const chapter = data.nodes.find(node => node.kind === 'chapter')
   const original = '清晨，窗外落着细雨。\n短句。\n\n' + '她沿着石阶走到街角，停下来读信。'.repeat(10) + '\n另一行很短。\n最后一段只选择开头，其余文字保持原样。'
   await call('save_document', { input: { projectPath, nodeId: chapter.id, content: original, reason: '合成选区测试' } })
+  const firstRevision = (await call('list_history', {input:{projectPath,nodeId:chapter.id}}))[0]
+  const firstFile=resolve(projectPath,firstRevision.path)
+  renameSync(firstFile,firstFile+'.unavailable')
+  const recoveredSave=await call('save_document_checked',{input:{projectPath,nodeId:chapter.id,content:original+'损坏历史后继续写作。',reason:'自动保存'},expectedContent:original})
+  assert.equal(recoveredSave.historyCreated,true)
+  assert.equal((await call('get_document',{input:{projectPath,nodeId:chapter.id}})).content,original+'损坏历史后继续写作。')
+  await call('save_document_checked',{input:{projectPath,nodeId:chapter.id,content:original,reason:'手动保存'},expectedContent:recoveredSave.content})
   await ev(`localStorage.setItem('novelforge:recent-projects',${JSON.stringify(JSON.stringify([{ path: projectPath, title: '选区显示验收', updatedAt: '' }]))});location.reload()`)
   await sleep(800); await waitFor(`!!document.querySelector('.recent-project')`); await ev(`document.querySelector('.recent-project').click()`)
   await waitFor(`!!document.querySelector('.cm-content')?.cmTile?.root?.view`)
@@ -72,7 +79,16 @@ try {
   assert.equal((await history()).length, beforeClose + 1)
   const latest=(await history())[0]
   assert.equal(await call('read_history', { input: { projectPath, revisionId: latest.id } }), '离开前最后一稿')
-  writeFileSync(resolve(run,'result.json'),JSON.stringify({result:'HISTORY_UI_PASS',initial,total:(await history()).length},null,2))
+  await call('delete_node',{input:{projectPath,nodeId:chapter.id}})
+  const oldTrash=(await call('list_trash',{path:projectPath}))[0]
+  const backup=await call('backup_project',{path:projectPath,directory:run})
+  const restored=await call('restore_backup',{path:backup.path,directory:run})
+  renameSync(oldTrash.trashPath,oldTrash.trashPath+'.unavailable')
+  await call('open_project',{path:restored.path})
+  const trash=(await call('list_trash',{path:restored.path}))[0]
+  await call('restore_trash',{input:{projectPath:restored.path,nodeId:trash.id}})
+  assert.equal((await call('get_document',{input:{projectPath:restored.path,nodeId:chapter.id}})).content,'离开前最后一稿')
+  writeFileSync(resolve(run,'result.json'),JSON.stringify({result:'HISTORY_UI_PASS',initial,total:(await history()).length,damagedHistorySave:true,portableTrashRestore:true},null,2))
   console.log('HISTORY_UI_PASS '+run)
 } catch(error) {
   if(socket){try{await capture('failure')}catch{/* app exited */}}

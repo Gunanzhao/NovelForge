@@ -70,6 +70,39 @@ pub fn history_items(connection: &Connection, node_id: &str) -> Result<Vec<Histo
     Ok(history)
 }
 
+pub fn history_page(
+    connection: &Connection,
+    node_id: &str,
+    before: Option<&str>,
+    filter: &str,
+) -> Result<Vec<HistoryItem>, String> {
+    if !matches!(filter, "all" | "named" | "automatic" | "protected") {
+        return Err("历史来源筛选无效".into());
+    }
+    let mut statement = connection.prepare(
+        "SELECT id, node_id, node_title, reason, word_count, created_at, file_path FROM revisions
+         WHERE node_id = ?1
+         AND (?2 IS NULL OR (created_at, rowid) < (SELECT created_at, rowid FROM revisions WHERE id = ?2 AND node_id = ?1))
+         AND (?3 = 'all' OR (?3 = 'named' AND reason LIKE '命名版本：%') OR (?3 = 'automatic' AND reason = '自动保存') OR (?3 = 'protected' AND (reason LIKE '%保护%' OR reason LIKE '%恢复前%')))
+         ORDER BY created_at DESC, rowid DESC LIMIT 101"
+    ).map_err(|e| format!("读取历史分页失败：{e}"))?;
+    let rows = statement
+        .query_map(params![node_id, before, filter], |row| {
+            Ok(HistoryItem {
+                id: row.get(0)?,
+                node_id: row.get(1)?,
+                node_title: row.get(2)?,
+                reason: row.get(3)?,
+                word_count: row.get::<_, i64>(4)? as u64,
+                created_at: row.get(5)?,
+                path: row.get(6)?,
+            })
+        })
+        .map_err(|e| format!("读取历史分页失败：{e}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("读取历史分页失败：{e}"))
+}
+
 pub fn parse_timestamp(value: &str) -> Option<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(value)
         .ok()
@@ -119,8 +152,19 @@ pub fn needs_snapshot(
     let Some((path, time, previous_reason)) = latest else {
         return Ok(true);
     };
-    let previous = fs::read_to_string(safe_relative(root, &path)?)
-        .map_err(|e| format!("读取最近快照失败：{}", e))?;
+    // An unavailable previous snapshot cannot be reused. Create a fresh one;
+    // the old record remains visible and reading it still reports the damage.
+    let previous = match fs::read_to_string(safe_relative(root, &path)?) {
+        Ok(content) => content,
+        Err(_) => {
+            let _ = append_log(
+                root,
+                "WARN",
+                "previous_history_unreadable_creating_fresh_snapshot",
+            );
+            return Ok(true);
+        }
+    };
     let named = reason.starts_with("命名版本：");
     if previous == content && (!named || previous_reason == reason) {
         return Ok(false);

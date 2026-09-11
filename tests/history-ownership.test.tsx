@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-const mocks = vi.hoisted(() => ({ createHistorySnapshot: vi.fn(async () => {}), getDocument: vi.fn(), aiComplete: vi.fn(), listHistory: vi.fn(), readHistory: vi.fn(), restoreHistory: vi.fn() }))
+const mocks = vi.hoisted(() => ({ createHistorySnapshot: vi.fn(async () => {}), getDocument: vi.fn(), aiComplete: vi.fn(), listHistoryPage: vi.fn(), readHistory: vi.fn(), restoreHistory: vi.fn() }))
 vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: mocks }))
 import { Inspector } from '../src/components/Inspector'
 vi.mock('../src/components/NameGenerator', () => ({ NameGenerator: () => null }))
@@ -27,7 +27,7 @@ afterEach(async () => { await decideDraftNavigation('cancel'); cleanup() })
 
 it('clears chapter A history and preview while chapter B history is loading', async () => {
   const revision = { id:'revision-A',nodeId:node.id,nodeTitle:'A章',reason:'A章历史',wordCount:5,createdAt:'2026-01-01T00:00:00Z',path:'history/A.md' }
-  mocks.listHistory.mockResolvedValueOnce([revision]).mockImplementation(() => new Promise(() => {}))
+  mocks.listHistoryPage.mockResolvedValueOnce([revision]).mockImplementation(() => new Promise(() => {}))
   mocks.readHistory.mockResolvedValue('A章旧内容')
   mocks.restoreHistory.mockResolvedValue(data)
   mocks.getDocument.mockResolvedValue({node:{...node,id:'previous'},content:'B章正文'})
@@ -45,12 +45,12 @@ it('clears chapter A history and preview while chapter B history is loading', as
 
 it('saves a named version of the current unsaved body and exposes old named versions', async () => {
   const items = Array.from({ length: 101 }, (_, i) => ({ id: 'version-' + i, nodeId: node.id, nodeTitle: '章', reason: i === 100 ? '命名版本：旧结局' : '自动保存', wordCount: 4, createdAt: '2026-01-01T01:02:03Z', path: 'history/test.md' }))
-  mocks.listHistory.mockResolvedValue(items)
+  mocks.listHistoryPage.mockImplementation(async ({filter}) => filter === 'named' ? items.filter(item => item.reason.startsWith('命名版本：')) : items)
   render(<ContextMenuProvider fallbackItems={[]}><Inspector /></ContextMenuProvider>)
   fireEvent.click(screen.getByRole('button', { name: '版本历史' }))
   await screen.findByRole('button', { name: /加载更早版本/ })
   fireEvent.change(screen.getByRole('combobox', { name: '筛选历史版本' }), { target: { value: 'named' } })
-  expect(screen.getByText('命名版本：旧结局')).toBeTruthy()
+  expect(await screen.findByText('命名版本：旧结局')).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: '保存版本' }))
   const dialog = screen.getByRole('dialog', { name: '保存命名版本' })
   fireEvent.change(within(dialog).getByLabelText('版本名称'), { target: { value: '结局修改前' } })
@@ -58,3 +58,21 @@ it('saves a named version of the current unsaved body and exposes old named vers
   await waitFor(() => expect(mocks.createHistorySnapshot).toHaveBeenCalledWith({ projectPath: 'A', nodeId: node.id, content: 'A原选区与正文', kind: 'named', name: '结局修改前' }))
   await waitFor(() => expect(screen.queryByRole('dialog', { name: '保存命名版本' })).toBeNull())
 })
+
+it('loads history only when open, refreshes on history events, and pages by cursor', async () => {
+ const items=Array.from({length:101},(_,i)=>({id:'h'+i,nodeId:node.id,nodeTitle:'章',reason:'版本'+i,wordCount:1,createdAt:'2026-09-11T00:00:00Z',path:'test'}))
+ mocks.listHistoryPage.mockImplementation(async ({before})=>before?items.slice(100):items)
+ render(<ContextMenuProvider fallbackItems={[]}><Inspector /></ContextMenuProvider>)
+ act(()=>{for(let i=0;i<10;i++) useAppStore.getState().updateContent('修改'+i)})
+ expect(mocks.listHistoryPage).not.toHaveBeenCalled()
+ fireEvent.click(screen.getByRole('button',{name:'版本历史'}))
+ await screen.findByText('版本0')
+ act(()=>{for(let i=10;i<20;i++) useAppStore.getState().updateContent('修改'+i)})
+ expect(mocks.listHistoryPage).toHaveBeenCalledTimes(1)
+ fireEvent.click(screen.getByText('加载更早版本'))
+ await screen.findByText('版本100')
+ expect(mocks.listHistoryPage).toHaveBeenLastCalledWith(expect.objectContaining({before:'h99'}))
+ act(()=>window.dispatchEvent(new Event('novelforge:history-changed')))
+ await waitFor(()=>expect(mocks.listHistoryPage).toHaveBeenCalledTimes(3))
+ expect(mocks.listHistoryPage).toHaveBeenLastCalledWith(expect.objectContaining({before:undefined}))
+}, 15000)

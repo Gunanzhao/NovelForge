@@ -401,6 +401,10 @@ fn restore(path: String, directory: String) -> Result<BackupReport, String> {
                 return Err(format!("备份缺失资料：{}", entity.title));
             }
         }
+        for item in storage::trash_items(&db)? {
+            storage::safe_trash_path(&stage, &item.trash_path)
+                .map_err(|error| format!("备份回收站条目无效（{}）：{}", item.title, error))?;
+        }
         drop(db);
         if output.exists() {
             return Err("恢复目标已存在".into());
