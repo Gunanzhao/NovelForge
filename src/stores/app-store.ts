@@ -635,7 +635,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const data = await projectApi.deleteNode({ projectPath, nodeId })
       if (!isCurrentProjectSession(session)) return
       const current = get().document
-      if (current && !data.nodes.some(node => node.id === current.node.id)) {
+      if (!current || !data.nodes.some(node => node.id === current.node.id)) {
         set(state => ({ document: null, editorSelection: null, documentVersion: state.documentVersion + 1, saveState: 'saved' }))
         await get().refreshData(data, false, session)
         const next = firstChapter(data)
