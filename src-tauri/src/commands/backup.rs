@@ -175,9 +175,11 @@ fn manifest<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<Manifest, Str
             return Err("备份解压大小超过 8 GB".into());
         }
     }
+    let mut seen_directories = HashSet::new();
     if value.directories.len() > 100000
         || value.directories.iter().any(|name| {
             !safe_name(name)
+                || !seen_directories.insert(name.to_lowercase())
                 || value
                     .files
                     .keys()
@@ -188,6 +190,7 @@ fn manifest<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<Manifest, Str
     }
     Ok(value)
 }
+#[cfg(test)]
 fn verify<R: Read + Seek>(archive: &mut ZipArchive<R>, value: &Manifest) -> Result<(), String> {
     for (name, expected) in &value.files {
         let mut file = archive.by_name(name).map_err(|e| e.to_string())?;
@@ -197,6 +200,73 @@ fn verify<R: Read + Seek>(archive: &mut ZipArchive<R>, value: &Manifest) -> Resu
         }
     }
     Ok(())
+}
+fn validate_references(root: &Path, db: &Connection) -> Result<(), String> {
+    for node in storage::all_nodes(db, false)? {
+        if !storage::safe_relative(root, &node.file_path)?.exists() {
+            return Err(format!("备份缺失正文：{}", node.title));
+        }
+    }
+    for entity in storage::all_entities(db, false)? {
+        if !storage::safe_relative(root, &entity.file_path)?.exists() {
+            return Err(format!("备份缺失资料：{}", entity.title));
+        }
+    }
+    for item in storage::trash_items(db)? {
+        storage::safe_trash_path(root, &item.trash_path)
+            .map_err(|error| format!("备份回收站条目无效（{}）：{}", item.title, error))?;
+    }
+    Ok(())
+}
+// All three entry points validate the same extracted project, including DB references.
+fn extract_and_validate<R: Read + Seek>(
+    archive: &mut ZipArchive<R>,
+    value: &Manifest,
+    stage: &Path,
+) -> Result<(), String> {
+    for name in &value.directories {
+        fs::create_dir_all(storage::safe_relative(stage, name)?).map_err(|e| e.to_string())?;
+    }
+    for (name, expected) in &value.files {
+        let target = storage::safe_relative(stage, name)?;
+        fs::create_dir_all(target.parent().ok_or("备份路径无父目录")?)
+            .map_err(|e| e.to_string())?;
+        let mut source = archive.by_name(name).map_err(|e| e.to_string())?;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&target)
+            .map_err(|e| e.to_string())?;
+        let actual = transfer(&mut source, &mut file, expected.size)?;
+        if actual.size != expected.size || actual.sha256 != expected.sha256 {
+            return Err(format!("恢复时校验失败：{name}"));
+        }
+    }
+    storage::read_project_json(stage)?;
+    let db = Connection::open_with_flags(
+        stage.join(".novelforge/database.sqlite"),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )
+    .map_err(|e| e.to_string())?;
+    let check: String = db
+        .query_row("PRAGMA quick_check", [], |r| r.get(0))
+        .map_err(|e| e.to_string())?;
+    if check != "ok" {
+        return Err("备份数据库校验失败".into());
+    }
+    validate_references(stage, &db)?;
+    drop(db);
+    Ok(())
+}
+fn verify_project<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<Manifest, String> {
+    let value = manifest(archive)?;
+    let stage = std::env::temp_dir().join(format!("novelforge-verify-{}", storage::new_id()));
+    fs::create_dir(&stage).map_err(|e| e.to_string())?;
+    let result = extract_and_validate(archive, &value, &stage);
+    let cleanup = fs::remove_dir_all(&stage).map_err(|e| format!("清理备份验证目录失败：{e}"));
+    result?;
+    cleanup?;
+    Ok(value)
 }
 fn create(path: String, directory: String) -> Result<BackupReport, String> {
     let (root, connection) = project_connection(&path)?;
@@ -214,6 +284,7 @@ fn create(path: String, directory: String) -> Result<BackupReport, String> {
     ));
     let snapshot = parent.join(format!(".novelforge-db-{id}.tmp"));
     let result = (|| {
+        validate_references(&root, &connection)?;
         let version: i64 = connection
             .query_row("PRAGMA data_version", [], |r| r.get(0))
             .map_err(|e| e.to_string())?;
@@ -310,7 +381,7 @@ fn create(path: String, directory: String) -> Result<BackupReport, String> {
             .map_err(|e| e.to_string())?;
         let mut archive = ZipArchive::new(fs::File::open(&output).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
-        verify(&mut archive, &value)?;
+        verify_project(&mut archive)?;
         Ok(BackupReport {
             path: output.to_string_lossy().into_owned(),
             file_count: count,
@@ -334,8 +405,7 @@ pub async fn validate_backup(path: String) -> Result<BackupReport, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let mut archive = ZipArchive::new(fs::File::open(&path).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
-        let value = manifest(&mut archive)?;
-        verify(&mut archive, &value)?;
+        let value = verify_project(&mut archive)?;
         Ok(BackupReport {
             path,
             file_count: value.files.len(),
@@ -352,7 +422,6 @@ fn restore(path: String, directory: String) -> Result<BackupReport, String> {
     let mut archive = ZipArchive::new(fs::File::open(path).map_err(|e| e.to_string())?)
         .map_err(|e| e.to_string())?;
     let value = manifest(&mut archive)?;
-    verify(&mut archive, &value)?;
     let id = storage::new_id();
     let stage = parent.join(format!(".novelforge-restore-{id}"));
     let output = parent.join(format!(
@@ -361,51 +430,7 @@ fn restore(path: String, directory: String) -> Result<BackupReport, String> {
     ));
     fs::create_dir(&stage).map_err(|e| e.to_string())?;
     let result = (|| {
-        for name in &value.directories {
-            fs::create_dir_all(storage::safe_relative(&stage, name)?).map_err(|e| e.to_string())?;
-        }
-        for (name, expected) in &value.files {
-            let target = storage::safe_relative(&stage, name)?;
-            fs::create_dir_all(target.parent().ok_or("备份路径无父目录")?)
-                .map_err(|e| e.to_string())?;
-            let mut source = archive.by_name(name).map_err(|e| e.to_string())?;
-            let mut file = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&target)
-                .map_err(|e| e.to_string())?;
-            let actual = transfer(&mut source, &mut file, expected.size)?;
-            if actual.size != expected.size || actual.sha256 != expected.sha256 {
-                return Err(format!("恢复时校验失败：{name}"));
-            }
-        }
-        storage::read_project_json(&stage)?;
-        let db = Connection::open_with_flags(
-            stage.join(".novelforge/database.sqlite"),
-            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
-        )
-        .map_err(|e| e.to_string())?;
-        let check: String = db
-            .query_row("PRAGMA quick_check", [], |r| r.get(0))
-            .map_err(|e| e.to_string())?;
-        if check != "ok" {
-            return Err("备份数据库校验失败".into());
-        }
-        for node in storage::all_nodes(&db, false)? {
-            if !storage::safe_relative(&stage, &node.file_path)?.exists() {
-                return Err(format!("备份缺失正文：{}", node.title));
-            }
-        }
-        for entity in storage::all_entities(&db, false)? {
-            if !storage::safe_relative(&stage, &entity.file_path)?.exists() {
-                return Err(format!("备份缺失资料：{}", entity.title));
-            }
-        }
-        for item in storage::trash_items(&db)? {
-            storage::safe_trash_path(&stage, &item.trash_path)
-                .map_err(|error| format!("备份回收站条目无效（{}）：{}", item.title, error))?;
-        }
-        drop(db);
+        extract_and_validate(&mut archive, &value, &stage)?;
         if output.exists() {
             return Err("恢复目标已存在".into());
         }
@@ -461,7 +486,7 @@ mod tests {
             parent.to_string_lossy().into_owned(),
         )
         .unwrap();
-        let restored = restore(backup.path, parent.to_string_lossy().into_owned()).unwrap();
+        let restored = restore(backup.path.clone(), parent.to_string_lossy().into_owned()).unwrap();
         let restored = PathBuf::from(restored.path);
         assert!(restored.join("attachments/empty-folder").is_dir());
         assert_eq!(
@@ -483,6 +508,44 @@ mod tests {
         })
         .unwrap()
         .is_empty());
+        // Rebuild a self-consistent ZIP/manifest that omits a referenced chapter.
+        // Hash-only validation used to accept this, while restore rejected it.
+        let mut source = ZipArchive::new(fs::File::open(&backup.path).unwrap()).unwrap();
+        let mut value = manifest(&mut source).unwrap();
+        value.files.remove(&chapter.file_path);
+        let invalid = parent.join("missing-chapter.nfbackup");
+        let mut writer = ZipWriter::new(fs::File::create(&invalid).unwrap());
+        for name in value.files.keys() {
+            writer
+                .start_file(name, SimpleFileOptions::default())
+                .unwrap();
+            std::io::copy(&mut source.by_name(name).unwrap(), &mut writer).unwrap();
+        }
+        writer
+            .start_file(MANIFEST, SimpleFileOptions::default())
+            .unwrap();
+        serde_json::to_writer(&mut writer, &value).unwrap();
+        writer.finish().unwrap();
+        let mut archive = ZipArchive::new(fs::File::open(&invalid).unwrap()).unwrap();
+        verify(&mut archive, &value).unwrap();
+        assert!(verify_project(&mut archive)
+            .unwrap_err()
+            .contains("备份缺失正文"));
+        assert!(restore(
+            invalid.to_string_lossy().into_owned(),
+            parent.to_string_lossy().into_owned()
+        )
+        .err()
+        .unwrap()
+        .contains("备份缺失正文"));
+        drop(archive);
+        drop(source);
+        fs::remove_file(project.join(&chapter.file_path)).unwrap();
+        let failed = create(
+            project.to_string_lossy().into_owned(),
+            parent.to_string_lossy().into_owned(),
+        );
+        assert!(failed.err().unwrap().contains("备份缺失正文"));
         guard::release_project(project.to_string_lossy().into_owned()).unwrap();
         guard::release_project(restored.to_string_lossy().into_owned()).unwrap();
         fs::remove_dir_all(parent).unwrap();
