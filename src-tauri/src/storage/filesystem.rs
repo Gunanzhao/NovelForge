@@ -182,14 +182,29 @@ pub fn safe_relative(root: &Path, relative: &str) -> Result<PathBuf, String> {
 }
 
 pub fn safe_trash_path(root: &Path, stored_path: &str) -> Result<PathBuf, String> {
-    let candidate = PathBuf::from(stored_path);
-    if !candidate.is_absolute() {
-        return Err("回收站路径必须是绝对路径".to_string());
-    }
+    // Old projects stored absolute paths. Resolve only their trash/items suffix
+    // against this project, never access the original project's files.
+    let normalized = stored_path.replace('\\', "/");
+    let relative = if normalized.starts_with("trash/items/") {
+        normalized.as_str()
+    } else {
+        let absolute = normalized.starts_with('/')
+            || (normalized.as_bytes().get(1) == Some(&b':')
+                && normalized.as_bytes().get(2) == Some(&b'/'));
+        if !absolute {
+            return Err("回收站路径必须位于 trash/items 内".into());
+        }
+        let (_, suffix) = normalized
+            .rsplit_once("/trash/items/")
+            .ok_or("回收站路径必须位于 trash/items 内")?;
+        if suffix.is_empty() {
+            return Err("回收站条目路径为空".into());
+        }
+        // The following safe_relative/canonical checks reject traversal and links.
+        return safe_trash_path(root, &format!("trash/items/{suffix}"));
+    };
+    let candidate = safe_relative(root, relative)?;
     let trash_root = safe_relative(root, "trash/items")?;
-    if !trash_root.is_dir() {
-        return Err("项目回收站目录不存在".to_string());
-    }
     let canonical_trash_root = fs::canonicalize(&trash_root)
         .map_err(|error| format!("无法规范化回收站目录：{}", error))?;
     let canonical_candidate = fs::canonicalize(&candidate)

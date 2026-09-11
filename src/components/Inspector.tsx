@@ -35,13 +35,15 @@ function InspectorContent() {
   const { openContextMenu } = useContextMenu()
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyRefresh, setHistoryRefresh] = useState(0)
-  const [historyLimit, setHistoryLimit] = useState(100)
+  const [historyCursor, setHistoryCursor] = useState<string>()
+  const [historyMore, setHistoryMore] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [versionDialog, setVersionDialog] = useState(false)
   const [versionName, setVersionName] = useState('')
   const [versionSaving, setVersionSaving] = useState(false)
   const [historyFilter, setHistoryFilter] = useState('all')
   useEffect(() => {
-    const refresh = () => setHistoryRefresh(value => value + 1)
+    const refresh = () => { setHistoryCursor(undefined); setHistoryRefresh(value => value + 1) }
     window.addEventListener('novelforge:history-changed', refresh)
     return () => window.removeEventListener('novelforge:history-changed', refresh)
   }, [])
@@ -53,12 +55,20 @@ function InspectorContent() {
   const session = captureProjectSession()
   const isCurrent = () => mounted.current && isCurrentProjectSession(session) && useAppStore.getState().document?.node.id === document?.node.id
 
+  const historyNodeId = document?.node.id
   useEffect(() => {
+    if (!historyOpen || !projectPath || !historyNodeId) return
     let active = true
-    if (!projectPath || !document) { setHistory([]); return }
-    void projectApi.listHistory({ projectPath, nodeId: document.node.id }).then(items => { if (active) setHistory(items.filter(item => item.nodeId === document.node.id)) }).catch(error => { if (active) setError(error) })
+    setHistoryLoading(true)
+    if (!historyCursor) { setHistory([]); setHistoryMore(false) }
+    void projectApi.listHistoryPage({ projectPath, nodeId: historyNodeId, before: historyCursor, filter: historyFilter }).then(items => {
+      if (!active) return
+      const page = items.filter(item => item.nodeId === historyNodeId)
+      setHistory(previous => historyCursor ? [...previous, ...page.slice(0, 100).filter(item => !previous.some(old => old.id === item.id))] : page.slice(0, 100))
+      setHistoryMore(page.length > 100)
+    }).catch(error => { if (active) setError(error) }).finally(() => { if (active) setHistoryLoading(false) })
     return () => { active = false }
-  }, [document, projectPath, setError, historyRefresh])
+  }, [historyNodeId, projectPath, setError, historyRefresh, historyOpen, historyFilter, historyCursor])
 
   if (!document || !data || !projectPath) return <aside className="inspector"><div className="inspector-inner"><div className="empty-state"><Lightbulb size={22} /><div><strong>辅助栏</strong><span>选择章节后，这里会显示字数、设定链接、写作提示和版本历史。</span></div></div></div></aside>
   const attachments = linkedAttachments(data.entities, data.nodes, document.node.id)
@@ -109,7 +119,7 @@ function InspectorContent() {
     } catch (error) { if (isCurrent()) setError(error) }
     finally { if (isCurrent()) setVersionSaving(false) }
   }
-  const filteredHistory = history.filter(item => historyFilter === 'all' || (historyFilter === 'named' ? item.reason.startsWith('命名版本：') : historyFilter === 'automatic' ? item.reason === '自动保存' : item.reason.includes('保护') || item.reason.includes('恢复前')))
+  const filteredHistory = history
   const historyDate = (value: string) => new Date(value).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
 
   async function readRevision(id: string, mode: 'view' | 'diff' = 'view') {
@@ -160,6 +170,7 @@ function InspectorContent() {
       await refreshData(result, true, session)
       if (useAppStore.getState().document?.node.id === currentNodeId && useAppStore.getState().documentVersion === version) await useAppStore.getState().selectNode(currentNodeId, true)
       setHistoryPreview(null)
+      historyChanged()
     } catch (error) { setError(error) }
   }
 
@@ -175,7 +186,7 @@ function InspectorContent() {
       <Disclosure title="剧情线" storageKey="inspector:arcs" className="inspector-disclosure inspector-widget"><StoryArcInspector /></Disclosure>
       <Disclosure title="章节完成" storageKey="inspector:checklist" className="inspector-disclosure inspector-widget"><ChapterChecklistInspector /></Disclosure>
       <div className="inspector-section"><NameGenerator /></div>
-      <div className="inspector-section"><button className="inspector-collapse" onClick={() => setHistoryOpen(!historyOpen)}><span><History size={14} />版本历史</span>{historyOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>{historyOpen ? <div className="history-list" style={{ marginTop: 11 }}><p className="field-hint">正文及时保存，自动版本间隔至少 5 分钟；相同内容不重复记录。命名版本和旧历史长期保留。</p><div className="history-tools"><Button variant="outline" onClick={() => setVersionDialog(true)}>保存版本</Button><select className="select-input" aria-label="筛选历史版本" value={historyFilter} onChange={event => { setHistoryFilter(event.target.value); setHistoryLimit(100) }}><option value="all">全部版本</option><option value="named">命名版本</option><option value="automatic">自动版本</option><option value="protected">操作保护</option></select></div>{filteredHistory.length ? filteredHistory.slice(0, historyLimit).map((item) => <div className="history-item" key={item.id} onContextMenu={(event) => openHistoryMenu(event, item)}><div><strong>{item.reason}</strong><small>{historyDate(item.createdAt)} · {formatNumber(item.wordCount)} 字</small></div><span><Button variant="ghost" onClick={() => void readRevision(item.id)}>查看</Button><Button variant="ghost" onClick={() => void readRevision(item.id, 'diff')}><GitCompare size={12} />Diff</Button><Button variant="ghost" onClick={() => void copyRevision(item.id)}><Clipboard size={12} />复制</Button><Button variant="ghost" onClick={() => void restoreRevision(item.id)}><RotateCcw size={12} />恢复</Button></span></div>) : <span className="field-hint">暂无匹配的历史版本。</span>}{filteredHistory.length > historyLimit ? <Button variant="outline" onClick={() => setHistoryLimit(value => value + 100)}>加载更早版本（剩余 {filteredHistory.length - historyLimit} 条）</Button> : null}{historyPreview ? historyPreview.mode === 'diff' ? <pre className="history-preview history-diff">{diffLines(historyPreview.content, document.content).map((line, index) => <span className={'diff-line ' + line.kind} key={index}>{line.kind === 'same' ? '  ' : line.kind === 'added' ? '+ ' : '- '}{line.text}{'\n'}</span>)}</pre> : <pre className="history-preview">{historyPreview.content}</pre> : null}</div> : null}</div>
+      <div className="inspector-section"><button className="inspector-collapse" onClick={() => setHistoryOpen(!historyOpen)}><span><History size={14} />版本历史</span>{historyOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</button>{historyOpen ? <div className="history-list" style={{ marginTop: 11 }}><p className="field-hint">正文及时保存，自动版本间隔至少 5 分钟；相同内容不重复记录。命名版本和旧历史长期保留。</p><div className="history-tools"><Button variant="outline" onClick={() => setVersionDialog(true)}>保存版本</Button><select className="select-input" aria-label="筛选历史版本" value={historyFilter} onChange={event => { setHistoryFilter(event.target.value); setHistoryCursor(undefined); setHistoryPreview(null) }}><option value="all">全部版本</option><option value="named">命名版本</option><option value="automatic">自动版本</option><option value="protected">操作保护</option></select></div>{filteredHistory.length ? filteredHistory.map((item) => <div className="history-item" key={item.id} onContextMenu={(event) => openHistoryMenu(event, item)}><div><strong>{item.reason}</strong><small>{historyDate(item.createdAt)} · {formatNumber(item.wordCount)} 字</small></div><span><Button variant="ghost" onClick={() => void readRevision(item.id)}>查看</Button><Button variant="ghost" onClick={() => void readRevision(item.id, 'diff')}><GitCompare size={12} />Diff</Button><Button variant="ghost" onClick={() => void copyRevision(item.id)}><Clipboard size={12} />复制</Button><Button variant="ghost" onClick={() => void restoreRevision(item.id)}><RotateCcw size={12} />恢复</Button></span></div>) : <span className="field-hint">{historyLoading ? '正在读取历史版本…' : '暂无匹配的历史版本。'}</span>}{historyMore ? <Button variant="outline" disabled={historyLoading} onClick={() => setHistoryCursor(history.at(-1)?.id)}>{historyLoading ? '正在读取…' : '加载更早版本'}</Button> : null}{historyPreview ? historyPreview.mode === 'diff' ? <pre className="history-preview history-diff">{diffLines(historyPreview.content, document.content).map((line, index) => <span className={'diff-line ' + line.kind} key={index}>{line.kind === 'same' ? '  ' : line.kind === 'added' ? '+ ' : '- '}{line.text}{'\n'}</span>)}</pre> : <pre className="history-preview">{historyPreview.content}</pre> : null}</div> : null}</div>
     </div>
   </aside>
 }

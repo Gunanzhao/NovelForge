@@ -102,6 +102,8 @@ pub struct ProjectData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentData {
+    #[serde(default)]
+    pub history_created: bool,
     pub node: NodeRecord,
     pub content: String,
 }

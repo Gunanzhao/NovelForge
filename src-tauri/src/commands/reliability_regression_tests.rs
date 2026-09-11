@@ -374,3 +374,240 @@ fn self_and_parent_locks_protect_body_and_history_until_unlocked() {
     })
     .unwrap();
 }
+
+#[test]
+fn damaged_history_does_not_block_body_saves_and_write_failure_keeps_recovery() {
+    let f = Fixture::new();
+    let save = |content: &str| SaveDocumentInput {
+        project_path: f.path.clone(),
+        node_id: f.chapter.id.clone(),
+        content: content.into(),
+        reason: "自动保存".into(),
+    };
+    save_document(save("第一份稿件")).unwrap();
+    let history = list_history(f.action(&f.chapter.id)).unwrap();
+    fs::remove_file(f.root.join(&history[0].path)).unwrap();
+    let saved = guard::save_document_checked(save("第二份稿件"), "第一份稿件".into()).unwrap();
+    assert!(saved.history_created);
+    assert_eq!(
+        get_document(f.action(&f.chapter.id)).unwrap().content,
+        "第二份稿件"
+    );
+    let latest = list_history(f.action(&f.chapter.id)).unwrap();
+    assert_eq!(latest.len(), 2);
+    assert_eq!(
+        read_history(RevisionActionInput {
+            project_path: f.path.clone(),
+            revision_id: latest[0].id.clone()
+        })
+        .unwrap(),
+        "第二份稿件"
+    );
+    // Make the history directory unwritable as a directory, without relying on ACLs.
+    let directory = f.root.join(".novelforge/history").join(&f.chapter.id);
+    fs::rename(&directory, directory.with_extension("held")).unwrap();
+    fs::write(&directory, b"not a directory").unwrap();
+    assert!(guard::save_document_checked(save("第三份必须保留"), "第二份稿件".into()).is_err());
+    assert_eq!(
+        get_document(f.action(&f.chapter.id)).unwrap().content,
+        "第二份稿件"
+    );
+    assert!(!list_recovery(f.path.clone()).unwrap().is_empty());
+    assert!(recovery::create_history_snapshot(recovery::SnapshotInput {
+        project_path: f.path.clone(),
+        node_id: f.chapter.id.clone(),
+        content: "保护内容".into(),
+        kind: recovery::SnapshotKind::Protected,
+        name: Some("测试".into())
+    })
+    .is_err());
+}
+
+#[test]
+fn history_pages_use_stable_cursor_and_filter_before_limiting() {
+    let f = Fixture::new();
+    let (_, connection) = project_connection(&f.path).unwrap();
+    for i in 0..205 {
+        connection.execute("INSERT INTO revisions (id,node_id,node_title,reason,word_count,created_at,file_path) VALUES (?1,?2,'章',?3,1,'2026-09-11T00:00:00Z','test.md')", params![format!("h{i}"),f.chapter.id,if i==0 {"命名版本：最早的里程碑"} else {"自动保存"}]).unwrap();
+    }
+    let page = storage::history::history_page(&connection, &f.chapter.id, None, "all").unwrap();
+    assert_eq!(page.len(), 101);
+    assert_eq!(page[0].id, "h204");
+    let next =
+        storage::history::history_page(&connection, &f.chapter.id, Some(&page[99].id), "all")
+            .unwrap();
+    assert_eq!(next[0].id, "h104");
+    let named = storage::history::history_page(&connection, &f.chapter.id, None, "named").unwrap();
+    assert_eq!(named.len(), 1);
+    assert_eq!(named[0].id, "h0");
+    assert!(
+        storage::history::history_page(&connection, "other", Some(&page[99].id), "all")
+            .unwrap()
+            .is_empty()
+    );
+    assert!(storage::history::history_page(&connection, &f.chapter.id, None, "unknown").is_err());
+}
+
+#[test]
+fn renamed_document_baseline_is_returned_and_external_changes_are_rejected() {
+    let f = Fixture::new();
+    let before = get_document(f.action(&f.chapter.id)).unwrap().content;
+    let result = guard::rename_node_checked(
+        crate::models::RenameNodeInput {
+            project_path: f.path.clone(),
+            node_id: f.chapter.id.clone(),
+            title: "新的名字".into(),
+        },
+        Some(before),
+    )
+    .unwrap();
+    let value = serde_json::to_value(result).unwrap();
+    let content = value["document"]["content"].as_str().unwrap().to_string();
+    assert!(content.starts_with("# 新的名字"));
+    guard::save_document_checked(
+        SaveDocumentInput {
+            project_path: f.path.clone(),
+            node_id: f.chapter.id.clone(),
+            content: format!("{content}继续写作"),
+            reason: "自动保存".into(),
+        },
+        content.clone(),
+    )
+    .unwrap();
+    assert!(guard::rename_node_checked(
+        crate::models::RenameNodeInput {
+            project_path: f.path.clone(),
+            node_id: f.chapter.id.clone(),
+            title: "不应改名".into()
+        },
+        Some(content)
+    )
+    .unwrap_err()
+    .contains("EXTERNAL_CONFLICT"));
+}
+
+#[test]
+fn backup_restores_trash_without_accessing_the_original_project() {
+    let f = Fixture::new();
+    let volume_data = create_node(NodeInput {
+        project_path: f.path.clone(),
+        parent_id: None,
+        kind: "volume".into(),
+        title: "备份回收卷".into(),
+    })
+    .unwrap();
+    let volume = volume_data
+        .nodes
+        .iter()
+        .find(|n| n.title == "备份回收卷")
+        .unwrap()
+        .clone();
+    let chapter_data = create_node(NodeInput {
+        project_path: f.path.clone(),
+        parent_id: Some(volume.id.clone()),
+        kind: "chapter".into(),
+        title: "回收章".into(),
+    })
+    .unwrap();
+    let chapter = chapter_data
+        .nodes
+        .iter()
+        .find(|n| n.title == "回收章")
+        .unwrap()
+        .clone();
+    let section_data = create_node(NodeInput {
+        project_path: f.path.clone(),
+        parent_id: Some(chapter.id.clone()),
+        kind: "section".into(),
+        title: "独立回收节".into(),
+    })
+    .unwrap();
+    let section = section_data
+        .nodes
+        .iter()
+        .find(|n| n.title == "独立回收节")
+        .unwrap()
+        .clone();
+    let attachment = f.import();
+    delete_node(f.action(&section.id)).unwrap();
+    delete_node(f.action(&volume.id)).unwrap();
+    delete_entity(f.action(&attachment.id)).unwrap();
+    let target =
+        std::env::temp_dir().join(format!("novelforge-backup-portable-{}", storage::new_id()));
+    fs::create_dir(&target).unwrap();
+    let report = tauri::async_runtime::block_on(backup::backup_project(
+        f.path.clone(),
+        target.to_string_lossy().into(),
+    ))
+    .unwrap();
+    let restored = tauri::async_runtime::block_on(backup::restore_backup(
+        report.path,
+        target.to_string_lossy().into(),
+    ))
+    .unwrap();
+    fs::rename(
+        f.root.join("trash/items"),
+        f.root.join("trash/original-items-unavailable"),
+    )
+    .unwrap();
+    open_project(restored.path.clone()).unwrap();
+    for id in [&volume.id, &section.id, &attachment.id] {
+        let trash = list_trash(restored.path.clone())
+            .unwrap()
+            .into_iter()
+            .find(|item| &item.ref_id == id)
+            .unwrap();
+        restore_trash(crate::models::NodeActionInput {
+            project_path: restored.path.clone(),
+            node_id: trash.id,
+        })
+        .unwrap();
+    }
+    assert!(list_trash(restored.path.clone()).unwrap().is_empty());
+    assert!(get_document(crate::models::NodeActionInput {
+        project_path: restored.path.clone(),
+        node_id: chapter.id
+    })
+    .is_ok());
+    assert_eq!(
+        fs::read(Path::new(&restored.path).join(attachment.file_path)).unwrap(),
+        b"unchanged attachment bytes\0\xff"
+    );
+    guard::release_project(restored.path).unwrap();
+    fs::remove_dir_all(target).unwrap();
+}
+
+#[test]
+fn statistics_group_utc_records_by_the_requested_local_day() {
+    use chrono::TimeZone;
+    let f = Fixture::new();
+    let (_, connection) = project_connection(&f.path).unwrap();
+    connection.execute("INSERT INTO activity(id,node_id,created_at,delta_words,word_count) VALUES ('local-day',?1,'2026-09-10T18:00:00Z',100,100)",params![f.chapter.id]).unwrap();
+    let zone = chrono::FixedOffset::east_opt(8 * 3600).unwrap();
+    let now = zone.with_ymd_and_hms(2026, 9, 11, 14, 0, 0).unwrap();
+    let stats = statistics::get_statistics_at(
+        crate::models::StatisticsInput {
+            project_path: f.path.clone(),
+            current_node_id: None,
+        },
+        now,
+    )
+    .unwrap();
+    assert_eq!(stats.today_words, 100);
+    assert_eq!(stats.yesterday_words, 0);
+    assert_eq!(stats.daily.last().unwrap().date, "2026-09-11");
+    assert_eq!(stats.daily.last().unwrap().words, 100);
+    assert_eq!(stats.writing_streak, 1);
+    // The same UTC timestamp belongs to the previous local day in a western zone.
+    let west = chrono::FixedOffset::west_opt(7 * 3600).unwrap();
+    let stats = statistics::get_statistics_at(
+        crate::models::StatisticsInput {
+            project_path: f.path.clone(),
+            current_node_id: None,
+        },
+        west.with_ymd_and_hms(2026, 9, 11, 1, 0, 0).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(stats.today_words, 0);
+    assert_eq!(stats.yesterday_words, 100);
+}

@@ -1,12 +1,19 @@
 use crate::models::{StatisticsInput, Stats};
 use crate::storage_impl as storage;
-use chrono::{Duration, Utc};
+use chrono::{Duration, Local};
 use std::fs;
 
 use super::project_connection;
 
 #[tauri::command]
 pub fn get_statistics(input: StatisticsInput) -> Result<Stats, String> {
+    get_statistics_at(input, Local::now())
+}
+
+pub(super) fn get_statistics_at<Tz: chrono::TimeZone>(
+    input: StatisticsInput,
+    now: chrono::DateTime<Tz>,
+) -> Result<Stats, String> {
     let (root, connection) = project_connection(&input.project_path)?;
     let nodes = storage::all_nodes(&connection, false)?;
     let mut total_words = 0;
@@ -32,11 +39,13 @@ pub fn get_statistics(input: StatisticsInput) -> Result<Stats, String> {
             }
         }
     }
-    let now = Utc::now();
-    let today = now.format("%Y-%m-%d").to_string();
-    let yesterday = (now - Duration::days(1)).format("%Y-%m-%d").to_string();
-    let week_start = (now - Duration::days(6)).date_naive();
-    let month_start = (now - Duration::days(30)).date_naive();
+    let today_date = now.date_naive();
+    let today = today_date.format("%Y-%m-%d").to_string();
+    let yesterday = (today_date - Duration::days(1))
+        .format("%Y-%m-%d")
+        .to_string();
+    let week_start = today_date - Duration::days(6);
+    let month_start = today_date - Duration::days(30);
     let mut today_words = 0_u64;
     let mut yesterday_words = 0_u64;
     let mut week_words = 0_u64;
@@ -55,6 +64,7 @@ pub fn get_statistics(input: StatisticsInput) -> Result<Stats, String> {
         let (created_at, delta) = row;
         let positive = delta.max(0) as u64;
         if let Some(date) = storage::parse_timestamp(&created_at) {
+            let date = date.with_timezone(&now.timezone()).date_naive();
             let date_key = date.format("%Y-%m-%d").to_string();
             if positive > 0 {
                 dates.insert(date_key.clone());
@@ -66,10 +76,10 @@ pub fn get_statistics(input: StatisticsInput) -> Result<Stats, String> {
             if date_key == yesterday {
                 yesterday_words += positive;
             }
-            if date.date_naive() >= week_start {
+            if date >= week_start {
                 week_words += positive;
             }
-            if date.date_naive() >= month_start {
+            if date >= month_start {
                 month_words += positive;
             }
         }
@@ -81,7 +91,7 @@ pub fn get_statistics(input: StatisticsInput) -> Result<Stats, String> {
         .checked_div(active_days)
         .unwrap_or(0);
     let mut streak = 0;
-    let mut cursor = now.date_naive();
+    let mut cursor = today_date;
     loop {
         let key = cursor.format("%Y-%m-%d").to_string();
         if dates.contains(&key) {
@@ -110,7 +120,7 @@ pub fn get_statistics(input: StatisticsInput) -> Result<Stats, String> {
     let daily = (0..30)
         .rev()
         .map(|offset| {
-            let date = (now - Duration::days(offset))
+            let date = (today_date - Duration::days(offset))
                 .format("%Y-%m-%d")
                 .to_string();
             let words = daily_totals.get(&date).copied().unwrap_or(0);

@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type { DocumentData, NodeRecord, ProjectData } from '../src/lib/types'
 
 const api = vi.hoisted(() => ({
-  createHistorySnapshot: vi.fn(async () => {}), getDocument: vi.fn(), saveDocument: vi.fn(), open: vi.fn(), create: vi.fn(), stats: vi.fn(),
+  release: vi.fn(async () => {}), createHistorySnapshot: vi.fn(async () => {}), getDocument: vi.fn(), saveDocument: vi.fn(), open: vi.fn(), create: vi.fn(), stats: vi.fn(),
   createNode: vi.fn(), renameNode: vi.fn(), setNodeStatus: vi.fn(), reorderNode: vi.fn(), moveNode: vi.fn(), copyNode: vi.fn(), deleteNode: vi.fn(),
   upsertEntity: vi.fn(), deleteEntity: vi.fn(), listTrash: vi.fn(), restoreTrash: vi.fn(), permanentDelete: vi.fn(), emptyTrash: vi.fn(), updateProject: vi.fn(), exportProject: vi.fn(),
 }))
@@ -136,4 +136,48 @@ it('keeps edits made while the final checkpoint is being written', async () => {
   useAppStore.getState().updateContent('关闭前继续输入')
   slow.resolve(); expect(await closing).toBe(false)
   expect(useAppStore.getState().document?.content).toBe('关闭前继续输入')
+})
+
+it.each(['switch','close'])('keeps input that arrives while post-save statistics starts on %s', async(action) => {
+ const slow=deferred<unknown>()
+ api.stats.mockImplementationOnce(()=>{
+   useAppStore.getState().updateContent('统计期间新输入')
+   return slow.promise
+ })
+ useAppStore.getState().updateContent('离开前草稿')
+ const result=await (action==='switch'?useAppStore.getState().selectNode('b'):useAppStore.getState().closeProject())
+ expect(useAppStore.getState().document?.content).toBe('统计期间新输入')
+ expect(useAppStore.getState().projectPath).toBe('P')
+ if(action==='close') expect(result).toBe(false)
+ slow.resolve(useAppStore.getState().stats)
+})
+it('does not wait for statistics before completing a body save', async()=>{
+ const slow=deferred<unknown>();api.stats.mockReturnValueOnce(slow.promise)
+ useAppStore.getState().updateContent('新稿')
+ expect(await useAppStore.getState().saveCurrentDocument()).toBe(true)
+ expect(useAppStore.getState().saveState).toBe('saved')
+ slow.resolve(useAppStore.getState().stats)
+})
+it('keeps input during project lease release and reacquires without reloading',async()=>{
+ const slow=deferred<void>();api.release.mockReturnValueOnce(slow.promise)
+ const closing=useAppStore.getState().closeProject()
+ await vi.waitFor(()=>expect(api.release).toHaveBeenCalled())
+ useAppStore.getState().updateContent('释放期间的新内容')
+ slow.resolve();expect(await closing).toBe(false)
+ expect(useAppStore.getState().document?.content).toBe('释放期间的新内容')
+ expect(api.getDocument).toHaveBeenCalledWith({projectPath:'P',nodeId:'a'})
+})
+it.each([false,true])('synchronizes renamed disk baseline without losing concurrent input (%s)',async(edit)=>{
+ useAppStore.setState({document:{node:a,content:'# A\n\n原文',persistedContent:'# A\n\n原文'}})
+ const slow=deferred<ProjectData & {renamedDocument:DocumentData}>();api.renameNode.mockReturnValueOnce(slow.promise)
+ const renaming=useAppStore.getState().renameNode('a','新名')
+ if(edit) useAppStore.getState().updateContent('# A\n\n原文追加')
+ slow.resolve({...project,renamedDocument:{node:{...a,title:'新名'},content:'# 新名\n\n原文'}})
+ await renaming
+ expect(useAppStore.getState().document?.content).toBe(edit?'# 新名\n\n原文追加':'# 新名\n\n原文')
+ expect(useAppStore.getState().document?.persistedContent).toBe('# 新名\n\n原文')
+ if(edit) {
+   await useAppStore.getState().saveCurrentDocument()
+   expect(api.saveDocument).toHaveBeenLastCalledWith(expect.objectContaining({expectedContent:'# 新名\n\n原文',content:'# 新名\n\n原文追加'}))
+ }
 })

@@ -45,6 +45,12 @@ try {
   console.log('EDITOR_SESSION_AND_CONTEXT_OK')
   await ev(`document.querySelector('button[title="项目设置"]').click()`);await waitFor(`!!document.querySelector('.settings-view')`)
   await field('#settings-project input','可靠性验收已保存')
+  // Exercise the same application event emitted by the native CloseRequested handler.
+  await call('plugin:event|emit',{event:'novelforge:request-close',payload:null})
+  await waitFor(`!!document.querySelector('[aria-label="有未保存的修改"]')`)
+  assert.equal(await ev(`!!document.querySelector('[aria-label="正在保存并关闭…"]')`),false,'draft confirmation remains accessible during window close')
+  await click('继续编辑')
+  console.log('WINDOW_CLOSE_DRAFT_GUARD_OK')
   await nav('人物');await waitFor(`!!document.querySelector('[aria-label="有未保存的修改"]')`);await click('继续编辑')
   assert.equal(await ev(`document.querySelector('#settings-project input').value`),'可靠性验收已保存')
   await nav('人物');await click('保存后离开');await waitFor(`!!document.querySelector('.entity-list-head')`)

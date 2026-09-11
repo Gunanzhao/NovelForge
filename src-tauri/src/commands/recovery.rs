@@ -63,6 +63,25 @@ pub fn list_history(input: crate::models::NodeActionInput) -> Result<Vec<History
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct HistoryPageInput {
+    pub project_path: String,
+    pub node_id: String,
+    pub before: Option<String>,
+    pub filter: Option<String>,
+}
+#[tauri::command]
+pub fn list_history_page(input: HistoryPageInput) -> Result<Vec<HistoryItem>, String> {
+    let (_, connection) = project_connection(&input.project_path)?;
+    storage::history::history_page(
+        &connection,
+        &input.node_id,
+        input.before.as_deref(),
+        input.filter.as_deref().unwrap_or("all"),
+    )
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RevisionActionInput {
     pub project_path: String,
     pub revision_id: String,

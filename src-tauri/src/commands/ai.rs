@@ -284,7 +284,7 @@ async fn complete_http(input: AiCompletionInput) -> Result<AiCompletionResult, S
 fn response_incomplete(body: &serde_json::Value) -> bool {
     body["choices"][0]["finish_reason"]
         .as_str()
-        .is_some_and(|reason| reason != "stop")
+        .is_none_or(|reason| reason != "stop")
 }
 
 fn response_content(body: &serde_json::Value) -> Result<String, String> {
@@ -373,7 +373,12 @@ mod response_tests {
         assert!(!response_incomplete(
             &json!({"choices":[{"finish_reason":"stop"}]})
         ));
-        assert!(!response_incomplete(
+        for reason in [json!(null), json!(42), json!("unknown")] {
+            assert!(response_incomplete(
+                &json!({"choices":[{"finish_reason":reason}]})
+            ));
+        }
+        assert!(response_incomplete(
             &json!({"choices":[{"message":{"content":"兼容旧服务"}}]})
         ));
     }

@@ -76,6 +76,7 @@ export interface ProjectData {
 }
 
 export interface DocumentData {
+  historyCreated?: boolean
   persistedContent?: string
   node: NodeRecord
   content: string

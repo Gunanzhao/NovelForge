@@ -659,7 +659,7 @@ async function run() {
   rmSync(attachmentSource, { force: true })
   const providerServer = createServer((_request, response) => {
     response.writeHead(200, { 'content-type': 'application/json' })
-    response.end(JSON.stringify({ model: 'cdp-provider', choices: [{ message: { content: 'Provider 验收结果' } }] }))
+    response.end(JSON.stringify({ model: 'cdp-provider', choices: [{ message: { content: 'Provider 验收结果' }, finish_reason: 'stop' }] }))
   })
   await new Promise((resolvePromise) => providerServer.listen(0, '127.0.0.1', resolvePromise))
   const providerAddress = providerServer.address()

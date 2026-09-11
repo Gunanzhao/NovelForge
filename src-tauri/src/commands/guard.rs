@@ -63,6 +63,46 @@ pub fn save_document_checked(
     )
 }
 
+#[derive(Debug, serde::Serialize)]
+pub struct RenameResult {
+    data: ProjectData,
+    document: Option<DocumentData>,
+}
+#[tauri::command]
+pub fn rename_node_checked(
+    input: crate::models::RenameNodeInput,
+    expected_content: Option<String>,
+) -> Result<RenameResult, String> {
+    let _serial = SAVES.lock().map_err(|_| "正文保存锁不可用")?;
+    if let Some(expected) = expected_content {
+        let current = manuscript::get_document(crate::models::NodeActionInput {
+            project_path: input.project_path.clone(),
+            node_id: input.node_id.clone(),
+        })?;
+        if current.content != expected {
+            return Err("EXTERNAL_CONFLICT:磁盘正文已变化，已取消重命名，请先处理正文冲突".into());
+        }
+    }
+    let data = manuscript::rename_node(crate::models::RenameNodeInput {
+        project_path: input.project_path.clone(),
+        node_id: input.node_id.clone(),
+        title: input.title.clone(),
+    })?;
+    let document = if data
+        .nodes
+        .iter()
+        .any(|node| node.id == input.node_id && node.kind != "volume")
+    {
+        Some(manuscript::get_document(crate::models::NodeActionInput {
+            project_path: input.project_path,
+            node_id: input.node_id,
+        })?)
+    } else {
+        None
+    };
+    Ok(RenameResult { data, document })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
