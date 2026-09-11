@@ -17,11 +17,11 @@ const data:ProjectData={project:{id:'p',formatVersion:1,title:'测试',author:''
 beforeEach(()=>{useAiTask.setState(useAiTask.getInitialState(), true);localStorage.clear();useAppStore.setState({...useAppStore.getInitialState(),projectPath:'P',data,document:{node:chapter,content:'测试正文'},saveState:'saved',selectedEntityId:'a'})})
 afterEach(cleanup)
 it('从章节链接打开正确附件，筛选无匹配时不保留旧详情操作',()=>{
- render(<AttachmentsView/>);expect(screen.getByRole('button',{name:'打开文件'})).toBeTruthy();
+ render(<AttachmentsView/>);expect(screen.getByRole('button',{name:'打开或定位文件'})).toBeTruthy();
  fireEvent.change(screen.getByPlaceholderText('搜索附件名称或说明'),{target:{value:'完全没有匹配'}});
- expect(screen.getByText('没有匹配附件')).toBeTruthy();expect(screen.queryByRole('button',{name:'打开文件'})).toBeNull();
+ expect(screen.getByText('没有匹配附件')).toBeTruthy();expect(screen.queryByRole('button',{name:'打开或定位文件'})).toBeNull();
  fireEvent.change(screen.getByPlaceholderText('搜索附件名称或说明'),{target:{value:'另一个章节'}});
- expect(screen.getByRole('button',{name:'打开文件'})).toBeTruthy()
+ expect(screen.getByRole('button',{name:'打开或定位文件'})).toBeTruthy()
 })
 it('章节及其小节展示同一组关联附件，切换章节不会包含其他附件',()=>{
  expect(linkedAttachments(data.entities,data.nodes,'s')).toEqual([attachment]);

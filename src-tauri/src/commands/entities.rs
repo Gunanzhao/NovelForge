@@ -326,22 +326,98 @@ pub fn open_attachment(input: crate::models::NodeActionInput) -> Result<String, 
     if !absolute.is_file() {
         return Err("附件文件不存在，可能已被外部程序移动".to_string());
     }
+    let absolute = absolute.canonicalize().map_err(|e| e.to_string())?;
+    storage::ensure_within_root(&root, &absolute)?;
+    let open_directly = attachment_can_open(&absolute);
     #[cfg(target_os = "windows")]
-    std::process::Command::new("explorer.exe")
-        .arg(&absolute)
-        .spawn()
-        .map_err(|error| format!("无法打开附件：{}", error))?;
+    {
+        let mut command = std::process::Command::new("explorer.exe");
+        if !open_directly {
+            command.arg("/select,");
+        }
+        command
+            .arg(&absolute)
+            .spawn()
+            .map_err(|e| format!("无法打开附件位置：{e}"))?;
+    }
     #[cfg(target_os = "macos")]
-    std::process::Command::new("open")
-        .arg(&absolute)
-        .spawn()
-        .map_err(|error| format!("无法打开附件：{}", error))?;
+    {
+        let mut command = std::process::Command::new("open");
+        if !open_directly {
+            command.arg("-R");
+        }
+        command
+            .arg(&absolute)
+            .spawn()
+            .map_err(|e| format!("无法打开附件位置：{e}"))?;
+    }
     #[cfg(target_os = "linux")]
     std::process::Command::new("xdg-open")
-        .arg(&absolute)
+        .arg(if open_directly {
+            absolute.as_path()
+        } else {
+            absolute.parent().ok_or("附件目录不存在")?
+        })
         .spawn()
-        .map_err(|error| format!("无法打开附件：{}", error))?;
+        .map_err(|e| format!("无法打开附件位置：{e}"))?;
     Ok(absolute.to_string_lossy().to_string())
+}
+
+// Allow only common passive formats. Scripts, executables, shortcuts, active
+// documents and unknown types are located in the file manager, never executed.
+fn attachment_can_open(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .as_str(),
+        "txt"
+            | "md"
+            | "pdf"
+            | "png"
+            | "jpg"
+            | "jpeg"
+            | "gif"
+            | "webp"
+            | "avif"
+            | "bmp"
+            | "mp3"
+            | "wav"
+            | "ogg"
+            | "flac"
+            | "mp4"
+            | "webm"
+            | "mkv"
+    )
+}
+#[cfg(test)]
+mod attachment_policy_tests {
+    use super::*;
+    #[test]
+    fn dangerous_and_unknown_types_are_locate_only() {
+        for name in [
+            "a.exe",
+            "a.PS1",
+            "a.bat",
+            "a.cmd",
+            "a.lnk",
+            "a.url",
+            "a.msi",
+            "a.hta",
+            "a.svg",
+            "a.html",
+            "a.docm",
+            "a.pdf.exe",
+            "a",
+            "a.pdf.",
+        ] {
+            assert!(!attachment_can_open(Path::new(name)), "{name}");
+        }
+        for name in ["a.PNG", "a.pdf", "a.txt", "a.wav"] {
+            assert!(attachment_can_open(Path::new(name)), "{name}");
+        }
+    }
 }
 
 pub(crate) fn safe_filename(title: &str) -> String {
