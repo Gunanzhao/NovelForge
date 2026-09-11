@@ -34,6 +34,7 @@ let statsGeneration = 0
 let searchGeneration = 0
 let selectionGeneration = 0
 let transitionGeneration = 0
+let conflictGeneration = 0
 
 export interface ProjectSession {
   path: string | null
@@ -141,6 +142,7 @@ interface AppState {
   setEditorMode: (mode: AppState['editorMode']) => void
   openAiAssistant: (action?: AiAction) => void
   consumeAiAction: () => void
+  reloadConflictedDocument: () => Promise<boolean>
   clearError: () => void
   setError: (error: unknown) => void
   createProject: (input: ProjectInput) => Promise<void>
@@ -230,7 +232,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setEditorMode: (editorMode) => set({ editorMode }),
   openAiAssistant: (action) => runGuarded(() => set({ activeView: 'ai', requestedAiAction: action ?? null })),
   consumeAiAction: () => set({ requestedAiAction: null }),
-  clearError: () => set({ error: null }),
+  clearError: () => { ++conflictGeneration; set({ error: null }) },
   setError: (error) => set({ error: error instanceof Error ? error.message : String(error) }),
 
   loadRecent: () => {
@@ -376,6 +378,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     return { document: { ...state.document, content }, documentVersion: state.documentVersion + 1, saveState: 'idle' }
   }),
   setEditorSelection: (selection) => set({ editorSelection: selection }),
+
+  reloadConflictedDocument: async () => {
+    const before = get(), session = captureProjectSession(), request = ++conflictGeneration
+    if (!before.projectPath || !before.document || !before.error?.startsWith('EXTERNAL_CONFLICT:')) return false
+    const current = () => request === conflictGeneration && isCurrentProjectSession(session) && get().document?.node.id === before.document!.node.id && get().documentVersion === before.documentVersion && get().document?.content === before.document!.content && get().error === before.error
+    try {
+      await projectApi.createHistorySnapshot({ projectPath: before.projectPath, nodeId: before.document.node.id, content: before.document.content, kind: 'protected', name: '读取外部版本前' })
+      if (!current()) return false
+      const fresh = await projectApi.getDocument({ projectPath: before.projectPath, nodeId: before.document.node.id })
+      let applied = false
+      set(state => {
+        if (!current() || fresh.node.id !== before.document!.node.id) return state
+        applied = true
+        return { document: { ...fresh, persistedContent: fresh.content }, editorSelection: null, documentVersion: state.documentVersion + 1, saveState: 'saved', error: null }
+      })
+      return applied
+    } catch (error) { if (current()) throw error; return false }
+  },
 
   saveCurrentDocument: async (reason = '自动保存') => {
     const current = get()

@@ -181,3 +181,27 @@ it.each([false,true])('synchronizes renamed disk baseline without losing concurr
    expect(api.saveDocument).toHaveBeenLastCalledWith(expect.objectContaining({expectedContent:'# 新名\n\n原文',content:'# 新名\n\n原文追加'}))
  }
 })
+
+it.each(['edit','cancel','chapter','project','repeat','error'])('NF-07 rejects stale conflict reload: %s', async action => {
+  useAppStore.setState({error:'EXTERNAL_CONFLICT:disk changed'})
+  const slow=deferred<DocumentData>();api.getDocument.mockReturnValueOnce(slow.promise)
+  const first=useAppStore.getState().reloadConflictedDocument()
+  await vi.waitFor(()=>expect(api.getDocument).toHaveBeenCalled())
+  if(action==='edit')useAppStore.getState().updateContent('new input')
+  if(action==='cancel')useAppStore.getState().clearError()
+  if(action==='chapter')useAppStore.setState({document:{node:b,content:'B new input'},documentVersion:5,saveState:'idle'})
+  if(action==='project')useAppStore.setState({projectSession:99,projectPath:'Q'})
+  if(action==='repeat'){api.getDocument.mockResolvedValueOnce({node:a,content:'new disk'});await useAppStore.getState().reloadConflictedDocument()}
+  const before=useAppStore.getState()
+  if(action==='error'){slow.reject(new Error('read failed'));await expect(first).rejects.toThrow('read failed')}
+  else {slow.resolve({node:a,content:'old disk'});expect(await first).toBe(false)}
+  expect(useAppStore.getState().document).toBe(before.document)
+  expect(useAppStore.getState().saveState).toBe(before.saveState)
+  expect(api.createHistorySnapshot).toHaveBeenCalledWith(expect.objectContaining({content:'original',kind:'protected'}))
+})
+it('NF-07 protects the exact current draft before accepting disk content', async()=>{
+  useAppStore.setState({error:'EXTERNAL_CONFLICT:changed'})
+  api.getDocument.mockResolvedValue({node:a,content:'disk'})
+  expect(await useAppStore.getState().reloadConflictedDocument()).toBe(true)
+  expect(useAppStore.getState().document?.persistedContent).toBe('disk')
+})
