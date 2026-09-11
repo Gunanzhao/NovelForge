@@ -60,11 +60,14 @@ export function isCurrentDocumentSaved() {
 async function releaseForTransition(path: string | null, isCurrent: () => boolean) {
   const before = useAppStore.getState()
   if (!isCurrentDocumentSaved()) throw new Error('正文仍有新修改，已取消离开，请重试。')
-  if (path) await projectApi.release?.(path)
+  if (path) await (before.projectLease ? projectApi.release(path, before.projectLease) : projectApi.release?.(path))
   const after = useAppStore.getState()
   if (!isCurrent() || after.projectSession !== before.projectSession || after.documentVersion !== before.documentVersion || !isCurrentDocumentSaved()) {
     // Reacquire the current project's lease without replacing any editor content.
-    if (path && after.projectPath === path && after.document) await projectApi.getDocument({ projectPath: path, nodeId: after.document.node.id })
+    if (path && after.projectPath === path && after.projectSession === before.projectSession) {
+      if (before.projectLease) await projectApi.retain(path, before.projectLease)
+      else if (after.document) await projectApi.getDocument({ projectPath: path, nodeId: after.document.node.id })
+    }
     throw new Error('关闭项目期间正文或项目已变化，已保留当前内容，请重试。')
   }
 }
@@ -107,6 +110,7 @@ const emptyStats: Stats = {
 }
 
 interface AppState {
+  projectLease: string | null
   projectPath: string | null
   projectSession: number
   data: ProjectData | null
@@ -180,6 +184,7 @@ interface AppState {
 let activeSave: Promise<boolean> | null = null
 
 export const useAppStore = create<AppState>((set, get) => ({
+  projectLease: null,
   projectPath: null,
   projectSession: 0,
   data: null,
@@ -250,6 +255,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   createProject: async (input) => {
     if (dirtyDrafts().length && !await confirmDraftNavigation()) return
     const request = ++transitionGeneration
+    let targetLease: string | undefined
+    let adopted = false
     try {
       if (get().document) {
         const saved = await get().saveCurrentDocument('切换项目前保存')
@@ -257,6 +264,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       if (request !== transitionGeneration) return
       let data = await projectApi.create(input)
+      targetLease = data.leaseToken
       let checklistError: unknown = null
       const initialChapter = firstChapter(data)
       if (initialChapter) {
@@ -267,10 +275,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (get().document && !await get().saveCurrentDocument('切换项目前保存')) throw new Error('当前正文保存失败，已保留当前项目')
       if (request !== transitionGeneration) return
       const previousPath = get().projectPath
-      await releaseForTransition(previousPath !== input.path ? previousPath : null, () => request === transitionGeneration)
+      await releaseForTransition(previousPath, () => request === transitionGeneration)
       if (request !== transitionGeneration) return
       ++selectionGeneration
-      set((state) => ({ projectPath: input.path, projectSession: state.projectSession + 1, deletingNodes: [], data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
+      set((state) => ({ projectPath: input.path, projectLease: targetLease ?? null, projectSession: state.projectSession + 1, deletingNodes: [], data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
+      adopted = true
       if (checklistError) get().setError(checklistError)
       const chapter = firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
@@ -280,12 +289,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) {
       if (request === transitionGeneration) get().setError(error)
       throw error
-    }
+    } finally { if (targetLease && !adopted) await projectApi.release(input.path, targetLease) }
   },
 
   openProject: async (path) => {
     if (dirtyDrafts().length && !await confirmDraftNavigation()) return
     const request = ++transitionGeneration
+    let targetLease: string | undefined
+    let adopted = false
     try {
       if (get().document) {
         const saved = await get().saveCurrentDocument('切换项目前保存')
@@ -293,14 +304,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       if (request !== transitionGeneration) return
       const data = await projectApi.open(path)
+      targetLease = data.leaseToken
       if (request !== transitionGeneration) return
       if (get().document && !await get().saveCurrentDocument('切换项目前保存')) throw new Error('当前正文保存失败，已保留当前项目')
       if (request !== transitionGeneration) return
       const previousPath = get().projectPath
-      await releaseForTransition(previousPath !== path ? previousPath : null, () => request === transitionGeneration)
+      await releaseForTransition(previousPath, () => request === transitionGeneration)
       if (request !== transitionGeneration) return
       ++selectionGeneration
-      set((state) => ({ projectPath: path, projectSession: state.projectSession + 1, deletingNodes: [], data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
+      set((state) => ({ projectPath: path, projectLease: targetLease ?? null, projectSession: state.projectSession + 1, deletingNodes: [], data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
+      adopted = true
       const remembered = readEditorSession(path).nodeId
       const chapter = data.nodes.find(node => node.id === remembered && node.kind !== 'volume') ?? firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
@@ -310,7 +323,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) {
       if (request === transitionGeneration) get().setError(error)
       throw error
-    }
+    } finally { if (targetLease && !adopted) await projectApi.release(path, targetLease) }
   },
 
   closeProject: async () => {
@@ -325,7 +338,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     catch (error) { if (request === transitionGeneration) get().setError(error); return false }
     ++selectionGeneration
     set((state) => ({
-      projectPath: null,
+      projectLease: null,
+  projectPath: null,
       projectSession: state.projectSession + 1,
       data: null,
       document: null,

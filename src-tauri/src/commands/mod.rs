@@ -66,8 +66,9 @@ pub(crate) use trash::{empty_trash, list_trash, permanent_delete, restore_trash}
 
 fn project_connection(path: &str) -> Result<(PathBuf, Connection), String> {
     let root = storage::existing_project_root(path)?;
-    guard::acquire(&root)?;
+    let lease = guard::begin(&root)?;
     let connection = storage::open_db(&root)?;
+    lease.finish_implicit()?;
     Ok((root, connection))
 }
 

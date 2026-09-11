@@ -69,6 +69,7 @@ export interface TrashItem {
 }
 
 export interface ProjectData {
+  leaseToken?: string
   project: ProjectMetadata
   nodes: NodeRecord[]
   entities: EntityRecord[]

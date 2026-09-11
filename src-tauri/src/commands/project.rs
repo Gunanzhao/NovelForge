@@ -137,16 +137,37 @@ fn initialize_project(root: PathBuf, input: ProjectInput) -> Result<ProjectData,
 #[tauri::command]
 pub fn open_project(path: String) -> Result<ProjectData, String> {
     let root = storage::existing_project_root(&path)?;
-    super::guard::acquire(&root)?;
-    let database_path = storage::safe_relative(&root, ".novelforge/database.sqlite")?;
+    let lease = super::guard::begin(&root)?;
+    let data = open_project_inner(&root)?;
+    lease.finish_implicit()?;
+    Ok(data)
+}
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreparedProject {
+    data: ProjectData,
+    lease_token: String,
+}
+#[tauri::command]
+pub fn prepare_open_project(path: String) -> Result<PreparedProject, String> {
+    let root = storage::existing_project_root(&path)?;
+    let lease = super::guard::begin(&root)?;
+    let data = open_project_inner(&root)?;
+    Ok(PreparedProject {
+        data,
+        lease_token: lease.retain(),
+    })
+}
+fn open_project_inner(root: &Path) -> Result<ProjectData, String> {
+    let database_path = storage::safe_relative(root, ".novelforge/database.sqlite")?;
     if !database_path.is_file() {
         // Do not leave a newly initialized, empty database behind when recovery fails.
-        let connection = recovered_project_connection(&root)?;
-        entities::backfill_attachment_mirrors(&root, &connection)?;
-        let _ = storage::append_log(&root, "INFO", "project_opened");
-        return project_data(&root, &connection);
+        let connection = recovered_project_connection(root)?;
+        entities::backfill_attachment_mirrors(root, &connection)?;
+        let _ = storage::append_log(root, "INFO", "project_opened");
+        return project_data(root, &connection);
     }
-    let mut connection = match storage::open_db(&root) {
+    let mut connection = match storage::open_db(root) {
         Ok(connection)
             if storage::all_nodes(&connection, false).is_ok()
                 && storage::all_entities(&connection, false).is_ok() =>
@@ -155,19 +176,19 @@ pub fn open_project(path: String) -> Result<ProjectData, String> {
         }
         Ok(connection) => {
             drop(connection);
-            recovered_project_connection(&root)?
+            recovered_project_connection(root)?
         }
-        Err(_) => recovered_project_connection(&root)?,
+        Err(_) => recovered_project_connection(root)?,
     };
     let nodes_empty = storage::all_nodes(&connection, false)?.is_empty();
     let entities_empty = storage::all_entities(&connection, false)?.is_empty();
     if nodes_empty || entities_empty {
-        rebuild_project_from_files(&root, &mut connection, nodes_empty, entities_empty)?;
+        rebuild_project_from_files(root, &mut connection, nodes_empty, entities_empty)?;
     }
-    entities::backfill_attachment_mirrors(&root, &connection)?;
-    storage::refresh_search_index(&root, &connection)?;
-    let _ = storage::append_log(&root, "INFO", "project_opened");
-    project_data(&root, &connection)
+    entities::backfill_attachment_mirrors(root, &connection)?;
+    storage::refresh_search_index(root, &connection)?;
+    let _ = storage::append_log(root, "INFO", "project_opened");
+    project_data(root, &connection)
 }
 
 #[tauri::command]

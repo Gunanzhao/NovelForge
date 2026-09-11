@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type { DocumentData, NodeRecord, ProjectData } from '../src/lib/types'
 
 const api = vi.hoisted(() => ({
-  release: vi.fn(async () => {}), createHistorySnapshot: vi.fn(async () => {}), getDocument: vi.fn(), saveDocument: vi.fn(), open: vi.fn(), create: vi.fn(), stats: vi.fn(),
+  retain: vi.fn(async () => {}), release: vi.fn(async () => {}), createHistorySnapshot: vi.fn(async () => {}), getDocument: vi.fn(), saveDocument: vi.fn(), open: vi.fn(), create: vi.fn(), stats: vi.fn(),
   createNode: vi.fn(), renameNode: vi.fn(), setNodeStatus: vi.fn(), reorderNode: vi.fn(), moveNode: vi.fn(), copyNode: vi.fn(), deleteNode: vi.fn(),
   upsertEntity: vi.fn(), deleteEntity: vi.fn(), listTrash: vi.fn(), restoreTrash: vi.fn(), permanentDelete: vi.fn(), emptyTrash: vi.fn(), updateProject: vi.fn(), exportProject: vi.fn(),
 }))
@@ -235,4 +235,38 @@ it('keeps a newly selected surviving chapter after deleting the previous chapter
   await useAppStore.getState().selectNode('b'); useAppStore.getState().updateContent('new B')
   slow.resolve({ ...project, nodes: [b, c] }); await pending
   expect(useAppStore.getState().document?.content).toBe('new B')
+})
+
+it('releases only the abandoned open token when a newer open adopts the same path', async () => {
+  const slow = deferred<ProjectData>(); api.open.mockReturnValueOnce(slow.promise)
+  const first = useAppStore.getState().openProject('Q')
+  await vi.waitFor(() => expect(api.open).toHaveBeenCalledOnce())
+  api.open.mockResolvedValueOnce({ ...project, leaseToken: 'new-owner' })
+  await useAppStore.getState().openProject('Q')
+  slow.resolve({ ...project, leaseToken: 'old-owner' }); await first
+  expect(api.release).toHaveBeenCalledWith('Q', 'old-owner')
+  expect(api.release).not.toHaveBeenCalledWith('Q', 'new-owner')
+  expect(useAppStore.getState().projectLease).toBe('new-owner')
+  await useAppStore.getState().closeProject()
+  expect(api.release).toHaveBeenCalledWith('Q', 'new-owner')
+})
+it('releases an unadopted target after saving the current draft fails', async () => {
+  const slow = deferred<ProjectData>(); api.open.mockReturnValueOnce(slow.promise)
+  const pending = useAppStore.getState().openProject('Q')
+  await vi.waitFor(() => expect(api.open).toHaveBeenCalledOnce())
+  useAppStore.getState().updateContent('new draft'); api.saveDocument.mockRejectedValueOnce(new Error('disk failure'))
+  slow.resolve({ ...project, leaseToken: 'abandoned' })
+  await expect(pending).rejects.toThrow('保存失败')
+  expect(api.release).toHaveBeenCalledWith('Q', 'abandoned')
+  expect(useAppStore.getState().document?.content).toBe('new draft')
+})
+it('retains the current owned lease if new input cancels closing during release', async () => {
+  useAppStore.setState({ projectLease: 'active' })
+  const slow = deferred<void>(); api.release.mockReturnValueOnce(slow.promise)
+  const closing = useAppStore.getState().closeProject()
+  await vi.waitFor(() => expect(api.release).toHaveBeenCalledWith('P', 'active'))
+  useAppStore.getState().updateContent('typed during release')
+  slow.resolve(); expect(await closing).toBe(false)
+  expect(api.retain).toHaveBeenCalledWith('P', 'active')
+  expect(useAppStore.getState().document?.content).toBe('typed during release')
 })

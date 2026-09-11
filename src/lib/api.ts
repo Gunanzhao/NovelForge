@@ -26,15 +26,21 @@ export function chooseFile() {
 
 export interface BackupReport { path: string; fileCount: number; totalBytes: number }
 export interface UpdateInfo { currentVersion: string; latestVersion: string; available: boolean; url: string }
+async function openProjectWithLease(path: string): Promise<ProjectData> {
+  if (!isDesktop) return command<ProjectData>('open_project', { path })
+  const result = await command<{ data: ProjectData; leaseToken: string }>('prepare_open_project', { path }, false)
+  return { ...result.data, leaseToken: result.leaseToken }
+}
 export const projectApi = {
   checkUpdates: () => command<UpdateInfo>('check_updates', {}, false),
   backup: (path: string, directory: string) => command<BackupReport>('backup_project', { path, directory }, false),
   validateBackup: (path: string) => command<BackupReport>('validate_backup', { path }, false),
   restoreBackup: (path: string, directory: string) => command<BackupReport>('restore_backup', { path, directory }, false),
   openExternalUrl: (url: string) => command<void>('open_external_url', { url }, false),
-  release: (path: string) => isDesktop ? command<void>('release_project', { path }, false) : Promise.resolve(),
-  create: (input: ProjectInput) => command<ProjectData>('create_project', { input }),
-  open: (path: string) => command<ProjectData>('open_project', { path }),
+  release: (path: string, token?: string | null) => isDesktop ? (token ? command<void>('release_project_lease', { path, token }, false) : command<void>('release_project', { path }, false)) : Promise.resolve(),
+  retain: (path: string, token: string) => command<void>('retain_project_lease', { path, token }, false),
+  create: async (input: ProjectInput) => { const data = await command<ProjectData>('create_project', { input }); return isDesktop ? openProjectWithLease(input.path) : data },
+  open: openProjectWithLease,
   createNode: (input: NodeInput) => command<ProjectData>('create_node', { input }),
   renameNode: async (input: { projectPath: string; nodeId: string; title: string; expectedContent?: string }): Promise<ProjectData & { renamedDocument?: DocumentData }> => {
     if (!isDesktop) {
