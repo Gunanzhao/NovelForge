@@ -3,11 +3,16 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { createServer } from 'node:http'
 const expectedVersion = JSON.parse(readFileSync(resolve('package.json'), 'utf8')).version
 const run = resolve('tmp/reliability-ui-' + Date.now())
 mkdirSync(run, { recursive: true })
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 const child = spawn(resolve('src-tauri/target/release/novelforge.exe'), [], { windowsHide: true, stdio: 'ignore', env: { ...process.env, WEBVIEW2_USER_DATA_FOLDER: resolve(run, 'profile'), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=9462' } })
+let imageRequests = 0
+const imageServer = createServer((_request, response) => { imageRequests++; response.writeHead(200, { 'Content-Type': 'image/png' }); response.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/nV0AAAAASUVORK5CYII=', 'base64')) })
+await new Promise(resolve => imageServer.listen(0, '127.0.0.1', resolve))
+const imageUrl = 'http://127.0.0.1:' + imageServer.address().port + '/reference.png'
 let socket, seq = 0
 const pending = new Map()
 const cmd = (method, params = {}) => new Promise((resolve, reject) => { const id = ++seq; pending.set(id, { resolve, reject }); socket.send(JSON.stringify({ id, method, params })) })
@@ -29,10 +34,13 @@ try {
   await cmd('Runtime.enable'); await waitFor(`!!window.__TAURI_INTERNALS__?.invoke`)
   const projectPath=resolve(run,'project')
   let data=await call('create_project',{input:{path:projectPath,title:'可靠性验收',author:'',genre:'',description:'',targetWords:1000}})
+  await assert.rejects(call('save_document',{input:{projectPath,nodeId:'unused',content:'blocked',reason:'test'}}),/not found|unknown/i)
+  await assert.rejects(call('rename_node',{input:{projectPath,nodeId:'unused',title:'blocked'}}),/not found|unknown/i)
+  console.log('UNCHECKED_IPC_REJECTED')
   const volume=data.nodes.find(n=>n.kind==='volume')
   data=await call('create_node',{input:{projectPath,kind:'chapter',title:'继续写作章节',parentId:volume.id}})
   const chapter=data.nodes.find(n=>n.title==='继续写作章节')
-  const text=Array.from({length:120},(_,i)=>`第${i+1}行：用于检验滚动位置恢复。`).join('\n')
+  const text=Array.from({length:120},(_,i)=>`第${i+1}行：用于检验滚动位置恢复。`).join('\n')+'\n\n![测试外部图片]('+imageUrl+')'
   await saveChecked({input:{projectPath,nodeId:chapter.id,content:text,reason:'合成测试'}})
   const sessionKey='novelforge:editor-session:'+projectPath.replaceAll('\\','/').toLowerCase()
   await ev(`localStorage.setItem('novelforge:recent-projects',${JSON.stringify(JSON.stringify([{path:projectPath,title:'可靠性验收',updatedAt:''}]))});localStorage.setItem(${JSON.stringify(sessionKey)},${JSON.stringify(JSON.stringify({nodeId:chapter.id,positions:{[chapter.id]:{anchor:7,head:7,scrollTop:350,scrollLeft:0}}}))});location.reload()`)
@@ -47,6 +55,12 @@ try {
   await nav('人物');assert.ok(await ev(`document.querySelector('.main-layout').classList.contains('inspector-closed')`));await nav('正文');await sleep(300)
   assert.ok(await ev(`document.querySelector('.cm-scroller').scrollTop>100`),'scroll restored')
   console.log('EDITOR_SESSION_AND_CONTEXT_OK')
+  await ev(`[...document.querySelectorAll('.mode-switch button')].find(e=>e.textContent.includes('预览')).click()`)
+  await waitFor(`!!document.querySelector('.external-image-placeholder')`)
+  await sleep(300); assert.equal(imageRequests,0,'no remote request before consent')
+  await click('加载外部图片'); await sleep(500); assert.equal(imageRequests,1,'only explicit consent sends the request')
+  await ev(`[...document.querySelectorAll('.mode-switch button')].find(e=>e.textContent.includes('编辑')).click()`)
+  console.log('REMOTE_IMAGE_CONSENT_OK')
   await ev(`document.querySelector('button[title="项目设置"]').click()`);await waitFor(`!!document.querySelector('.settings-view')`)
   await field('#settings-project input','可靠性验收已保存')
   // Exercise the same application event emitted by the native CloseRequested handler.
@@ -76,7 +90,8 @@ try {
   assert.equal(readFileSync(resolve(projectPath,chapter.filePath),'utf8'),'外部编辑器版本')
   const recoveries=await call('list_recovery',{path:projectPath});assert.ok(recoveries.length)
   assert.ok(recoveries.some(item=>readFileSync(item.path,'utf8').includes('本地冲突草稿')))
-  await capture('conflict');await click('保留恢复副本并读取磁盘版本');await waitFor(`!document.querySelector('[aria-label="正文存在外部修改"]')`)
+  await waitFor(`![...document.querySelectorAll('button')].find(e=>e.textContent==='保护当前内容并读取磁盘版本').disabled`)
+  await capture('conflict');await click('保护当前内容并读取磁盘版本');await waitFor(`!document.querySelector('[aria-label="正文存在外部修改"]')`)
   assert.ok(await ev(`document.querySelector('.cm-content').textContent.includes('外部编辑器版本')`))
   console.log('EXTERNAL_CONFLICT_RECOVERY_OK')
   const backup=await call('backup_project',{path:projectPath,directory:run});const check=await call('validate_backup',{path:backup.path});assert.equal(check.fileCount,backup.fileCount)
@@ -93,4 +108,4 @@ try {
 } catch(error) {
   try { const shot=await cmd('Page.captureScreenshot',{format:'png'});writeFileSync(resolve(run,'failure.png'),Buffer.from(shot.data,'base64'));console.log('FAILURE_SCREENSHOT',run) } catch { /* Wait for startup or keep the original failure. */ }
   throw error
-} finally { socket?.close(); child.kill() }
+} finally { socket?.close(); child.kill(); imageServer.close() }

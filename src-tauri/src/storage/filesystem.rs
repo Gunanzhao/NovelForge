@@ -324,6 +324,39 @@ mod atomic_tests {
         fs::remove_dir_all(root).unwrap();
     }
     #[test]
+    fn readers_never_observe_a_missing_target_during_replacement() {
+        use std::sync::{Arc, Barrier};
+        let root = std::env::temp_dir().join(format!("nf-atomic-readers-{}", new_id()));
+        fs::create_dir(&root).unwrap();
+        let target = root.join("chapter.md");
+        atomic_write(&target, b"old draft").unwrap();
+        let barrier = Arc::new(Barrier::new(2));
+        let reader_target = target.clone();
+        let reader_barrier = barrier.clone();
+        let reader = std::thread::spawn(move || {
+            reader_barrier.wait();
+            for _ in 0..10000 {
+                let value = fs::read(&reader_target)
+                    .expect("replacement must never remove the target name");
+                assert!(value == b"old draft" || value == b"new draft");
+            }
+        });
+        barrier.wait();
+        for i in 0..200 {
+            atomic_write(
+                &target,
+                if i % 2 == 0 {
+                    b"new draft"
+                } else {
+                    b"old draft"
+                },
+            )
+            .unwrap();
+        }
+        reader.join().unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
     fn legacy_interruption_reports_preserved_metadata_copy() {
         let root = std::env::temp_dir().join(format!("nf-legacy-{}", new_id()));
         fs::create_dir(&root).unwrap();
