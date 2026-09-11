@@ -12,6 +12,10 @@ let socket, seq = 0
 const pending = new Map()
 const cmd = (method, params = {}) => new Promise((resolve, reject) => { const id = ++seq; pending.set(id, { resolve, reject }); socket.send(JSON.stringify({ id, method, params })) })
 const ev = async expression => { const result = await cmd('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (result.exceptionDetails) throw Error(JSON.stringify(result.exceptionDetails)); return result.result?.value }
+const saveChecked = async ({ input }) => {
+  const disk = await call('get_document', { input: { projectPath: input.projectPath, nodeId: input.nodeId } })
+  return call('save_document_checked', { input, expectedContent: disk.content })
+}
 const call = (name, args) => ev(`window.__TAURI_INTERNALS__.invoke(${JSON.stringify(name)},${JSON.stringify(args)})`)
 const click = text => ev(`(()=>{const scope=[...document.querySelectorAll('[role="dialog"]')].filter(e=>e.getClientRects().length).at(-1)??document;const e=[...scope.querySelectorAll('button')].find(e=>e.getClientRects().length&&(e.getAttribute('aria-label')||e.textContent.trim())===${JSON.stringify(text)});if(!e)throw Error('missing '+${JSON.stringify(text)});e.click()})()`)
 const waitFor = async (expression, count = 100) => { for (let i=0;i<count;i++) { if (await ev(expression)) return; await sleep(250) } throw Error('Timed out: '+expression) }
@@ -44,7 +48,7 @@ try {
   const data=await call('create_project',{input:{path:projectPath,title:'正文 AI 验收',author:'',genre:'',description:'',targetWords:1000}})
   const chapter=data.nodes.find(node=>node.kind==='chapter')
   const original='# 雨夜\n\n前文。风很冷。灯很暗。后文。\n\n远处的钟声响了，街灯下的影子慢慢走过。'.replaceAll('\\n','\n')
-  await call('save_document',{input:{projectPath,nodeId:chapter.id,content:original,reason:'合成测试'}})
+  await saveChecked({input:{projectPath,nodeId:chapter.id,content:original,reason:'合成测试'}})
   const preferences={mode:'provider',endpoint:`http://127.0.0.1:${server.address().port}/v1`,model:'synthetic-writer'}
   await ev(`localStorage.setItem('novelforge:ai-preferences:v1',${JSON.stringify(JSON.stringify(preferences))});localStorage.setItem('novelforge:recent-projects',${JSON.stringify(JSON.stringify([{path:projectPath,title:'正文 AI 验收',updatedAt:''}]))});location.reload()`)
   await sleep(800);await waitFor(`!!document.querySelector('.recent-project')`);await ev(`document.querySelector('.recent-project').click()`)

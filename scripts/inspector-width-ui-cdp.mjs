@@ -11,6 +11,10 @@ let socket, seq = 0
 const pending = new Map()
 const cmd = (method, params = {}) => new Promise((resolve, reject) => { const id = ++seq; pending.set(id, { resolve, reject }); socket.send(JSON.stringify({ id, method, params })) })
 const ev = async expression => { const result = await cmd('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (result.exceptionDetails) throw Error(JSON.stringify(result.exceptionDetails)); return result.result?.value }
+const saveChecked = async ({ input }) => {
+  const disk = await call('get_document', { input: { projectPath: input.projectPath, nodeId: input.nodeId } })
+  return call('save_document_checked', { input, expectedContent: disk.content })
+}
 const call = (name, args) => ev(`window.__TAURI_INTERNALS__.invoke(${JSON.stringify(name)},${JSON.stringify(args)})`)
 const waitFor = async (expression, count = 100) => { for (let i=0;i<count;i++) { if (await ev(expression)) return; await sleep(250) } throw Error('Timed out: '+expression) }
 const capture = async name => { const shot=await cmd('Page.captureScreenshot',{format:'png'});writeFileSync(resolve(run,name+'.png'),Buffer.from(shot.data,'base64')) }
@@ -33,7 +37,7 @@ try {
   const data = await call('create_project', { input: { path: projectPath, title: '选区显示验收', author: '', genre: '', description: '', targetWords: 1000 } })
   const chapter = data.nodes.find(node => node.kind === 'chapter')
   const original = '清晨，窗外落着细雨。\n短句。\n\n' + '她沿着石阶走到街角，停下来读信。'.repeat(10) + '\n另一行很短。\n最后一段只选择开头，其余文字保持原样。'
-  await call('save_document', { input: { projectPath, nodeId: chapter.id, content: original, reason: '合成选区测试' } })
+  await saveChecked( { input: { projectPath, nodeId: chapter.id, content: original, reason: '合成选区测试' } })
   await ev(`localStorage.setItem('novelforge:recent-projects',${JSON.stringify(JSON.stringify([{ path: projectPath, title: '选区显示验收', updatedAt: '' }]))});location.reload()`)
   await sleep(800); await waitFor(`!!document.querySelector('.recent-project')`); await ev(`document.querySelector('.recent-project').click()`)
   await waitFor(`!!document.querySelector('.cm-content')?.cmTile?.root?.view`)

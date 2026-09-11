@@ -140,7 +140,6 @@ pub fn create_node(input: NodeInput) -> Result<ProjectData, String> {
     project_data(&root, &connection)
 }
 
-#[tauri::command]
 pub fn rename_node(input: crate::models::RenameNodeInput) -> Result<ProjectData, String> {
     if input.title.trim().is_empty() {
         return Err("名称不能为空".to_string());
@@ -1013,7 +1012,7 @@ pub fn get_document(input: crate::models::NodeActionInput) -> Result<DocumentDat
     })
 }
 
-#[tauri::command]
+#[cfg(test)]
 pub fn save_document(input: SaveDocumentInput) -> Result<DocumentData, String> {
     let (root, mut connection) = project_connection(&input.project_path)?;
     save_document_internal(

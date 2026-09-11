@@ -12,6 +12,10 @@ let socket, seq = 0
 const pending = new Map()
 const cmd = (method, params = {}) => new Promise((resolve, reject) => { const id = ++seq; pending.set(id, { resolve, reject }); socket.send(JSON.stringify({ id, method, params })) })
 const ev = async expression => { const result = await cmd('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); if (result.exceptionDetails) throw Error(JSON.stringify(result.exceptionDetails)); return result.result?.value }
+const saveChecked = async ({ input }) => {
+  const disk = await call('get_document', { input: { projectPath: input.projectPath, nodeId: input.nodeId } })
+  return call('save_document_checked', { input, expectedContent: disk.content })
+}
 const call = (name, args) => ev(`window.__TAURI_INTERNALS__.invoke(${JSON.stringify(name)},${JSON.stringify(args)})`)
 const click = text => ev(`(()=>{const e=[...document.querySelectorAll('button')].find(e=>e.textContent.trim()===${JSON.stringify(text)});if(!e)throw Error('missing '+${JSON.stringify(text)});e.click()})()`)
 const field = (selector, value) => ev(`(()=>{const e=document.querySelector(${JSON.stringify(selector)});if(!e)throw Error('missing field');Object.getOwnPropertyDescriptor(e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));})()`)
@@ -29,7 +33,7 @@ try {
   data=await call('create_node',{input:{projectPath,kind:'chapter',title:'继续写作章节',parentId:volume.id}})
   const chapter=data.nodes.find(n=>n.title==='继续写作章节')
   const text=Array.from({length:120},(_,i)=>`第${i+1}行：用于检验滚动位置恢复。`).join('\n')
-  await call('save_document',{input:{projectPath,nodeId:chapter.id,content:text,reason:'合成测试'}})
+  await saveChecked({input:{projectPath,nodeId:chapter.id,content:text,reason:'合成测试'}})
   const sessionKey='novelforge:editor-session:'+projectPath.replaceAll('\\','/').toLowerCase()
   await ev(`localStorage.setItem('novelforge:recent-projects',${JSON.stringify(JSON.stringify([{path:projectPath,title:'可靠性验收',updatedAt:''}]))});localStorage.setItem(${JSON.stringify(sessionKey)},${JSON.stringify(JSON.stringify({nodeId:chapter.id,positions:{[chapter.id]:{anchor:7,head:7,scrollTop:350,scrollLeft:0}}}))});location.reload()`)
   await sleep(800);await waitFor(`!!document.querySelector('.recent-project')`);await ev(`document.querySelector('.recent-project').click()`)

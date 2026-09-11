@@ -22,6 +22,10 @@ const ev = async (expression) => {
         throw new Error(JSON.stringify(r.exceptionDetails));
     return r.result?.value;
 };
+const saveChecked = async ({ input }) => {
+  const disk = await call('get_document', { input: { projectPath: input.projectPath, nodeId: input.nodeId } })
+  return call('save_document_checked', { input, expectedContent: disk.content })
+}
 const call = (name, args) => ev(`window.__TAURI_INTERNALS__.invoke(${JSON.stringify(name)},${JSON.stringify(args)})`);
 const click = txt => ev(`(()=>{const e=[...document.querySelectorAll('button')].find(e=>e.textContent.trim()===${JSON.stringify(txt)});if(!e)throw Error('missing button '+${JSON.stringify(txt)});e.click()})()`);
 const field = (sel, value) => ev(`(()=>{const e=document.querySelector(${JSON.stringify(sel)});if(!e)throw Error('missing field');Object.getOwnPropertyDescriptor(e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(value)});e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
@@ -63,7 +67,7 @@ try {
     const projectPath = resolve(run, 'project');
     let p = await call('create_project', { input: { path: projectPath, title: '全量审查合成项目', author: '审查', genre: '测试', description: '独立合成测试数据', targetWords: 10000 } });
     const chapter = p.nodes.find(n => n.kind === 'chapter');
-    await call('save_document', { input: { projectPath, nodeId: chapter.id, content: '# 测试正文\n\n林月在青山城遇见苏晴。[[林月]]拿起书。\n\n## 内部标题\n\n这里只使用合成文本。', reason: 'audit' } });
+    await saveChecked( { input: { projectPath, nodeId: chapter.id, content: '# 测试正文\n\n林月在青山城遇见苏晴。[[林月]]拿起书。\n\n## 内部标题\n\n这里只使用合成文本。', reason: 'audit' } });
     for (const [kind, title, content] of [['character', '林月', { description: '已保存人物说明' }], ['character', '苏晴', {}], ['location', '青山城', {}], ['world', '星河法则', {}], ['timeline', '初次相遇', { storyDate: '1', chapterId: chapter.id }], ['foreshadowing', '遗失的信', { status: 'planted', chapterId: chapter.id }], ['story-arc', '寻找失落之城', { status: 'active', chapterIds: [chapter.id], milestones: [] }], ['inbox', '雨中的灵感', { body: '合成灵感', status: 'unprocessed' }]])
         p = await call('upsert_entity', { input: { projectPath, kind, title, content, tags: [] } });
     const source = resolve(run, 'reference.txt');
@@ -72,7 +76,7 @@ try {
     const attachment = p.entities.find(e => e.kind === 'attachment');
     p = await call('upsert_entity', { input: { projectPath, kind: 'attachment', id: attachment.id, title: attachment.title, content: { ...attachment.content, chapterId: chapter.id, description: 'RC6_ATTACHMENT_DESCRIPTION' }, tags: ['附件'] } });
     const codeBody = '# 第一章\n\n````text\nCODE_A\n```\n# INSIDE_CODE\n````\nAFTER_CODE';
-    await call('save_document', { input: { projectPath, nodeId: chapter.id, content: codeBody, reason: 'regression' } });
+    await saveChecked( { input: { projectPath, nodeId: chapter.id, content: codeBody, reason: 'regression' } });
     const exported = await call('export_project', { input: { projectPath, format: 'html', includeToc: false } });
     const html = readFileSync(exported, 'utf8');
     writeFileSync(resolve(base, 'fence-export.html'), html);
@@ -80,7 +84,7 @@ try {
     assert.ok(!/<pre><code[^>]*>[^<]*AFTER_CODE/.test(html));
     assert.ok(html.includes('CODE_A'));
     console.log('LONG_FENCE_EXPORT_OK');
-    await call('save_document', { input: { projectPath, nodeId: chapter.id, content: '# 测试正文\n\n林月在青山城遇见苏晴。[[林月]]拿起书。\n\n[外链测试](' + externalUrl + ')\n\n## 内部标题\n\n这里只使用合成文本。', reason: 'regression' } });
+    await saveChecked( { input: { projectPath, nodeId: chapter.id, content: '# 测试正文\n\n林月在青山城遇见苏晴。[[林月]]拿起书。\n\n[外链测试](' + externalUrl + ')\n\n## 内部标题\n\n这里只使用合成文本。', reason: 'regression' } });
     await ev(`localStorage.setItem('novelforge:recent-projects',${JSON.stringify(JSON.stringify([{ path: projectPath, title: '全量审查合成项目', updatedAt: '' }]))});location.reload()`);
     await sleep(800);
     await ev(`document.querySelector('.recent-project').click()`);

@@ -47,7 +47,7 @@ pub(crate) use entities::{
 pub(crate) use export::export_project;
 pub(crate) use manuscript::{
     copy_node, create_node, delete_node, get_document, move_node, rename_node, reorder_node,
-    save_document, set_node_status, NodeStatusInput,
+    set_node_status, NodeStatusInput,
 };
 pub(crate) use manuscript::{
     preserve_current_revision, restore_document_after_save_failure, save_document_internal,
@@ -1367,3 +1367,6 @@ mod move_regression_tests;
 mod reliability_regression_tests;
 
 pub(crate) mod navigation;
+
+#[cfg(test)]
+pub(crate) use manuscript::save_document;
