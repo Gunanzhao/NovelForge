@@ -116,6 +116,7 @@ interface AppState {
   activeView: ViewId
   selectedEntityId: string | null
   saveState: SaveState
+  deletingNodes: string[]
   documentVersion: number
   error: string | null
   stats: Stats
@@ -188,6 +189,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeView: 'dashboard',
   selectedEntityId: null,
   saveState: 'idle',
+  deletingNodes: [],
   documentVersion: 0,
   error: null,
   stats: emptyStats,
@@ -268,7 +270,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await releaseForTransition(previousPath !== input.path ? previousPath : null, () => request === transitionGeneration)
       if (request !== transitionGeneration) return
       ++selectionGeneration
-      set((state) => ({ projectPath: input.path, projectSession: state.projectSession + 1, data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
+      set((state) => ({ projectPath: input.path, projectSession: state.projectSession + 1, deletingNodes: [], data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
       if (checklistError) get().setError(checklistError)
       const chapter = firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
@@ -298,7 +300,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await releaseForTransition(previousPath !== path ? previousPath : null, () => request === transitionGeneration)
       if (request !== transitionGeneration) return
       ++selectionGeneration
-      set((state) => ({ projectPath: path, projectSession: state.projectSession + 1, data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
+      set((state) => ({ projectPath: path, projectSession: state.projectSession + 1, deletingNodes: [], data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
       const remembered = readEditorSession(path).nodeId
       const chapter = data.nodes.find(node => node.id === remembered && node.kind !== 'volume') ?? firstChapter(data)
       if (chapter) await get().selectNode(chapter.id)
@@ -343,6 +345,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   selectNode: async (nodeId, reload = false) => {
+    if (get().deletingNodes.includes(nodeId)) return
     if (dirtyDrafts().length && !await confirmDraftNavigation()) return
     const request = ++selectionGeneration
     const session = captureProjectSession()
@@ -364,7 +367,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const version = get().documentVersion
     try {
       const document = await projectApi.getDocument({ projectPath: path, nodeId })
-      if (request !== selectionGeneration || !isCurrentProjectSession(session) || get().documentVersion !== version) return
+      if (request !== selectionGeneration || !isCurrentProjectSession(session) || get().documentVersion !== version || get().deletingNodes.includes(nodeId)) return
       rememberEditor(path, nodeId)
       set((state) => ({ document: { ...document, persistedContent: document.content }, editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', selectedEntityId: null, error: null, saveState: 'saved' }))
     } catch (error) {
@@ -374,6 +377,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   updateContent: (content) => set((state) => {
     if (!state.document || state.document.content === content) return state
+    if (state.deletingNodes.includes(state.document.node.id)) return state
     if (isNodeLocked(state.data?.nodes ?? [], state.document.node.id)) return { error: '正文已锁定，请先解除本节点或父级锁定。' }
     return { document: { ...state.document, content }, documentVersion: state.documentVersion + 1, saveState: 'idle' }
   }),
@@ -598,21 +602,36 @@ export const useAppStore = create<AppState>((set, get) => ({
   deleteNode: async (nodeId) => {
     const session = captureProjectSession()
     const projectPath = get().projectPath
-    if (!projectPath) return
+    if (!projectPath || get().deletingNodes.length) return
+    const affected = new Set([nodeId])
+    const nodes = get().data?.nodes ?? []
+    for (let previous = -1; previous !== affected.size;) {
+      previous = affected.size
+      for (const node of nodes) if (node.parentId && affected.has(node.parentId)) affected.add(node.id)
+    }
+    const deletingNodes = [...affected]
+    set({ deletingNodes })
     try {
-      if (get().document && get().saveState !== 'saved') {
-        const saved = await get().saveCurrentDocument('删除节点前保存')
-        if (!saved) throw new Error('当前正文保存失败，已取消删除')
+      if (get().document && affected.has(get().document!.node.id)) {
+        if (!await get().saveCurrentDocument('删除节点前保存')) throw new Error('当前正文保存失败，已取消删除')
+        const document = get().document
+        if (isCurrentProjectSession(session) && document && affected.has(document.node.id)) await projectApi.createHistorySnapshot({ projectPath, nodeId: document.node.id, content: document.content, kind: 'protected', name: '删除节点前' })
       }
       if (!isCurrentProjectSession(session)) return
       const data = await projectApi.deleteNode({ projectPath, nodeId })
       if (!isCurrentProjectSession(session)) return
-      const next = firstChapter(data)
-      set((state) => ({ document: null, documentVersion: state.documentVersion + 1 }))
-      await get().refreshData(data, false, session)
-      if (next) await get().selectNode(next.id)
+      const current = get().document
+      if (current && !data.nodes.some(node => node.id === current.node.id)) {
+        set(state => ({ document: null, editorSelection: null, documentVersion: state.documentVersion + 1, saveState: 'saved' }))
+        await get().refreshData(data, false, session)
+        const next = firstChapter(data)
+        if (next) await get().selectNode(next.id)
+      } else {
+        await get().refreshData(data, true, session)
+      }
       if (isCurrentProjectSession(session)) notifyDeletion(nodeId, 'node', session)
     } catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
+    finally { if (get().deletingNodes === deletingNodes) set({ deletingNodes: [] }) }
   },
 
   selectEntity: (kind, entityId = null) => { if (get().activeView === kind && get().selectedEntityId === entityId) return; runGuarded(() => set({ activeView: kind, selectedEntityId: entityId })) },

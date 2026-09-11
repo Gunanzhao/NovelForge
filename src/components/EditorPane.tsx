@@ -144,7 +144,8 @@ export function EditorPane() {
     reportEditorSelection({ state: view.state } as ViewUpdate)
   }
   const [wikiResolution, setWikiResolution] = useState<{ target: string; candidates: EntityRecord[] } | null>(null)
-  const locked = isNodeLocked(data?.nodes ?? [], document?.node.id)
+  const deletingNodes = useAppStore(state => state.deletingNodes)
+  const locked = deletingNodes.includes(document?.node.id ?? '') || isNodeLocked(data?.nodes ?? [], document?.node.id)
 
   const resolveWikiTarget = useCallback((target: string) => {
     const normalized = wikiTitleKey(target)
@@ -200,7 +201,7 @@ export function EditorPane() {
         }).catch(error => useAppStore.getState().setError(error))
         return []
       }
-      return transaction.docChanged && isNodeLocked(current.data?.nodes ?? [], current.document?.node.id) ? [] : transaction
+      return transaction.docChanged && (current.deletingNodes.includes(current.document?.node.id ?? '') || isNodeLocked(current.data?.nodes ?? [], current.document?.node.id)) ? [] : transaction
     }),
     ...wikiEditorExtension(resolveWikiTarget),
     ...(autoNames && typeof Worker !== 'undefined' ? [autoNameExtension(data?.entities ?? [], openNameCard, closeNameCard)] : []),

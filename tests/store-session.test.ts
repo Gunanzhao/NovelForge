@@ -205,3 +205,34 @@ it('NF-07 protects the exact current draft before accepting disk content', async
   expect(await useAppStore.getState().reloadConflictedDocument()).toBe(true)
   expect(useAppStore.getState().document?.persistedContent).toBe('disk')
 })
+
+it('preserves current edits and selection when deleting an unrelated chapter', async () => {
+  const slow = deferred<ProjectData>(); api.deleteNode.mockReturnValueOnce(slow.promise)
+  const pending = useAppStore.getState().deleteNode('b')
+  useAppStore.getState().updateContent('typed during deletion')
+  const version = useAppStore.getState().documentVersion
+  slow.resolve({ ...project, nodes: [a, c] }); await pending
+  expect(useAppStore.getState().document?.content).toBe('typed during deletion')
+  expect(useAppStore.getState().documentVersion).toBe(version)
+  expect(useAppStore.getState().saveState).toBe('idle')
+  expect(api.getDocument).not.toHaveBeenCalled()
+})
+it('protects affected content and blocks edits only during deletion, then unlocks on failure', async () => {
+  const slow = deferred<ProjectData>(); api.deleteNode.mockReturnValueOnce(slow.promise)
+  const pending = useAppStore.getState().deleteNode('v')
+  await vi.waitFor(() => expect(api.deleteNode).toHaveBeenCalled())
+  expect(api.createHistorySnapshot).toHaveBeenCalledWith(expect.objectContaining({ content: 'original' }))
+  useAppStore.getState().updateContent('blocked')
+  expect(useAppStore.getState().document?.content).toBe('original')
+  slow.reject(new Error('delete failed')); await expect(pending).rejects.toThrow('delete failed')
+  useAppStore.getState().updateContent('editable again')
+  expect(useAppStore.getState().document?.content).toBe('editable again')
+})
+it('keeps a newly selected surviving chapter after deleting the previous chapter', async () => {
+  const slow = deferred<ProjectData>(); api.deleteNode.mockReturnValueOnce(slow.promise)
+  const pending = useAppStore.getState().deleteNode('a')
+  await vi.waitFor(() => expect(api.deleteNode).toHaveBeenCalled())
+  await useAppStore.getState().selectNode('b'); useAppStore.getState().updateContent('new B')
+  slow.resolve({ ...project, nodes: [b, c] }); await pending
+  expect(useAppStore.getState().document?.content).toBe('new B')
+})
