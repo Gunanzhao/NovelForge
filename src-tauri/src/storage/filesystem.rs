@@ -142,6 +142,20 @@ pub fn existing_project_root(input: &str) -> Result<PathBuf, String> {
     }
     let project_file = safe_relative(&root, PROJECT_FILE)?;
     if !project_file.is_file() {
+        let backups: Vec<_> = fs::read_dir(&root)
+            .map_err(|e| e.to_string())?
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".project.json.backup-")
+            })
+            .map(|entry| entry.path().display().to_string())
+            .collect();
+        if !backups.is_empty() {
+            return Err(format!("检测到旧版写入中断，project.json 缺失。原副本已保留，请复制所需副本为 project.json 后重试：{}", backups.join("；")));
+        }
         return Err("这里没有找到 project.json，不是有效的 NovelForge 项目".to_string());
     }
     Ok(root)
@@ -250,30 +264,10 @@ pub fn atomic_write(target: &Path, content: &[u8]) -> Result<(), String> {
 }
 
 fn replace_file(source: &Path, target: &Path) -> Result<(), String> {
-    // Windows std::fs::rename 不覆盖现有文件；失败时会恢复旧文件。
-    if target.exists() {
-        let backup = target.with_file_name(format!(
-            ".{}.backup-{}",
-            target
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("file"),
-            new_id()
-        ));
-        fs::rename(target, &backup).map_err(|error| format!("准备替换文件失败：{}", error))?;
-        match fs::rename(source, target) {
-            Ok(()) => {
-                let _ = fs::remove_file(backup);
-                Ok(())
-            }
-            Err(error) => {
-                let _ = fs::rename(&backup, target);
-                Err(format!("原子替换文件失败：{}", error))
-            }
-        }
-    } else {
-        fs::rename(source, target).map_err(|error| format!("原子替换文件失败：{}", error))
-    }
+    // Same-directory rename replaces an existing file on Unix and Windows
+    // (MoveFileExW with MOVEFILE_REPLACE_EXISTING). Never remove the old name first.
+    // The temp file is synced above; atomic visibility is not a power-loss guarantee.
+    fs::rename(source, target).map_err(|error| format!("原子替换文件失败：{}", error))
 }
 
 pub fn remove_file_if_exists(path: &Path) -> Result<(), String> {
@@ -304,4 +298,41 @@ pub fn move_to_trash(root: &Path, original: &Path, ref_id: &str) -> Result<Strin
     ensure_within_root(root, &trash_path)?;
     fs::rename(original, &trash_path).map_err(|error| format!("移动到回收站失败：{}", error))?;
     Ok(trash_path.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod atomic_tests {
+    use super::*;
+    #[test]
+    fn replacement_failure_preserves_old_target_and_success_replaces_it() {
+        let root = std::env::temp_dir().join(format!("nf-atomic-{}", new_id()));
+        fs::create_dir(&root).unwrap();
+        let target = root.join("chapter.md");
+        atomic_write(&target, b"old draft").unwrap();
+        assert!(replace_file(&root.join("missing-temp"), &target).is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"old draft");
+        // An interrupted preparation leaves a temp file, never a missing target.
+        fs::write(root.join(".chapter.md.tmp-interrupted"), b"partial").unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"old draft");
+        atomic_write(&target, b"new draft").unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"new draft");
+        assert!(!fs::read_dir(&root).unwrap().any(|p| p
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .contains("backup-")));
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn legacy_interruption_reports_preserved_metadata_copy() {
+        let root = std::env::temp_dir().join(format!("nf-legacy-{}", new_id()));
+        fs::create_dir(&root).unwrap();
+        let copy = root.join(".project.json.backup-interrupted");
+        fs::write(&copy, b"preserved").unwrap();
+        let error = existing_project_root(root.to_str().unwrap()).unwrap_err();
+        assert!(error.contains("旧版写入中断"));
+        assert!(error.contains(copy.to_str().unwrap()));
+        assert_eq!(fs::read(copy).unwrap(), b"preserved");
+        fs::remove_dir_all(root).unwrap();
+    }
 }
