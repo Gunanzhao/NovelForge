@@ -511,7 +511,7 @@ function findManuscriptFile(directory) {
 }
 
 async function runRecoveryFlow(page, projectPath, projectTitle, restartPage) {
-  const currentRelativePath = await page.evaluate("document.querySelector('.path-text')?.getAttribute('title') || ''")
+  const currentRelativePath = await page.evaluate("document.querySelector('.editor-title-row > span')?.textContent?.trim() || ''")
   const currentTarget = currentRelativePath ? resolve(projectPath, currentRelativePath) : null
   const target = currentTarget && existsSync(currentTarget) ? currentTarget : findManuscriptFile(projectPath)
   if (!target) throw new Error('找不到用于保存失败验收的正文文件')
@@ -527,8 +527,8 @@ async function runRecoveryFlow(page, projectPath, projectTitle, restartPage) {
   writeFileSync(historyDirectory, 'NovelForge E2E history blocker', 'utf8')
   try {
     await replaceEditor(page, '# 第一章\n\n恢复验收内容')
-    await clickExact(page, '保存')
-    await waitForCondition(page, "document.body.innerText.includes('保存失败') && document.body.innerText.includes('恢复数据已保留')", '保存失败与恢复文件保留')
+    // Automatic snapshots exercise history failure; manual saves intentionally skip history.
+    try { await waitForCondition(page, "document.body.innerText.includes('保存失败') && document.body.innerText.includes('恢复数据已保留')", '保存失败与恢复文件保留') } catch (error) { console.log('RECOVERY_DIAGNOSTIC', JSON.stringify({ currentRelativePath, target, body: await bodyText(page) })); throw error }
     const recoveryDirectory = resolve(projectPath, '.novelforge', 'recovery')
     const recoveryDeadline = Date.now() + 5_000
     while (Date.now() < recoveryDeadline && (!existsSync(recoveryDirectory) || !readdirSync(recoveryDirectory).some((name) => name.endsWith('.md')))) {
@@ -1057,6 +1057,7 @@ async function run() {
     console.log('CHARACTER_STATS_OK')
 
     await clickText(page, 'AI 辅助')
+    await clickExact(page, '使用模板')
     await waitForSelector(page, '.prompt-preset-manager', '提示词预设管理器')
     await setField(page, '人物 OOC 检查', '章节验收预设')
     await setField(page, '请检查 {{character:林月}} 在 {{currentChapter}} 中的行为。', '分析当前章节并列出关键冲突：{{currentChapter}}')
@@ -1147,8 +1148,10 @@ async function run() {
     console.log('INBOX_OK')
 
     await clickText(page, 'AI 辅助')
+    await clickExact(page, '使用模板')
     await waitForCondition(page, "Array.from(document.querySelectorAll('.prompt-preset-list button')).some((item)=>(item.textContent||'').includes('章节验收预设'))", '重启后提示词预设持久化')
     console.log('PROMPT_PRESET_OK')
+    await pressEscape(page)
 
     await clickExact(page, '正文')
     await waitForSelector(page, '.chapter-checklist-items input', '重启后章节 Checklist')
@@ -1265,15 +1268,18 @@ async function run() {
     await clickText(page, 'AI 辅助')
     await waitForText(page, 'AI 辅助')
     await waitForText(page, '已捕获当前选区')
-    await selectValue(page, '.ai-action-card select', 'polish')
+    await clickSelectorContains(page, '.ai-task-picker button', '润色')
     await clickExact(page, '选中最近 3 章')
     await clickExact(page, '运行辅助')
     await waitForCondition(page, "document.querySelector('.ai-result-text')?.value.includes('本地润色草稿')", '本地 AI 结果')
     await pressEscape(page)
     await waitForText(page, '等待一次辅助任务')
     console.log('AI_SELECTION_AND_CANCEL_OK')
+    await selectValue(page, 'select[aria-label="AI 模式"]', 'provider')
+    await clickExact(page, '连接设置')
     await setField(page, '留空使用本地离线模式', providerEndpoint)
-    await setField(page, 'local-writer', 'cdp-model')
+    await pressEscape(page)
+    await setField(page, '模型名称', 'cdp-model')
     await clickExact(page, '运行辅助')
     await waitForCondition(page, "document.querySelector('.ai-result-text')?.value.includes('Provider 验收结果')", '本地 Provider AI 结果')
     await pressEscape(page)
@@ -1298,7 +1304,7 @@ async function run() {
           console.log('CODEX_DESKTOP_STATUS_OK')
           if (process.env.NOVELFORGE_E2E_CODEX_LIVE === '1') {
             await waitForCondition(page, "Array.from(document.querySelectorAll('button')).some(b => b.textContent.includes('运行辅助') && !b.disabled)", '订阅生成入口就绪')
-            await selectValue(page, '.ai-action-card select', 'continue')
+            await clickSelectorContains(page, '.ai-task-picker button', '续写')
             await setField(page, '例如：保持第一人称', '仅使用已有合成上下文续写，不超过80字，不使用工具。')
             await clickExact(page, '运行辅助')
             await waitForCondition(page, "(document.querySelector('.ai-result-text')?.value || '').length > 0 && Array.from(document.querySelectorAll('.ai-result-actions button')).some(b => b.textContent.includes('追加到正文'))", '真实订阅结果完成')
