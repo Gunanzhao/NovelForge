@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRightLeft, Copy, FolderOpen, Save } from 'lucide-react'
 import { chooseDirectory, isDesktop } from '../lib/api'
 import type { NodeKind, NodeRecord, ProjectData, ProjectInput } from '../lib/types'
@@ -69,16 +69,21 @@ export function NodeDialog({ kind, parentId, onClose }: { kind: NodeKind | null;
   const createNode = useAppStore((state) => state.createNode)
   const [title, setTitle] = useState('')
   const [busy, setBusy] = useState(false)
+  const inFlight = useRef(false)
+  const [error, setError] = useState('')
   useEffect(() => setTitle(''), [kind, parentId])
   async function submit() {
-    if (!kind || !title.trim()) return
+    if (inFlight.current || !kind || !title.trim()) return
+    inFlight.current = true
+    setError('')
     setBusy(true)
-    try { await createNode(kind, title.trim(), kind === 'volume' ? null : parentId); onClose() } finally { setBusy(false) }
+    try { await createNode(kind, title.trim(), kind === 'volume' ? null : parentId); onClose() } catch (error) { setError(String(error)) } finally { inFlight.current = false; setBusy(false) }
   }
   const label = kind === 'volume' ? '卷' : kind === 'chapter' ? '章' : '节'
-  return <Modal open={kind !== null} title={'新建' + label} onClose={onClose}
-    footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button onClick={() => void submit()} disabled={busy || !title.trim()}>{busy ? '创建中…' : '创建'}</Button></>}>
-    <Field label={label + '标题'}><TextInput autoFocus value={title} onChange={(event) => setTitle(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void submit() }} placeholder={kind === 'volume' ? '第二卷' : kind === 'chapter' ? '第二章' : '开场' } /></Field>
+  return <Modal open={kind !== null} title={'新建' + label} onClose={() => { if (!inFlight.current) onClose() }}
+    footer={<><Button variant="ghost" disabled={busy} onClick={onClose}>取消</Button><Button onClick={() => void submit()} disabled={busy || !title.trim()}>{busy ? '创建中…' : '创建'}</Button></>}>
+    {error ? <div role="alert">{error}</div> : null}
+    <Field label={label + '标题'}><TextInput autoFocus disabled={busy} value={title} onChange={(event) => setTitle(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) void submit() }} placeholder={kind === 'volume' ? '第二卷' : kind === 'chapter' ? '第二章' : '开场' } /></Field>
   </Modal>
 }
 
