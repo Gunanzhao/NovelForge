@@ -1,5 +1,5 @@
 import { Disclosure } from './Disclosure'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckSquare, FileArchive, FileDown, FileText, Square } from 'lucide-react'
 import type { ExportFormat, ExportInput, ProjectData } from '../lib/types'
 import { sortChapterNodes } from '../lib/planning-data'
@@ -46,8 +46,16 @@ export function ExportDialog({
   const volumes = useMemo(() => data.nodes.filter((node) => node.kind === 'volume').sort((left, right) => left.orderIndex - right.orderIndex), [data.nodes])
   const chapters = useMemo(() => sortChapterNodes(data.nodes), [data.nodes])
 
+  const initialized = useRef<string | null>(null)
+  const sessionKey = JSON.stringify([data.project.id, preset?.scope, preset?.volumePath, preset?.nodeIds])
   useEffect(() => {
-    if (!open) return
+    if (!open) { initialized.current = null; return }
+    if (initialized.current === sessionKey) {
+      setSelectedChapterIds(current => new Set([...current].filter(id => chapters.some(chapter => chapter.id === id))))
+      setVolumePath(current => volumes.some(volume => volume.filePath === current) ? current : volumes[0]?.filePath ?? '')
+      return
+    }
+    initialized.current = sessionKey
     setSelectedFormat('markdown')
     setScope(preset?.scope ?? 'project')
     setVolumePath(preset?.volumePath ?? volumes[0]?.filePath ?? '')
@@ -59,7 +67,7 @@ export function ExportDialog({
     setIncludeVolumeTitles(true)
     setIncludeChapterTitles(true)
     setCoverPath('')
-  }, [chapters, currentNodeId, data.project.author, data.project.title, open, preset, volumes])
+  }, [chapters, currentNodeId, data.project.author, data.project.title, open, preset, sessionKey, volumes])
 
   function toggleChapter(id: string) {
     setSelectedChapterIds((current) => {
