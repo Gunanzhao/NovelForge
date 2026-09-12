@@ -1156,16 +1156,17 @@ fn docx_bytes(markdown: &str, cover: Option<&ExportCover>) -> Result<Vec<u8>, St
         cover_default
     );
     let rels = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>"#;
-    let document_rels = cover.map(|asset| format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdCover" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/{}"/></Relationships>"#, xml_escape(&asset.file_name)));
-    let mut files = vec![
+    let cover_relation = cover.map(|asset| format!(r#"<Relationship Id="rIdCover" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/{}"/>"#, xml_escape(&asset.file_name))).unwrap_or_default();
+    let document_rels = format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdNumbering" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>{cover_relation}</Relationships>"#
+    );
+    let files = vec![
         ("[Content_Types].xml", content_types.as_str()),
         ("_rels/.rels", rels),
         ("word/document.xml", document.as_str()),
         ("word/numbering.xml", numbering),
+        ("word/_rels/document.xml.rels", document_rels.as_str()),
     ];
-    if let Some(document_rels) = document_rels.as_ref() {
-        files.push(("word/_rels/document.xml.rels", document_rels.as_str()));
-    }
     let cover_name = cover.map(|asset| format!("word/media/{}", asset.file_name));
     let binary = cover
         .map(|asset| {
@@ -1764,6 +1765,38 @@ pub fn export_project(input: ExportInput) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Read;
+
+    #[test]
+    fn docx_lists_link_numbering_with_and_without_cover() {
+        let cover = ExportCover {
+            file_name: "cover.png".into(),
+            mime_type: "image/png".into(),
+            bytes: vec![1, 2, 3],
+            data_uri: String::new(),
+        };
+        for image in [None, Some(&cover)] {
+            let bytes = docx_bytes("- bullet\n\n1. ordered", image).unwrap();
+            let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+            let mut rels = String::new();
+            zip.by_name("word/_rels/document.xml.rels")
+                .unwrap()
+                .read_to_string(&mut rels)
+                .unwrap();
+            assert!(rels.contains("relationships/numbering"));
+            assert!(rels.contains("Target=\"numbering.xml\""));
+            assert_eq!(rels.contains("rIdCover"), image.is_some());
+            assert!(zip.by_name("word/numbering.xml").is_ok());
+            let mut document = String::new();
+            zip.by_name("word/document.xml")
+                .unwrap()
+                .read_to_string(&mut document)
+                .unwrap();
+            assert!(document.contains("w:numId w:val=\"1\""));
+            assert!(document.contains("w:numId w:val=\"2\""));
+        }
+    }
+
     #[test]
     fn exported_fences_preserve_long_delimiters_and_reject_false_closers() {
         for (open, inside, close) in [
