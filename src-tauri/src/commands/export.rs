@@ -1320,10 +1320,10 @@ fn epub_bytes(
         ("OEBPS/nav.xhtml".to_string(), nav),
         ("OEBPS/content.xhtml".to_string(), xhtml),
     ];
-    for (file_name, part, _) in &parts {
+    for (index, (file_name, part, _)) in parts.iter().enumerate() {
         file_storage.push((
             "OEBPS/".to_string() + file_name,
-            epub_xhtml_document(part, cover, title),
+            epub_xhtml_document(part, if index == 0 { cover } else { None }, title),
         ));
     }
     let files = file_storage
@@ -1766,6 +1766,39 @@ pub fn export_project(input: ExportInput) -> Result<String, String> {
 mod tests {
     use super::*;
     use std::io::Read;
+
+    #[test]
+    fn epub_spine_contains_cover_only_once() {
+        let cover = ExportCover {
+            file_name: "cover.png".into(),
+            mime_type: "image/png".into(),
+            bytes: vec![1],
+            data_uri: String::new(),
+        };
+        for image in [None, Some(&cover)] {
+            let bytes = epub_bytes(
+                "# Book\nIntro\n# Volume One\nFirst\n# Volume Two\nSecond",
+                "Book",
+                "Author",
+                image,
+            )
+            .unwrap();
+            let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+            let mut covers = 0;
+            for index in 1..=3 {
+                let mut part = String::new();
+                zip.by_name(&format!("OEBPS/chapter-{index:03}.xhtml"))
+                    .unwrap()
+                    .read_to_string(&mut part)
+                    .unwrap();
+                covers += part.matches("class=\"cover\"").count();
+                if index > 1 {
+                    assert!(!part.contains("images/cover.png"));
+                }
+            }
+            assert_eq!(covers, usize::from(image.is_some()));
+        }
+    }
 
     #[test]
     fn docx_lists_link_numbering_with_and_without_cover() {
