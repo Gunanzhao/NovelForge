@@ -271,6 +271,8 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .entity-list-item strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; }
 .entity-list-item span { display: block; overflow: hidden; margin-top: 4px; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 10px; }
 .entity-editor { min-width: 0; padding: 24px 32px 50px; }
+/* Shared detail container: center within the editor pane, after the archive list. */
+.archive-editor-detail { width: 100%; max-width: 760px; min-width: 0; margin-inline: auto; }
 .entity-editor-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; margin-bottom: 22px; }
 .entity-editor-header h1 { margin: 0 0 5px; font-family: Georgia, "Noto Serif SC", serif; font-size: 22px; font-weight: 600; }
 .entity-editor-header p { margin: 0; color: var(--muted); font-size: 11px; }
