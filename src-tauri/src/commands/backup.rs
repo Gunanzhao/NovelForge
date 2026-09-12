@@ -202,19 +202,83 @@ fn verify<R: Read + Seek>(archive: &mut ZipArchive<R>, value: &Manifest) -> Resu
     Ok(())
 }
 fn validate_references(root: &Path, db: &Connection) -> Result<(), String> {
-    for node in storage::all_nodes(db, false)? {
-        if !storage::safe_relative(root, &node.file_path)?.exists() {
+    let nodes = storage::all_nodes(db, true)?;
+    let valid_node_path = |node: &NodeRecord, path: &Path| {
+        if node.kind == "volume" {
+            path.is_dir()
+        } else {
+            path.is_file()
+        }
+    };
+    for node in nodes.iter().filter(|node| node.deleted_at.is_none()) {
+        if !valid_node_path(node, &storage::safe_relative(root, &node.file_path)?) {
             return Err(format!("备份缺失正文：{}", node.title));
         }
     }
     for entity in storage::all_entities(db, false)? {
-        if !storage::safe_relative(root, &entity.file_path)?.exists() {
+        if !storage::safe_relative(root, &entity.file_path)?.is_file() {
             return Err(format!("备份缺失资料：{}", entity.title));
         }
     }
+    let mut revisions = db
+        .prepare("SELECT file_path FROM revisions")
+        .map_err(|error| error.to_string())?;
+    let paths = revisions
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?;
+    for path in paths {
+        let path = path.map_err(|error| error.to_string())?;
+        if !storage::safe_relative(root, &path)?.is_file() {
+            return Err(format!("备份缺失历史版本：{path}"));
+        }
+    }
+    let mut covered = HashSet::new();
     for item in storage::trash_items(db)? {
-        storage::safe_trash_path(root, &item.trash_path)
+        let trash_path = storage::safe_trash_path(root, &item.trash_path)
             .map_err(|error| format!("备份回收站条目无效（{}）：{}", item.title, error))?;
+        if item.ref_kind == "node" {
+            let node = nodes
+                .iter()
+                .find(|node| node.id == item.ref_id && node.deleted_at.is_some())
+                .ok_or("备份回收站节点记录无效")?;
+            let prefix = node_path_prefix(node);
+            let base = if node.kind == "chapter" {
+                trash_path.with_extension("")
+            } else {
+                trash_path.clone()
+            };
+            for id in trash::deletion_batch_ids(db, &nodes, node)? {
+                let child = nodes
+                    .iter()
+                    .find(|child| child.id == id)
+                    .ok_or("备份回收站子节点记录无效")?;
+                let path = if id == node.id {
+                    trash_path.clone()
+                } else {
+                    let relative = Path::new(&child.file_path)
+                        .strip_prefix(&prefix)
+                        .map_err(|_| "备份回收站子节点路径无效")?;
+                    base.join(relative)
+                };
+                storage::ensure_within_root(root, &path)?;
+                if !valid_node_path(child, &path) {
+                    return Err(format!(
+                        "备份缺失回收站正文：{}（{}）",
+                        child.title,
+                        path.display()
+                    ));
+                }
+                covered.insert(id);
+            }
+        } else if item.ref_kind != "entity" || !trash_path.is_file() {
+            return Err(format!("备份回收站资料无效：{}", item.title));
+        }
+    }
+    if nodes
+        .iter()
+        .any(|node| node.deleted_at.is_some() && !covered.contains(&node.id))
+    {
+        return Err("备份存在缺少回收站记录的已删除节点".into());
     }
     Ok(())
 }
@@ -455,6 +519,165 @@ pub async fn restore_backup(path: String, directory: String) -> Result<BackupRep
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn backup_rejects_missing_history_and_deleted_descendants() {
+        for delete_chapter_first in [false, true] {
+            let parent =
+                std::env::temp_dir().join(format!("novelforge-backup-refs-{}", storage::new_id()));
+            let project = parent.join("project");
+            fs::create_dir_all(&project).unwrap();
+            let project_path = project.to_string_lossy().into_owned();
+            let data = create_project(ProjectInput {
+                path: project_path.clone(),
+                title: "备份引用".into(),
+                author: "".into(),
+                genre: "".into(),
+                description: "".into(),
+                target_words: 1000,
+            })
+            .unwrap();
+            let chapter = data
+                .nodes
+                .iter()
+                .find(|node| node.kind == "chapter")
+                .unwrap()
+                .clone();
+            let volume = data
+                .nodes
+                .iter()
+                .find(|node| node.id == chapter.parent_id.clone().unwrap())
+                .unwrap()
+                .clone();
+            let data = create_node(NodeInput {
+                project_path: project_path.clone(),
+                kind: "section".into(),
+                title: "小节".into(),
+                parent_id: Some(chapter.id.clone()),
+            })
+            .unwrap();
+            let section = data
+                .nodes
+                .iter()
+                .find(|node| node.kind == "section")
+                .unwrap()
+                .clone();
+            save_document(SaveDocumentInput {
+                project_path: project_path.clone(),
+                node_id: chapter.id.clone(),
+                content: "历史正文".into(),
+                reason: "备份测试".into(),
+            })
+            .unwrap();
+            let (_, db) = project_connection(&project_path).unwrap();
+            let history: String = db
+                .query_row("SELECT file_path FROM revisions LIMIT 1", [], |row| {
+                    row.get(0)
+                })
+                .unwrap();
+            let history_path = project.join(&history);
+            let bytes = fs::read(&history_path).unwrap();
+            fs::remove_file(&history_path).unwrap();
+            assert!(
+                create(project_path.clone(), parent.to_string_lossy().into_owned())
+                    .err()
+                    .unwrap()
+                    .contains("备份缺失历史版本")
+            );
+            fs::write(&history_path, bytes).unwrap();
+            drop(db);
+            if delete_chapter_first {
+                delete_node(crate::models::NodeActionInput {
+                    project_path: project_path.clone(),
+                    node_id: chapter.id.clone(),
+                })
+                .unwrap();
+            }
+            delete_node(crate::models::NodeActionInput {
+                project_path: project_path.clone(),
+                node_id: volume.id.clone(),
+            })
+            .unwrap();
+            let (_, db) = project_connection(&project_path).unwrap();
+            validate_references(&project, &db).unwrap();
+            let items = storage::trash_items(&db).unwrap();
+            let batch = if delete_chapter_first {
+                &chapter
+            } else {
+                &volume
+            };
+            let item = items.iter().find(|item| item.ref_id == batch.id).unwrap();
+            let trash_path = storage::safe_trash_path(&project, &item.trash_path).unwrap();
+            let section_path = if delete_chapter_first {
+                trash_path
+                    .with_extension("")
+                    .join(Path::new(&section.file_path).file_name().unwrap())
+            } else {
+                trash_path.join(
+                    Path::new(&section.file_path)
+                        .strip_prefix(&volume.file_path)
+                        .unwrap(),
+                )
+            };
+            let backup =
+                create(project_path.clone(), parent.to_string_lossy().into_owned()).unwrap();
+            let restored =
+                restore(backup.path.clone(), parent.to_string_lossy().into_owned()).unwrap();
+            guard::release_project(restored.path).unwrap();
+            // A self-consistent archive still fails if it omits a referenced deleted section.
+            let relative = section_path
+                .strip_prefix(fs::canonicalize(&project).unwrap())
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
+            let mut source = ZipArchive::new(fs::File::open(&backup.path).unwrap()).unwrap();
+            let mut value = manifest(&mut source).unwrap();
+            assert!(value.files.remove(&relative).is_some());
+            let invalid = parent.join("missing-section.nfbackup");
+            let mut writer = ZipWriter::new(fs::File::create(&invalid).unwrap());
+            for name in value.files.keys() {
+                writer
+                    .start_file(name, SimpleFileOptions::default())
+                    .unwrap();
+                std::io::copy(&mut source.by_name(name).unwrap(), &mut writer).unwrap();
+            }
+            writer
+                .start_file(MANIFEST, SimpleFileOptions::default())
+                .unwrap();
+            serde_json::to_writer(&mut writer, &value).unwrap();
+            writer.finish().unwrap();
+            let mut archive = ZipArchive::new(fs::File::open(&invalid).unwrap()).unwrap();
+            assert!(verify_project(&mut archive)
+                .err()
+                .unwrap()
+                .contains("备份缺失回收站正文"));
+            assert!(restore(
+                invalid.to_string_lossy().into_owned(),
+                parent.to_string_lossy().into_owned()
+            )
+            .err()
+            .unwrap()
+            .contains("备份缺失回收站正文"));
+            drop(archive);
+            drop(source);
+            fs::remove_file(&section_path).unwrap();
+            assert!(
+                create(project_path.clone(), parent.to_string_lossy().into_owned())
+                    .err()
+                    .unwrap()
+                    .contains("备份缺失回收站正文")
+            );
+            fs::create_dir(&section_path).unwrap();
+            assert!(validate_references(&project, &db)
+                .err()
+                .unwrap()
+                .contains("备份缺失回收站正文"));
+            drop(db);
+            guard::release_project(project_path).unwrap();
+            fs::remove_dir_all(parent).unwrap();
+        }
+    }
+
     #[test]
     fn roundtrip_preserves_database_history_and_binary_attachments() {
         let parent =

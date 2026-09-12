@@ -1,6 +1,6 @@
 use super::*;
 
-fn deletion_batch_ids(
+pub(crate) fn deletion_batch_ids(
     connection: &Connection,
     nodes: &[NodeRecord],
     root: &NodeRecord,
