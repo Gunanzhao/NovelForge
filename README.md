@@ -2,24 +2,28 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.1.1-rc.6（预发布）**。
+当前版本：**1.1.1-rc.7（预发布）**。
 
 [![main CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Amain)
 
 ## 下载
 
-- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.6/NovelForge_1.1.1-rc.6_x64-setup.exe)
-- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.6/novelforge.exe)
-- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.6/SHA256SUMS.txt)
+- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.7/NovelForge_1.1.1-rc.7_x64-setup.exe)
+- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.7/novelforge.exe)
+- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.7/SHA256SUMS.txt)
 - [版本说明与历史 Release](https://github.com/Gunanzhao/NovelForge/releases)
 
 已有安装版用户运行新安装包升级；直接运行独立 EXE 不会更新旧快捷方式。桌面版需要 Windows WebView2。
 
-## 开发分支审查修复（尚未发布新版本）
+## 1.1.1-rc.7 相比 1.1.1-rc.6
 
-已处理 2026-09-11 审查报告中的 NF-01～NF-08：删除及冲突读取保护当前稿件、单次原子文件替换、附件打开限制、备份可恢复性校验、远程图片授权、旧写入 IPC 收敛，以及按请求持有的项目锁。现有 Release 下载仍为 rc.6；这些改动需从最新源码构建。
+- 备份创建、校验和恢复检查历史版本及回收站内全部章节、小节，缺失内容时拒绝输出可用备份。
+- 自动保存保留导出选项；修复 DOCX 列表编号关联、EPUB 每卷重复封面，以及 Enter 重复创建章节。
+- 纳入此前 NF-01～NF-08 审查修复：正文删除与冲突保护、单次原子文件替换、按请求持有的项目锁、外部图片授权、附件打开限制及旧写入 IPC 收敛。
 
-详见 [修复与验证记录](docs/audit-fixes-2026-09-12.md)。
+验证：410 项前端测试、137 项 Rust 测试通过（7 项跳过），类型检查、Lint、Rustfmt、Clippy、Windows 构建、完整桌面回归和真实备份/导出专项验收通过。
+
+详见 [rc.7 发布说明](docs/release-1.1.1-rc.7.md)、[全量审查修复记录](docs/full-audit-fixes-2026-09-12.md)及 [NF-01～NF-08 修复记录](docs/audit-fixes-2026-09-12.md)。
 
 ## 1.1.1-rc.6 相比 1.1.1-rc.5
 
@@ -106,7 +110,7 @@ GTK 和 urlpattern 依赖链仍有 `proc-macro-error` 及五个 `unic-*` 包停�
 
 在“连接设置”填写 OpenAI-compatible 服务的 Base URL、模型和可选 API Key。密钥只保留在当前窗口，不保存到项目或偏好。远程非加密 HTTP 地址会在发送前提示并要求确认。
 
-等待期间可继续操作软件。若结果区提示“输出上限耗尽”，可手动提高上限重试，或在模型服务中降低思考量；提高上限可能增加耗时和服务用量。当前仍为一次性返回正文，“停止接收”仅忽略后续结果，不能保证服务端停止处理。
+等待期间可继续操作软件。若结果区提示“输出上限耗尽”，可手动提高上限重试，或在模型服务中降低思考量；提高上限可能增加耗时和服务用量。当前仍为一次性返回正文，“停止接收”会取消 HTTP 连接并丢弃后续结果；服务端是否立即停止处理取决于其实现。
 
 ### Codex 订阅（实验性）
 
@@ -144,9 +148,9 @@ Codex 结果可以流式查看和停止生成；未完成文本只供查看与�
 - 资料镜像包含版本化 `novelforgeEntity` JSON 前置元数据及可读 Markdown。人工修改资料镜像时需保持两种表示一致；正文 Markdown 的常规编辑不受影响。
 - 正文外部修改会触发冲突保护，读取失败会中止导出；恢复时检查路径边界，失败时报告回滚结果。
 - 章节锁定用于防止误编辑，不等于加密或操作系统权限控制。
-- 最新源码中，Markdown 预览的 HTTP/HTTPS 远程图片默认不加载，点击“加载外部图片”后才向托管服务器请求资源；切换项目或图片后需要重新授权。
-- 最新源码中，附件仅对常见文本、图片、PDF 和影音格式直接调用系统打开；脚本、可执行文件、快捷方式、网页及未知类型仅定位到文件夹。打开前仍需判断来源是否可信。
-- 整项目备份的创建、校验和恢复使用相同的项目完整性规则；缺失数据库引用的正文、资料或回收站内容时会报告错误。
+- Markdown 预览的 HTTP/HTTPS 远程图片默认不加载，点击“加载外部图片”后才向托管服务器请求资源；切换项目或图片后需要重新授权。
+- 附件仅对常见文本、图片、PDF 和影音格式直接调用系统打开；脚本、可执行文件、快捷方式、网页及未知类型仅定位到文件夹。打开前仍需判断来源是否可信。
+- 整项目备份的创建、校验和恢复使用相同的项目完整性规则；缺失数据库引用的正文、资料、历史版本或回收站内章节及小节时会报告错误。
 - AI 预览包含 System 与 User 内容，前端合计上限为 80,000 字符，后端硬上限为 200,000 字符。
 
 ## 开发与构建
