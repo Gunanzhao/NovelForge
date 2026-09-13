@@ -2,18 +2,24 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.1.1-rc.7（预发布）**。
+当前版本：**1.1.1-rc.8（预发布）**。
 
 [![main CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Amain)
 
 ## 下载
 
-- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.7/NovelForge_1.1.1-rc.7_x64-setup.exe)
-- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.7/novelforge.exe)
-- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.7/SHA256SUMS.txt)
+- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.8/NovelForge_1.1.1-rc.8_x64-setup.exe)
+- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.8/novelforge.exe)
+- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.8/SHA256SUMS.txt)
 - [版本说明与历史 Release](https://github.com/Gunanzhao/NovelForge/releases)
 
 已有安装版用户运行新安装包升级；直接运行独立 EXE 不会更新旧快捷方式。桌面版需要 Windows WebView2。
+
+## 1.1.1-rc.8 相比 1.1.1-rc.7
+
+人物、地点、世界观 Wiki 的标题、操作栏和完整表单统一在右侧主工作区居中。新建与编辑共用响应式资料容器，保留 760px 表单上限、字段排列和间距，以及项目导航和资料列表布局。
+
+三类资料的新建/编辑页面在 1100、1440、1920 窗口宽度下共 18 种组合验证通过。详见 [rc.8 发布说明](docs/release-1.1.1-rc.8.md)。
 
 ## 1.1.1-rc.7 相比 1.1.1-rc.6
 
