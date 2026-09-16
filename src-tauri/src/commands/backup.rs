@@ -32,6 +32,7 @@ fn ignored(name: &str) -> bool {
             | ".novelforge/database.sqlite"
             | ".novelforge/database.sqlite-wal"
             | ".novelforge/database.sqlite-shm"
+            | ".novelforge/auto-backup.json"
     ) || name.starts_with(".novelforge/cache/")
         || name.starts_with(".novelforge/index/")
         || name.starts_with(".novelforge/exports/")
@@ -332,7 +333,7 @@ fn verify_project<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<Manifes
     cleanup?;
     Ok(value)
 }
-fn create(path: String, directory: String) -> Result<BackupReport, String> {
+pub(crate) fn create(path: String, directory: String) -> Result<BackupReport, String> {
     let (root, connection) = project_connection(&path)?;
     let root = root.canonicalize().map_err(|e| e.to_string())?;
     let parent = PathBuf::from(directory)

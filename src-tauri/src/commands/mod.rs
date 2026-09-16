@@ -24,6 +24,7 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
 pub(crate) mod ai;
+pub(crate) mod auto_backup;
 pub(crate) mod backup;
 pub(crate) mod consistency;
 pub(crate) mod entities;
