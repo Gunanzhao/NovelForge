@@ -160,6 +160,7 @@ const RECOVERY_DIRECTORIES: &[&str] = &[
     "foreshadowing",
     "relationships",
     "notes",
+    "annotations",
     "mentions",
     "story-arcs",
     "prompts",
@@ -680,6 +681,7 @@ fn rebuild_entities_from_markdown(root: &Path, connection: &Connection) -> Resul
         ("foreshadowing", "foreshadowing"),
         ("relationship", "relationships"),
         ("note", "notes"),
+        ("annotation", "annotations"),
         ("mention-ignore", "mentions"),
         ("story-arc", "story-arcs"),
         ("prompt-preset", "prompts"),
@@ -1374,3 +1376,6 @@ pub(crate) mod navigation;
 
 #[cfg(test)]
 pub(crate) use manuscript::save_document;
+
+#[cfg(test)]
+mod annotations_regression_tests;

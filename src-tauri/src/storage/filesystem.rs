@@ -11,6 +11,7 @@ const DIRECTORIES: &[&str] = &[
     "foreshadowing",
     "relationships",
     "notes",
+    "annotations",
     "research",
     "attachments",
     "mentions",

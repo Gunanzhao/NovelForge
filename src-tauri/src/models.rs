@@ -103,6 +103,8 @@ pub struct ProjectData {
 #[serde(rename_all = "camelCase")]
 pub struct DocumentData {
     #[serde(default)]
+    pub annotation_tracking: Option<AnnotationTracking>,
+    #[serde(default)]
     pub history_created: bool,
     pub node: NodeRecord,
     pub content: String,
@@ -329,4 +331,20 @@ pub struct AiCompletionResult {
     pub model: String,
     #[serde(default)]
     pub incomplete: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnnotationAnchor {
+    pub id: String,
+    pub revision: String,
+    pub from: usize,
+    pub to: usize,
+    pub orphaned: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnnotationTracking {
+    pub content: String,
+    pub anchors: Vec<AnnotationAnchor>,
 }

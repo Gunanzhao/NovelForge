@@ -41,6 +41,7 @@ pub fn run() {
             confirm_window_close,
             commands::updates::check_updates,
             commands::guard::save_document_checked,
+            commands::guard::save_document_annotated,
             commands::guard::rename_node_checked,
             commands::guard::release_project,
             commands::guard::release_project_lease,

@@ -805,6 +805,16 @@ pub(crate) fn save_document_internal(
     content: &str,
     reason: &str,
 ) -> Result<DocumentData, String> {
+    save_document_annotated_internal(root, connection, node_id, content, reason, None)
+}
+pub(crate) fn save_document_annotated_internal(
+    root: &Path,
+    connection: &mut Connection,
+    node_id: &str,
+    content: &str,
+    reason: &str,
+    anchors: Option<&[crate::models::AnnotationAnchor]>,
+) -> Result<DocumentData, String> {
     ensure_body_unlocked(connection, node_id)?;
     let node =
         storage::node_from_id(connection, node_id)?.ok_or_else(|| "章节不存在".to_string())?;
@@ -898,6 +908,9 @@ pub(crate) fn save_document_internal(
             content,
             &node.file_path,
         )?;
+        if let Some(anchors) = anchors {
+            storage::database::write_annotation_tracking(&transaction, node_id, content, anchors)?;
+        }
         transaction
             .commit()
             .map_err(|error| format!("提交保存事务失败：{}", error))
@@ -932,6 +945,7 @@ pub(crate) fn save_document_internal(
     let updated = storage::node_from_id(connection, node_id)?
         .ok_or_else(|| "保存后无法读取章节".to_string())?;
     Ok(DocumentData {
+        annotation_tracking: storage::database::read_annotation_tracking(connection, node_id)?,
         history_created: keep_history,
         node: updated,
         content: content.to_string(),
@@ -1006,6 +1020,10 @@ pub fn get_document(input: crate::models::NodeActionInput) -> Result<DocumentDat
     let content = fs::read_to_string(storage::safe_relative(&root, &node.file_path)?)
         .map_err(|error| format!("读取正文失败：{}", error))?;
     Ok(DocumentData {
+        annotation_tracking: storage::database::read_annotation_tracking(
+            &connection,
+            &input.node_id,
+        )?,
         history_created: false,
         node,
         content: storage::strip_markdown_frontmatter(&content),

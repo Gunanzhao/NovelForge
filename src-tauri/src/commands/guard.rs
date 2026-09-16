@@ -134,6 +134,14 @@ pub fn save_document_checked(
     input: SaveDocumentInput,
     expected_content: String,
 ) -> Result<DocumentData, String> {
+    save_document_annotated(input, expected_content, None)
+}
+#[tauri::command]
+pub fn save_document_annotated(
+    input: SaveDocumentInput,
+    expected_content: String,
+    annotation_anchors: Option<Vec<crate::models::AnnotationAnchor>>,
+) -> Result<DocumentData, String> {
     let _serial = SAVES.lock().map_err(|_| "正文保存锁不可用")?;
     let (root, mut connection) = project_connection(&input.project_path)?;
     let node = storage::node_from_id(&connection, &input.node_id)?.ok_or("章节不存在")?;
@@ -147,12 +155,13 @@ pub fn save_document_checked(
             recovery_path
         ));
     }
-    save_document_internal(
+    manuscript::save_document_annotated_internal(
         &root,
         &mut connection,
         &input.node_id,
         &input.content,
         &input.reason,
+        annotation_anchors.as_deref(),
     )
 }
 

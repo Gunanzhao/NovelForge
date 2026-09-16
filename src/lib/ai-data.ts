@@ -148,7 +148,7 @@ export function contextItems(
     id: node.id, kind: 'node' as const, title: node.title, detail: node.id === currentNodeId ? '当前编辑章节' : node.kind === 'chapter' ? '正文 · 章节' : '正文 · 节',
   }))
   const attachmentIds = new Set(linkedAttachments(entities, nodes, currentNodeId).map(entity => entity.id))
-  const hiddenKinds = new Set([ 'mention-ignore', 'prompt-preset', 'inbox', 'checklist-template', 'chapter-checklist'])
+  const hiddenKinds = new Set(['annotation', 'mention-ignore', 'prompt-preset', 'inbox', 'checklist-template', 'chapter-checklist'])
   const entityItems = entities.filter((entity) => !hiddenKinds.has(entity.kind) && (entity.kind !== 'attachment' || attachmentIds.has(entity.id))).sort((left, right) => left.kind.localeCompare(right.kind) || left.title.localeCompare(right.title, 'zh-CN')).map((entity) => ({
     id: entity.id, kind: 'entity' as const, title: entity.title, detail: entity.kind === 'attachment' ? '关联附件说明（仅文本）' : entity.kind,
   }))

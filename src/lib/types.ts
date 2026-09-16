@@ -1,5 +1,5 @@
 export type NodeKind = 'volume' | 'chapter' | 'section'
-export type EntityKind = 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note' | 'relationship' | 'attachment' | 'mention-ignore' | 'story-arc' | 'prompt-preset' | 'inbox' | 'checklist-template' | 'chapter-checklist'
+export type EntityKind = 'annotation' | 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note' | 'relationship' | 'attachment' | 'mention-ignore' | 'story-arc' | 'prompt-preset' | 'inbox' | 'checklist-template' | 'chapter-checklist'
 export type ViewId = 'dashboard' | 'manuscript' | EntityKind | 'character-statistics' | 'consistency' | 'statistics' | 'ai' | 'search' | 'trash' | 'settings'
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type ThemeMode = 'light' | 'dark' | 'system'
@@ -76,7 +76,10 @@ export interface ProjectData {
   recovery: RecoveryItem[]
 }
 
+export interface AnnotationAnchor {id:string;revision:string;from:number;to:number;orphaned:boolean}
+export interface AnnotationTracking {content:string;anchors:AnnotationAnchor[]}
 export interface DocumentData {
+  annotationTracking?: AnnotationTracking | null
   historyCreated?: boolean
   persistedContent?: string
   node: NodeRecord
@@ -122,6 +125,7 @@ export interface EntityDraft {
 }
 
 export const ENTITY_LABELS: Record<EntityKind, string> = {
+  annotation: '批注与修订',
   character: '人物',
   location: '地点',
   world: '世界观',
@@ -150,6 +154,7 @@ export const NODE_STATUS_LABELS: Record<string, string> = {
 }
 
 export const ENTITY_FIELDS: Record<EntityKind, Array<{ key: string; label: string; multiline?: boolean }>> = {
+  annotation: [{key:'body',label:'批注',multiline:true},{key:'category',label:'分类'},{key:'status',label:'处理状态'}],
   character: [
     { key: 'alias', label: '别名' }, { key: 'gender', label: '性别' }, { key: 'age', label: '年龄' }, { key: 'birthday', label: '生日' },
     { key: 'identity', label: '身份 / 职业' }, { key: 'faction', label: '阵营' }, { key: 'avatar', label: '头像路径' },

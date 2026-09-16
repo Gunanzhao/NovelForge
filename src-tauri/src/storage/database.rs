@@ -57,6 +57,9 @@ CREATE TABLE IF NOT EXISTS batch_operations (
   changes_json TEXT NOT NULL,
   undone_by TEXT
 );
+CREATE TABLE IF NOT EXISTS annotation_tracking (
+ node_id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, anchors_json TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS activity (
   id TEXT PRIMARY KEY NOT NULL,
   node_id TEXT NOT NULL,
@@ -232,4 +235,53 @@ pub fn trash_items(connection: &Connection) -> Result<Vec<TrashItem>, String> {
         items.push(row.map_err(|error| format!("读取回收站失败：{}", error))?);
     }
     Ok(items)
+}
+
+pub fn read_annotation_tracking(
+    db: &Connection,
+    node_id: &str,
+) -> Result<Option<crate::models::AnnotationTracking>, String> {
+    let row: Option<(String, String)> = db
+        .query_row(
+            "SELECT content,anchors_json FROM annotation_tracking WHERE node_id=?1",
+            [node_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    row.map(|(content, json)| {
+        Ok(crate::models::AnnotationTracking {
+            content,
+            anchors: serde_json::from_str(&json).map_err(|e| format!("批注定位记录损坏：{e}"))?,
+        })
+    })
+    .transpose()
+}
+pub fn write_annotation_tracking(
+    db: &Connection,
+    node_id: &str,
+    content: &str,
+    anchors: &[crate::models::AnnotationAnchor],
+) -> Result<(), String> {
+    let length = content.encode_utf16().count();
+    let mut ids = std::collections::HashSet::new();
+    for anchor in anchors {
+        if !ids.insert(&anchor.id)
+            || anchor.from > anchor.to
+            || anchor.to > length
+            || (!anchor.orphaned && anchor.from == anchor.to)
+        {
+            return Err("批注定位范围无效".into());
+        }
+        let entity = entity_from_id(db, &anchor.id)?.ok_or("批注已删除，请刷新后保存")?;
+        if entity.deleted_at.is_some()
+            || entity.kind != "annotation"
+            || entity.content["chapterId"].as_str() != Some(node_id)
+            || entity.content["anchorRevision"].as_str() != Some(&anchor.revision)
+        {
+            return Err("批注锚点已变化，请刷新后保存正文".into());
+        }
+    }
+    db.execute("INSERT INTO annotation_tracking(node_id,content,anchors_json) VALUES(?1,?2,?3) ON CONFLICT(node_id) DO UPDATE SET content=excluded.content,anchors_json=excluded.anchors_json",params![node_id,content,serde_json::to_string(anchors).map_err(|e|e.to_string())?]).map_err(|e|e.to_string())?;
+    Ok(())
 }
