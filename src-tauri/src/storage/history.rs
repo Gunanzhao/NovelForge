@@ -24,10 +24,10 @@ pub fn recovery_items(root: &Path, connection: &Connection) -> Result<Vec<Recove
             Some(value) if !value.is_empty() => value,
             _ => continue,
         };
-        let node = match nodes.iter().find(|candidate| candidate.id == node_id) {
-            Some(value) => value,
-            None => continue,
-        };
+        if !filename.ends_with(".md") {
+            continue;
+        }
+        let node = nodes.iter().find(|candidate| candidate.id == node_id);
         let created_at = filename
             .split("--")
             .nth(1)
@@ -36,8 +36,10 @@ pub fn recovery_items(root: &Path, connection: &Connection) -> Result<Vec<Recove
             .to_string();
         items.push(RecoveryItem {
             id: filename.to_string(),
-            node_id: node.id.clone(),
-            node_title: node.title.clone(),
+            node_id: node_id.to_string(),
+            node_title: node
+                .map(|node| node.title.clone())
+                .unwrap_or_else(|| "原章节不可用的恢复稿".into()),
             path: path.to_string_lossy().to_string(),
             created_at,
         });

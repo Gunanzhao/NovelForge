@@ -66,6 +66,7 @@ pub fn run() {
             commands::manuscript::get_document,
             commands::recovery::list_recovery,
             commands::recovery::read_recovery,
+            commands::recovery::recovery_as_chapter,
             commands::recovery::restore_recovery,
             commands::recovery::discard_recovery,
             commands::recovery::list_history,
