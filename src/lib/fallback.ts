@@ -1,3 +1,4 @@
+import type { RenameChanges, WikiRenameOperation } from './wiki-rename'
 import type {
   EntityState, EntityVersion, EntityInput, EntityRecord, ExportInput, HistoryItem, NodeRecord, ProjectData,
   ProjectInput, SearchInput, SearchResult, TrashItem,
@@ -20,6 +21,7 @@ interface TrashSnapshot {
 interface FallbackStore {
   data: ProjectData
   documents: Record<string, string>
+  wikiRenames: Array<WikiRenameOperation & {targetId: string; changes: RenameChanges}>
   entityHistory: EntityVersion[]
   history: StoredHistory[]
   trash: TrashItem[]
@@ -71,6 +73,7 @@ function readStore(path: string) {
     const raw = localStorage.getItem(key)
     if (raw) {
       const parsed = JSON.parse(raw) as FallbackStore
+      parsed.wikiRenames ??= []
       parsed.entityHistory ??= []
       parsed.history ??= []
       parsed.trash ??= []
@@ -110,6 +113,7 @@ function makeProject(input: ProjectInput): FallbackStore {
       recovery: [],
     },
     documents: { [chapterId]: content },
+    wikiRenames: [],
     entityHistory: [],
     history: [],
     trash: [],
@@ -543,6 +547,44 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   if (command === 'list_recovery') return store.data.recovery as T
   if (command === 'read_recovery') throw new Error('浏览器 fallback 没有未完成恢复文件')
   if (command === 'restore_recovery' || command === 'discard_recovery') return store.data as T
+  if (command === 'list_wiki_renames') return store.wikiRenames.filter(operation => operation.targetId === input?.targetId).slice().reverse().slice(0,50) as T
+  if (command === 'apply_wiki_rename' || command === 'undo_wiki_rename') {
+    const next = structuredClone(store)
+    const undo = command === 'undo_wiki_rename' ? next.wikiRenames.find(operation => operation.id === input?.operationId) : undefined
+    if (command === 'undo_wiki_rename' && (!undo || undo.undoneBy)) throw new Error('这次改名不存在或已撤销')
+    const changes: RenameChanges = structuredClone(undo ? undo.changes : input?.changes as RenameChanges)
+    if (undo) {
+      for (const change of [...changes.documents,...changes.entities]) [change.before,change.after] = [change.after,change.before]
+    }
+    const targetId = undo?.targetId ?? String(input?.targetId)
+    const target = changes.entities.find(change => change.id === targetId)
+    if (!target || target.before.title === target.after.title) throw new Error('改名目标或名称无效')
+    if (!target.after.title.trim() || target.after.title.includes('[') || target.after.title.includes(']') || /[\r\n]/u.test(target.after.title)) throw new Error('新名称无效')
+    const key = (title: string) => title.trim().toLocaleLowerCase()
+    if (!undo && next.data.entities.some(entity => entity.id !== targetId && key(entity.title) === key(target.after.title))) throw new Error('目标名称已被其他资料使用')
+    if (!undo && (changes.documents.length || changes.entities.some(entity => entity.id !== targetId)) && next.data.entities.some(entity => entity.id !== targetId && key(entity.title) === key(target.before.title))) throw new Error('原名称存在同名资料，请重新预览')
+    const now = new Date().toISOString(), operationId = uid(), ids = new Set<string>()
+    const label = undo ? '撤销：'+undo.label : 'Wiki改名：'+target.before.title+' → '+target.after.title
+    for (const change of changes.documents) {
+      const current = node(next,change.id)
+      if (ids.has('node:'+change.id) || !current || current.kind === 'volume' || isNodeLocked(next.data.nodes,current.id) || next.documents[change.id] !== change.before) throw new Error('正文已变化或不可修改，请重新预览')
+      ids.add('node:'+change.id)
+      next.history.unshift({id:uid(),nodeId:current.id,nodeTitle:current.title,reason:label+'之前',wordCount:countWords(change.before),createdAt:now,path:'fallback://history/'+current.id,content:change.before})
+      next.documents[change.id] = change.after; current.updatedAt = now
+    }
+    for (const change of changes.entities) {
+      const current = entity(next,change.id)
+      if (ids.has('entity:'+change.id) || !current || !sameEntityState(entityState(current),change.before)) throw new Error('资料已变化，请重新预览')
+      if (current.id !== targetId && change.before.title !== change.after.title) throw new Error('只能修改目标资料的名称')
+      ids.add('entity:'+change.id)
+      recordEntityVersion(next,current,label+'之前')
+      Object.assign(current,change.after,{updatedAt:now});recordEntityVersion(next,current,label)
+    }
+    if (undo) undo.undoneBy = operationId
+    else next.wikiRenames.push({id:operationId,targetId,label,createdAt:now,undoneBy:null,changes})
+    updateTime(next.data);persist(projectPath,next)
+    return {data:next.data,operationId} as T
+  }
   if (command === 'list_entity_history') {
     const versions = store.entityHistory.filter(version => version.entityId === input?.entityId).slice().reverse()
     const cursor = input?.beforeId ? versions.findIndex(version => version.id === input.beforeId) : -1

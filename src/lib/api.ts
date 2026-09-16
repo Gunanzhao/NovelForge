@@ -1,3 +1,4 @@
+import type { RenameChanges, WikiRenameOperation } from './wiki-rename'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
@@ -32,6 +33,9 @@ async function openProjectWithLease(path: string): Promise<ProjectData> {
   return { ...result.data, leaseToken: result.leaseToken }
 }
 export const projectApi = {
+  applyWikiRename: (input: { projectPath: string; targetId: string; changes: RenameChanges }) => command<{data: ProjectData; operationId: string}>('apply_wiki_rename', {input}),
+  undoWikiRename: (input: { projectPath: string; operationId: string }) => command<{data: ProjectData; operationId: string}>('undo_wiki_rename', {input}),
+  listWikiRenames: (input: { projectPath: string; targetId: string }) => command<WikiRenameOperation[]>('list_wiki_renames', {input}),
   checkUpdates: () => command<UpdateInfo>('check_updates', {}, false),
   backup: (path: string, directory: string) => command<BackupReport>('backup_project', { path, directory }, false),
   validateBackup: (path: string) => command<BackupReport>('validate_backup', { path }, false),

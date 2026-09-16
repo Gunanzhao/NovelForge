@@ -128,3 +128,5 @@ export function selectedWikiRenameChanges(plan: WikiRenamePlan, selectedIds: str
   })
   return {documents,entities}
 }
+
+export interface WikiRenameOperation { id: string; label: string; createdAt: string; undoneBy: string | null }
