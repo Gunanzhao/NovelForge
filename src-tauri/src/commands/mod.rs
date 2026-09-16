@@ -37,6 +37,7 @@ pub(crate) mod search;
 pub(crate) mod statistics;
 pub(crate) mod trash;
 pub(crate) mod updates;
+pub(crate) mod wiki_rename;
 
 #[cfg(test)]
 pub(crate) use ai::{ai_complete_for_test as ai_complete, normalize_ai_endpoint};

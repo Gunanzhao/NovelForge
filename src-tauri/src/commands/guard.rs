@@ -6,7 +6,7 @@ struct Lease {
     owners: HashSet<String>,
 }
 static LEASES: OnceLock<Mutex<HashMap<PathBuf, Lease>>> = OnceLock::new();
-static SAVES: Mutex<()> = Mutex::new(());
+pub(crate) static SAVES: Mutex<()> = Mutex::new(());
 pub struct LeaseRequest {
     root: PathBuf,
     token: String,

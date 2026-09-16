@@ -178,6 +178,7 @@ fn open_project_inner(root: &Path) -> Result<ProjectData, String> {
             drop(connection);
             recovered_project_connection(root)?
         }
+        Err(error) if error.starts_with("BATCH_RECOVERY:") => return Err(error),
         Err(_) => recovered_project_connection(root)?,
     };
     let nodes_empty = storage::all_nodes(&connection, false)?.is_empty();

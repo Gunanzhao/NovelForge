@@ -9,6 +9,7 @@ use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use uuid::Uuid;
 
+pub(crate) mod batch;
 pub(crate) mod database;
 pub(crate) mod filesystem;
 pub(crate) mod history;

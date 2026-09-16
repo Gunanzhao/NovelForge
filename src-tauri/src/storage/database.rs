@@ -49,6 +49,14 @@ CREATE TABLE IF NOT EXISTS entity_revisions (
   state_json TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_entity_revisions ON entity_revisions(entity_id, created_at DESC, id DESC);
+CREATE TABLE IF NOT EXISTS batch_operations (
+  id TEXT PRIMARY KEY NOT NULL,
+  target_id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  changes_json TEXT NOT NULL,
+  undone_by TEXT
+);
 CREATE TABLE IF NOT EXISTS activity (
   id TEXT PRIMARY KEY NOT NULL,
   node_id TEXT NOT NULL,
@@ -81,11 +89,12 @@ pub fn open_db(root: &Path) -> Result<Connection, String> {
             .ok_or_else(|| "无法确定数据库目录".to_string())?,
     )
     .map_err(|error| format!("无法创建数据库目录：{}", error))?;
-    let connection = Connection::open(&database_path)
+    let mut connection = Connection::open(&database_path)
         .map_err(|error| format!("无法打开项目数据库 {}：{}", database_path.display(), error))?;
     connection
         .execute_batch(SCHEMA)
         .map_err(|error| format!("无法初始化项目数据库：{}", error))?;
+    batch::recover(root, &mut connection).map_err(|error| format!("BATCH_RECOVERY:{error}"))?;
     Ok(connection)
 }
 
