@@ -358,6 +358,104 @@ mod tests {
         assert_eq!(f.list("person").len(), 1);
     }
     #[test]
+    fn history_roundtrips_all_archive_types_and_attachment_description() {
+        let f = Fixture::new();
+        for kind in ["character", "location", "world"] {
+            let input = EntityInput {
+                project_path: f.path.clone(),
+                id: Some(kind.into()),
+                kind: kind.into(),
+                title: format!("{kind}资料"),
+                content: serde_json::json!({"summary":"初始设定"}),
+                tags: vec![],
+            };
+            upsert_entity(input.clone()).unwrap();
+            upsert_entity(EntityInput {
+                content: serde_json::json!({"summary":"修订设定"}),
+                ..input
+            })
+            .unwrap();
+            assert_eq!(f.list(kind).len(), 2);
+        }
+        let source = f.root.join("source.txt");
+        fs::write(&source, b"original attachment bytes").unwrap();
+        let imported = import_attachment(crate::models::AttachmentInput {
+            project_path: f.path.clone(),
+            source_path: source.to_string_lossy().into(),
+            description: "原说明".into(),
+        })
+        .unwrap();
+        let attachment = imported
+            .entities
+            .iter()
+            .find(|entity| entity.kind == "attachment")
+            .unwrap();
+        let mut changed = attachment.content.clone();
+        changed["description"] = serde_json::json!("新说明");
+        let data = upsert_entity(EntityInput {
+            project_path: f.path.clone(),
+            id: Some(attachment.id.clone()),
+            kind: "attachment".into(),
+            title: attachment.title.clone(),
+            content: changed,
+            tags: attachment.tags.clone(),
+        })
+        .unwrap();
+        let current = data
+            .entities
+            .iter()
+            .find(|entity| entity.id == attachment.id)
+            .unwrap();
+        let versions = f.list(&attachment.id);
+        assert_eq!(versions.len(), 2);
+        restore_entity_version(RestoreEntityVersionInput {
+            project_path: f.path.clone(),
+            entity_id: attachment.id.clone(),
+            version_id: versions[1].id.clone(),
+            fields: Some(vec!["content.description".into()]),
+            expected: EntityState::from(current),
+        })
+        .unwrap();
+        assert_eq!(
+            fs::read(f.root.join(&attachment.file_path)).unwrap(),
+            b"original attachment bytes"
+        );
+        let destination =
+            std::env::temp_dir().join(format!("entity-history-backup-{}", storage::new_id()));
+        fs::create_dir(&destination).unwrap();
+        let backup = tauri::async_runtime::block_on(backup::backup_project(
+            f.path.clone(),
+            destination.to_string_lossy().into(),
+        ))
+        .unwrap();
+        let restored = tauri::async_runtime::block_on(backup::restore_backup(
+            backup.path,
+            destination.to_string_lossy().into(),
+        ))
+        .unwrap();
+        for id in ["character", "location", "world", &attachment.id] {
+            let versions = list_entity_history(ListEntityHistoryInput {
+                project_path: restored.path.clone(),
+                entity_id: id.into(),
+                before_id: None,
+            })
+            .unwrap();
+            assert_eq!(
+                versions
+                    .iter()
+                    .map(|version| &version.id)
+                    .collect::<Vec<_>>(),
+                f.list(id)
+                    .iter()
+                    .map(|version| &version.id)
+                    .collect::<Vec<_>>()
+            );
+        }
+        guard::release_project(restored.path).unwrap();
+        fs::remove_dir_all(destination).unwrap();
+    }
+
+    #[test]
     fn same_timestamp_pagination_keeps_insertion_order() {
         let f = Fixture::new();
         let current = f.save("person", "19");

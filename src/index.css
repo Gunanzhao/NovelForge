@@ -1644,3 +1644,13 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 .inspector .history-item { flex-direction:column; align-items:stretch; gap:6px; }
 .inspector .history-item > span { display:flex; flex-wrap:wrap; gap:2px; }
 .inspector .history-item button { white-space:nowrap; }
+
+.entity-history-panel { margin-top: 20px; min-width: 0; }
+.entity-history-body { display: grid; gap: 12px; margin-top: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.entity-history-body p { margin: 0; font-size: 12px; line-height: 1.6; }
+.entity-history-differences { display: grid; gap: 12px; min-width: 0; }
+.entity-history-field { display: flex; align-items: center; gap: 8px; font-size: 12px; overflow-wrap: anywhere; }
+.entity-history-values { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.entity-history-values pre { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; margin: 8px 0 0; padding: 10px; background: var(--surface-2); border-radius: 5px; font: inherit; font-size: 12px; max-height: 240px; overflow: auto; }
+.entity-history-body .entity-actions { flex-wrap: wrap; }
+@container workspace (max-width: 760px) { .entity-history-values { grid-template-columns: minmax(0, 1fr); } }

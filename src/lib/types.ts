@@ -268,3 +268,17 @@ export interface AiCompletionResult {
   model: string
   incomplete?: boolean
 }
+
+export interface EntityState {
+  title: string
+  content: Record<string, unknown>
+  tags: string[]
+}
+export interface EntityVersion {
+  id: string
+  entityId: string
+  kind: EntityKind
+  label: string
+  createdAt: string
+  state: EntityState
+}

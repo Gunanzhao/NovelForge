@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
-  AiCompletionInput, AiCompletionResult, ConsistencyReport, CopyNodeInput, DocumentData, EntityInput, EntityRecord, ExportInput, HistoryItem, MoveNodeInput, NodeInput, ProjectData,
+  EntityState, EntityVersion, AiCompletionInput, AiCompletionResult, ConsistencyReport, CopyNodeInput, DocumentData, EntityInput, EntityRecord, ExportInput, HistoryItem, MoveNodeInput, NodeInput, ProjectData,
   ProjectInput, RecoveryItem, SaveDocumentInput, SearchInput, SearchResult, Stats, TrashItem,
 } from './types'
 import { fallbackInvoke } from './fallback'
@@ -70,7 +70,10 @@ export const projectApi = {
   listHistory: (input: { projectPath: string; nodeId: string }) => command<HistoryItem[]>('list_history', { input }),
   readHistory: (input: { projectPath: string; revisionId: string }) => command<string>('read_history', { input }),
   restoreHistory: (input: { projectPath: string; revisionId: string; expectedNodeId: string }) => command<ProjectData>('restore_history', { input }),
-  upsertEntity: (input: EntityInput) => command<ProjectData>('upsert_entity', { input }),
+  upsertEntity: (input: EntityInput, expected?: EntityState) => command<ProjectData>(expected ? 'upsert_entity_checked' : 'upsert_entity', { input, ...(expected ? { expected } : {}) }),
+  listEntityHistory: (input: { projectPath: string; entityId: string; beforeId?: string }) => command<EntityVersion[]>('list_entity_history', { input }),
+  nameEntityVersion: (input: { projectPath: string; entityId: string; name: string; expected: EntityState }) => command<void>('name_entity_version', { input }),
+  restoreEntityVersion: (input: { projectPath: string; entityId: string; versionId: string; fields?: string[]; expected: EntityState }) => command<ProjectData>('restore_entity_version', { input }),
   listEntities: (path: string, kind?: string) => command<EntityRecord[]>('list_entities', { path, kind }),
   deleteEntity: (input: { projectPath: string; nodeId: string }) => command<ProjectData>('delete_entity', { input }),
   listTrash: (path: string) => command<TrashItem[]>('list_trash', { path }),

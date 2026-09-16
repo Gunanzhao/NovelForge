@@ -1,5 +1,5 @@
 import type {
-  EntityInput, EntityRecord, ExportInput, HistoryItem, NodeRecord, ProjectData,
+  EntityState, EntityVersion, EntityInput, EntityRecord, ExportInput, HistoryItem, NodeRecord, ProjectData,
   ProjectInput, SearchInput, SearchResult, TrashItem,
 } from './types'
 import { analyzeConsistency } from './consistency-data'
@@ -20,10 +20,25 @@ interface TrashSnapshot {
 interface FallbackStore {
   data: ProjectData
   documents: Record<string, string>
+  entityHistory: EntityVersion[]
   history: StoredHistory[]
   trash: TrashItem[]
   trashSnapshots: Record<string, TrashSnapshot>
   activities: Array<{ createdAt: string; deltaWords: number }>
+}
+
+function entityState(entity: EntityRecord): EntityState { return { title: entity.title, content: entity.content, tags: entity.tags } }
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']'
+  if (value && typeof value === 'object') return '{' + Object.keys(value).sort().map(key => JSON.stringify(key) + ':' + canonical((value as Record<string,unknown>)[key])).join(',') + '}'
+  return JSON.stringify(value) ?? 'null'
+}
+function sameEntityState(left: EntityState, right: EntityState) { return canonical(left) === canonical(right) }
+function recordEntityVersion(store: FallbackStore, entity: EntityRecord, label: string, named = false) {
+  const state = entityState(entity)
+  const last = store.entityHistory.filter(version => version.entityId === entity.id).at(-1)
+  if (!named && last && sameEntityState(last.state, state)) return
+  store.entityHistory.push({ id: uid(), entityId: entity.id, kind: entity.kind, label, createdAt: new Date().toISOString(), state: structuredClone(state) })
 }
 
 const memory = new Map<string, FallbackStore>()
@@ -56,6 +71,7 @@ function readStore(path: string) {
     const raw = localStorage.getItem(key)
     if (raw) {
       const parsed = JSON.parse(raw) as FallbackStore
+      parsed.entityHistory ??= []
       parsed.history ??= []
       parsed.trash ??= []
       parsed.trashSnapshots ??= {}
@@ -94,6 +110,7 @@ function makeProject(input: ProjectInput): FallbackStore {
       recovery: [],
     },
     documents: { [chapterId]: content },
+    entityHistory: [],
     history: [],
     trash: [],
     trashSnapshots: {},
@@ -526,7 +543,49 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
   if (command === 'list_recovery') return store.data.recovery as T
   if (command === 'read_recovery') throw new Error('浏览器 fallback 没有未完成恢复文件')
   if (command === 'restore_recovery' || command === 'discard_recovery') return store.data as T
-  if (command === 'upsert_entity') {
+  if (command === 'list_entity_history') {
+    const versions = store.entityHistory.filter(version => version.entityId === input?.entityId).slice().reverse()
+    const cursor = input?.beforeId ? versions.findIndex(version => version.id === input.beforeId) : -1
+    if (input?.beforeId && cursor < 0) throw new Error('资料历史分页位置无效')
+    return versions.slice(cursor + 1, cursor + 51) as T
+  }
+  if (command === 'name_entity_version') {
+    const current = entity(store, String(input?.entityId))
+    if (!current) throw new Error('资料不存在或已删除')
+    const name = String(input?.name ?? '').trim()
+    if (!name || [...name].length > 120) throw new Error('版本名称需为1至120个字符')
+    if (!sameEntityState(entityState(current), input?.expected as EntityState)) throw new Error('资料已变化，请刷新后再命名版本')
+    recordEntityVersion(store, current, '命名版本：' + name, true)
+    persist(projectPath, store)
+    return undefined as T
+  }
+  if (command === 'restore_entity_version') {
+    const current = entity(store, String(input?.entityId))
+    const version = store.entityHistory.find(version => version.entityId === input?.entityId && version.id === input?.versionId)
+    if (!current || !version || version.kind !== current.kind) throw new Error('找不到当前资料的历史版本')
+    if (!sameEntityState(entityState(current), input?.expected as EntityState)) throw new Error('资料已变化，请重新查看差异后再操作')
+    const restored = structuredClone(input?.fields ? entityState(current) : version.state)
+    if (input?.fields) {
+      const fields = input.fields as string[]
+      if (!fields.length) throw new Error('请选择要恢复的字段')
+      for (const field of fields) {
+        if (field === 'title') restored.title = version.state.title
+        else if (field === 'tags') restored.tags = [...version.state.tags]
+        else if (field.startsWith('content.') && field.length > 8) {
+          const key = field.slice(8)
+          if (Object.hasOwn(version.state.content, key)) Object.defineProperty(restored.content, key, {value: structuredClone(version.state.content[key]), writable:true, configurable:true, enumerable:true})
+          else delete restored.content[key]
+        } else throw new Error('恢复字段无效')
+      }
+    }
+    if (!restored.title.trim()) throw new Error('条目名称不能为空')
+    recordEntityVersion(store, current, '修改前')
+    Object.assign(current, restored, { updatedAt: new Date().toISOString() })
+    recordEntityVersion(store, current, '恢复资料版本')
+    updateTime(store.data); persist(projectPath, store)
+    return store.data as T
+  }
+  if (command === 'upsert_entity' || command === 'upsert_entity_checked') {
     const entityInput = input as unknown as EntityInput
     const title = typeof entityInput.title === 'string' ? entityInput.title.trim() : ''
     if (!title) throw new Error('条目名称不能为空')
@@ -537,7 +596,9 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     if (!existing && entityInput.id && Object.values(store.trashSnapshots).some((snapshot) => snapshot.entities.some((item) => item.id === entityInput.id))) {
       throw new Error('回收站中的资料不能直接编辑，请先恢复')
     }
+    if (args.expected && (!existing || !sameEntityState(entityState(existing), args.expected as EntityState))) throw new Error('资料已变化，请重新查看差异后再操作')
     if (existing && existing.kind !== entityInput.kind) throw new Error('资料类型不能在编辑时修改')
+    if (existing) recordEntityVersion(store, existing, '修改前')
     const current: EntityRecord = existing ?? {
       id: entityInput.id ?? uid(), kind: entityInput.kind, title,
       content: {}, tags: [], filePath: entityInput.kind + '/' + uid() + '.md',
@@ -549,6 +610,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     current.tags = entityInput.tags
     current.updatedAt = new Date().toISOString()
     if (!existing) store.data.entities.push(current)
+    recordEntityVersion(store, current, '资料保存')
     updateTime(store.data)
     persist(projectPath, store)
     return store.data as T
