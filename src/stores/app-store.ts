@@ -1,3 +1,4 @@
+import { savedAnnotationAnchors } from '../lib/annotations'
 import { notify } from '../lib/notifications'
 import { readEditorSession, rememberEditor } from '../lib/editor-session'
 import { confirmDraftNavigation, dirtyDrafts, runGuarded } from '../lib/draft-guard'
@@ -453,13 +454,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         try {
           const saved = await projectApi.saveDocument({
             projectPath: savedProjectPath, nodeId: savedNodeId, content: savedContent, reason, expectedContent: document.persistedContent,
+            annotationAnchors: savedAnnotationAnchors(get().data?.entities ?? [],savedNodeId,savedContent,document.annotationTracking),
           })
           if (!isCurrentProjectSession(session)) return true
           const current = get()
           const sameDocument = current.projectPath === savedProjectPath && current.document?.node.id === savedNodeId
           const sameVersion = sameDocument && current.documentVersion === documentVersion && current.document?.content === savedContent
           set((state) => ({
-            document: sameDocument && state.document ? { ...state.document, persistedContent: saved.content, ...(sameVersion ? { node: saved.node, content: saved.content } : {}) } : state.document,
+            document: sameDocument && state.document ? { ...state.document, persistedContent: saved.content, annotationTracking: saved.annotationTracking, ...(sameVersion ? { node: saved.node, content: saved.content } : {}) } : state.document,
             saveState: sameVersion ? 'saved' : state.saveState,
             data: state.data ? { ...state.data, nodes: state.data.nodes.map((node) => node.id === saved.node.id ? saved.node : node) } : state.data,
           }))

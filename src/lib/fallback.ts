@@ -22,6 +22,7 @@ interface FallbackStore {
   data: ProjectData
   documents: Record<string, string>
   wikiRenames: Array<WikiRenameOperation & {targetId: string; changes: RenameChanges}>
+  annotationTracking: Record<string, import('./types').AnnotationTracking>
   entityHistory: EntityVersion[]
   history: StoredHistory[]
   trash: TrashItem[]
@@ -46,7 +47,7 @@ function recordEntityVersion(store: FallbackStore, entity: EntityRecord, label: 
 const memory = new Map<string, FallbackStore>()
 const STORAGE_PREFIX = 'novelforge-fallback:'
 const NODE_STATUSES = new Set(['not-started', 'draft', 'first-draft', 'editing', 'done', 'locked'])
-const ENTITY_KINDS = new Set(['character', 'location', 'world', 'timeline', 'foreshadowing', 'outline', 'scene', 'note', 'relationship', 'attachment', 'mention-ignore', 'story-arc', 'prompt-preset', 'inbox', 'checklist-template', 'chapter-checklist'])
+const ENTITY_KINDS = new Set(['annotation','character', 'location', 'world', 'timeline', 'foreshadowing', 'outline', 'scene', 'note', 'relationship', 'attachment', 'mention-ignore', 'story-arc', 'prompt-preset', 'inbox', 'checklist-template', 'chapter-checklist'])
 
 function uid() {
   return globalThis.crypto?.randomUUID?.() ?? ('fallback-' + Date.now() + '-' + Math.random().toString(16).slice(2))
@@ -74,6 +75,7 @@ function readStore(path: string) {
     if (raw) {
       const parsed = JSON.parse(raw) as FallbackStore
       parsed.wikiRenames ??= []
+      parsed.annotationTracking ??= {}
       parsed.entityHistory ??= []
       parsed.history ??= []
       parsed.trash ??= []
@@ -114,6 +116,7 @@ function makeProject(input: ProjectInput): FallbackStore {
     },
     documents: { [chapterId]: content },
     wikiRenames: [],
+    annotationTracking: {},
     entityHistory: [],
     history: [],
     trash: [],
@@ -344,7 +347,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     const current = node(store, id)
     if (!current) throw new Error('章节不存在')
     if (current.kind === 'volume') throw new Error('卷没有正文文件')
-    return { node: current, content: store.documents[id] ?? '' } as T
+    return { node: current, content: store.documents[id] ?? '', annotationTracking: store.annotationTracking[id] } as T
   }
   if (command === 'create_node') {
     const kind = input?.kind as NodeRecord['kind']
@@ -486,12 +489,13 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     }
     const latest = store.history.find(item => item.nodeId === id)
     if (!['手动保存', '命令面板保存', '右键菜单保存'].includes(reason) && (!latest || (latest.content !== content && (reason !== '自动保存' || Date.now() - Date.parse(latest.createdAt) >= 300_000)))) store.history.unshift(revision)
+    if (input?.annotationAnchors) store.annotationTracking[id] = {content,anchors:structuredClone(input.annotationAnchors as import('./types').AnnotationAnchor[])}
     store.documents[id] = content
     store.activities.push({ createdAt: now, deltaWords: countWords(content) - countWords(old) })
     current.updatedAt = now
     updateTime(store.data)
     persist(projectPath, store)
-    return { node: current, content, historyCreated: store.history[0]?.id === revision.id } as T
+    return { node: current, content, annotationTracking: store.annotationTracking[id], historyCreated: store.history[0]?.id === revision.id } as T
   }
   if (command === 'create_history_snapshot') {
     const current = node(store, input?.nodeId as string)

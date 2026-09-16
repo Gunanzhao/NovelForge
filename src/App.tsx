@@ -1,3 +1,5 @@
+import { clearAnnotationLocations } from './lib/annotations'
+import { AnnotationTasks } from './components/AnnotationTasks'
 import { useAutomaticBackups } from './lib/automatic-backups'
 import { OperationNotice } from './components/OperationNotice'
 import { ProjectBackup } from './components/ProjectBackup'
@@ -113,6 +115,8 @@ export default function App() {
   const activeView = useAppStore((state) => state.activeView)
   const document = useAppStore((state) => state.document)
   const projectPath = useAppStore((state) => state.projectPath)
+  const annotationSession = useAppStore(state => state.projectSession)
+  useEffect(() => { clearAnnotationLocations() }, [projectPath, annotationSession])
   const saveState = useAppStore((state) => state.saveState)
   const focusMode = useAppStore((state) => state.focusMode)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
@@ -188,6 +192,7 @@ export default function App() {
 
   function viewContent() {
     if (!data) return null
+    if (activeView === 'annotation') return <AnnotationTasks />
     if (activeView === 'dashboard') return <Dashboard />
     if (activeView === 'manuscript') return <EditorPane />
     if (activeView === 'outline') return <PlanningView />

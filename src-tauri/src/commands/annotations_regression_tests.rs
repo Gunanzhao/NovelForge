@@ -57,6 +57,31 @@ fn annotation_tracking_commits_with_body_and_preserves_deleted_targets_on_reopen
         guard::save_document_annotated(input(), "重复段落。".into(), Some(vec![wrong])).is_err()
     );
     assert!(root.join(&annotation.file_path).is_file());
+    let backups = std::env::temp_dir().join(format!(
+        "novelforge-annotation-backups-{}",
+        storage::new_id()
+    ));
+    fs::create_dir_all(&backups).unwrap();
+    let report = backup::create(path.clone(), backups.to_string_lossy().into_owned()).unwrap();
+    let restored = tauri::async_runtime::block_on(backup::restore_backup(
+        report.path,
+        backups.to_string_lossy().into_owned(),
+    ))
+    .unwrap();
+    let restored_doc = get_document(crate::models::NodeActionInput {
+        project_path: restored.path.clone(),
+        node_id: chapter.id.clone(),
+    })
+    .unwrap();
+    assert!(restored_doc.annotation_tracking.unwrap().anchors[0].orphaned);
+    assert!(open_project(restored.path.clone())
+        .unwrap()
+        .entities
+        .iter()
+        .any(|entity| entity.id == annotation.id));
+    guard::release_project(restored.path).unwrap();
+    fs::remove_dir_all(backups).unwrap();
+
     drop(db);
     guard::release_project(path).unwrap();
     fs::remove_dir_all(root).unwrap();

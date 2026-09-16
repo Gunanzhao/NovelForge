@@ -1,3 +1,6 @@
+import { annotationExtension } from '../lib/annotation-extension'
+import { useTextNavigation } from '../lib/text-navigation'
+import { chapterAnnotations } from '../lib/annotations'
 import { protectBeforeChange } from '../lib/history'
 import { autoNameExtension } from '../lib/auto-name-extension'
 import { NameRecognitionCard, type NameCard } from './NameRecognition'
@@ -21,7 +24,7 @@ import type { ContextMenuItem } from '../lib/context-menu'
 import { readClipboardText, writeClipboardText } from '../lib/clipboard'
 import type { AiAction } from '../lib/ai-data'
 import { ENTITY_LABELS, NODE_STATUS_LABELS, type EntityRecord } from '../lib/types'
-import { useAppStore } from '../stores/app-store'
+import { isCurrentProjectSession, useAppStore } from '../stores/app-store'
 import { registerAiEditor, useAiTask } from '../stores/ai-task'
 import { aiAcceptanceEffect } from '../lib/ai-edit'
 import { Button, IconButton } from './ui'
@@ -98,6 +101,14 @@ export function EditorPane() {
   useEffect(() => { setNameCard(null) }, [projectPath, document?.node.id, data?.entities, autoNames])
   const { openContextMenu } = useContextMenu()
   const editorViewRef = useRef<EditorView | null>(null)
+  const textJump=useTextNavigation(state=>state.request)
+  function applyTextJump(view:EditorView){
+    const request=useTextNavigation.getState().request
+    if(!request||!isCurrentProjectSession(request.session)||useAppStore.getState().document?.node.id!==request.nodeId||view.state.doc.toString()!==request.content)return
+    view.dispatch({selection:{anchor:request.from,head:request.to},effects:EditorView.scrollIntoView(request.from,{y:'center'})});view.focus();useTextNavigation.setState({request:null})
+  }
+  useEffect(()=>{if(textJump&&editorViewRef.current)applyTextJump(editorViewRef.current)},[textJump,document?.node.id,editorMode])
+
   const aiEditorCleanup = useRef<(() => void) | null>(null)
   const [floating, setFloating] = useState<{ left: number; top: number } | null>(null)
   const floatingMeasure = useRef({})
@@ -141,6 +152,7 @@ export function EditorPane() {
       view.dom.addEventListener('mouseup', schedule)
       positionCleanup.current = () => { window.cancelAnimationFrame(frame); window.clearTimeout(timer); persist(); view.scrollDOM.removeEventListener('scroll', onScroll); view.dom.removeEventListener('keyup', schedule); view.dom.removeEventListener('mouseup', schedule) }
     }
+    applyTextJump(view)
     reportEditorSelection({ state: view.state } as ViewUpdate)
   }
   const [wikiResolution, setWikiResolution] = useState<{ target: string; candidates: EntityRecord[] } | null>(null)
@@ -204,8 +216,9 @@ export function EditorPane() {
       return transaction.docChanged && (current.deletingNodes.includes(current.document?.node.id ?? '') || isNodeLocked(current.data?.nodes ?? [], current.document?.node.id)) ? [] : transaction
     }),
     ...wikiEditorExtension(resolveWikiTarget),
+    annotationExtension(chapterAnnotations(data?.entities ?? [],document?.node.id),document?.annotationTracking),
     ...(autoNames && typeof Worker !== 'undefined' ? [autoNameExtension(data?.entities ?? [], openNameCard, closeNameCard)] : []),
-  ], [resolveWikiTarget, autoNames, data?.entities, openNameCard, closeNameCard])
+  ], [resolveWikiTarget, autoNames, data?.entities, document?.node.id, document?.annotationTracking, openNameCard, closeNameCard])
   const applyCommand = useCallback((command: MarkdownCommand) => {
     const view = editorViewRef.current
     if (!view || !view.dom.isConnected) return

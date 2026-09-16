@@ -67,8 +67,8 @@ export const projectApi = {
   copyNode: (input: CopyNodeInput) => command<ProjectData>('copy_node', { input }),
   deleteNode: (input: { projectPath: string; nodeId: string }) => command<ProjectData>('delete_node', { input }),
   getDocument: (input: { projectPath: string; nodeId: string }) => command<DocumentData>('get_document', { input }),
-  saveDocument: (input: SaveDocumentInput & { expectedContent?: string }) => isDesktop
-    ? command<DocumentData>('save_document_checked', { input, expectedContent: input.expectedContent ?? input.content }, false)
+  saveDocument: (input: SaveDocumentInput & { expectedContent?: string; annotationAnchors?: import('./types').AnnotationAnchor[] }) => isDesktop
+    ? command<DocumentData>('save_document_annotated', { input, expectedContent: input.expectedContent ?? input.content, annotationAnchors: input.annotationAnchors }, false)
     : command<DocumentData>('save_document', { input }),
   listRecovery: (path: string) => command<RecoveryItem[]>('list_recovery', { path }),
   recoveryAsChapter: (input:{projectPath:string;recoveryId:string;expectedContent:string;parentId:string;title:string;requestId:string}) => command<ProjectData>('recovery_as_chapter',{input},false),

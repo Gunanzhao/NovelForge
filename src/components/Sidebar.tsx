@@ -33,6 +33,7 @@ const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: 'inbox', label: '灵感箱', icon: Inbox },
   { id: 'relationship', label: '人物关系图', icon: Network },
   { id: 'attachment', label: '资料附件', icon: Paperclip },
+  { id: 'annotation', label: '批注与修订', icon: ShieldCheck },
   { id: 'consistency', label: '一致性检查', icon: ShieldCheck },
   { id: 'statistics', label: '详细统计', icon: BarChart3 },
   { id: 'ai', label: 'AI 辅助', icon: Sparkles },

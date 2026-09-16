@@ -1673,3 +1673,13 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 @container workspace (max-width: 760px) { .backup-health, .backup-policy-grid { grid-template-columns: minmax(0, 1fr); } .backup-archive { flex-direction: column; align-items: stretch; } }
 .recovery-center, .recovery-center-detail { display: grid; gap: 12px; min-width: 0; }
 .recovery-center-text { min-height: 220px; max-height: 50vh; resize: vertical; }
+.annotation-content, .annotation-composer, .annotation-list { display: grid; gap: 12px; min-width: 0; }
+.annotation-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.annotation-card { border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
+.annotation-card small { display: block; color: var(--muted); }
+.annotation-card p, .annotation-card blockquote, .annotation-composer blockquote { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.annotation-card blockquote, .annotation-composer blockquote { max-height: 160px; overflow: auto; border-inline-start: 3px solid var(--border); padding-inline-start: 10px; }
+.annotation-orphan { color: var(--muted); }
+.annotation-tasks-compact .annotation-filters { grid-template-columns: minmax(0, 1fr); }
+@container workspace (max-width: 760px) { .annotation-filters { grid-template-columns: minmax(0, 1fr); } }
+.cm-manuscript-annotation { text-decoration-line: underline; text-decoration-style: dotted; text-decoration-color: var(--accent); text-underline-offset: 4px; background: color-mix(in srgb, var(--accent) 9%, transparent); }
