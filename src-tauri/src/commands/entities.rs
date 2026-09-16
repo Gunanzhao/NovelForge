@@ -85,13 +85,42 @@ pub(crate) fn move_entity_files(
 
 #[tauri::command]
 pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
+    upsert_entity_versioned(input, None, "资料保存")
+}
+
+#[tauri::command]
+pub fn upsert_entity_checked(
+    input: EntityInput,
+    expected: Option<super::entity_history::EntityState>,
+) -> Result<ProjectData, String> {
+    upsert_entity_versioned(input, expected.as_ref(), "资料保存")
+}
+
+pub(crate) fn upsert_entity_versioned(
+    input: EntityInput,
+    expected: Option<&super::entity_history::EntityState>,
+    label: &str,
+) -> Result<ProjectData, String> {
     if input.title.trim().is_empty() {
         return Err("条目名称不能为空".to_string());
     }
     let (root, mut connection) = project_connection(&input.project_path)?;
+    let transaction = connection
+        .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+        .map_err(|error| format!("无法开始资料事务：{error}"))?;
     let timestamp = storage::now();
     let entity_id = input.id.clone().unwrap_or_else(storage::new_id);
-    let existing = storage::entity_from_id(&connection, &entity_id)?;
+    let existing = storage::entity_from_id(&transaction, &entity_id)?;
+    if let Some(expected) = expected {
+        if existing
+            .as_ref()
+            .map(super::entity_history::EntityState::from)
+            .as_ref()
+            != Some(expected)
+        {
+            return Err("资料已变化，请重新查看差异后再操作".into());
+        }
+    }
     if input.kind == "attachment" && existing.is_none() {
         return Err("附件请通过导入文件创建".into());
     }
@@ -158,9 +187,16 @@ pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
         .map(|entity| entity.created_at.clone())
         .unwrap_or_else(|| timestamp.clone());
     let database_result = (|| -> Result<(), String> {
-        let transaction = connection
-            .transaction()
-            .map_err(|error| format!("无法开始保存资料事务：{}", error))?;
+        if let Some(entity) = existing.as_ref() {
+            super::entity_history::record(
+                &transaction,
+                &entity_id,
+                &input.kind,
+                "修改前",
+                &super::entity_history::EntityState::from(entity),
+                false,
+            )?;
+        }
         transaction
             .execute(
                 "INSERT INTO entities (id, kind, title, content_json, tags_json, file_path, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT(id) DO UPDATE SET kind = excluded.kind, title = excluded.title, content_json = excluded.content_json, tags_json = excluded.tags_json, file_path = excluded.file_path, updated_at = excluded.updated_at, deleted_at = NULL, deleted_path = NULL",
@@ -174,6 +210,18 @@ pub fn upsert_entity(input: EntityInput) -> Result<ProjectData, String> {
             input.title.trim(),
             &index_content,
             &file_path,
+        )?;
+        super::entity_history::record(
+            &transaction,
+            &entity_id,
+            &input.kind,
+            label,
+            &super::entity_history::EntityState {
+                title: input.title.trim().into(),
+                content: input.content.clone(),
+                tags: input.tags.clone(),
+            },
+            false,
         )?;
         transaction
             .commit()

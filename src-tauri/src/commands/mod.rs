@@ -27,6 +27,7 @@ pub(crate) mod ai;
 pub(crate) mod backup;
 pub(crate) mod consistency;
 pub(crate) mod entities;
+pub(crate) mod entity_history;
 pub(crate) mod export;
 pub(crate) mod guard;
 pub(crate) mod manuscript;

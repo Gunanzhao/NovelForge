@@ -40,6 +40,15 @@ CREATE TABLE IF NOT EXISTS revisions (
   file_path TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_revisions_node_time ON revisions(node_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS entity_revisions (
+  id TEXT PRIMARY KEY NOT NULL,
+  entity_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  label TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  state_json TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_entity_revisions ON entity_revisions(entity_id, created_at DESC, id DESC);
 CREATE TABLE IF NOT EXISTS activity (
   id TEXT PRIMARY KEY NOT NULL,
   node_id TEXT NOT NULL,
