@@ -1,10 +1,11 @@
+import { runAutomaticBackup } from '../lib/automatic-backups'
 import { confirmDraftNavigation, dirtyDrafts } from '../lib/draft-guard'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { isDesktop } from '../lib/api'
 import { writeClipboardText } from '../lib/clipboard'
-import { isCurrentDocumentSaved, useAppStore } from '../stores/app-store'
+import { captureProjectSession, isCurrentProjectSession, isCurrentDocumentSaved, useAppStore } from '../stores/app-store'
 import { Button, Modal } from './ui'
 
 export function WindowCloseGuard() {
@@ -26,6 +27,9 @@ export function WindowCloseGuard() {
         return
       }
       if (!isCurrentDocumentSaved()) { setFailed(true); return }
+      const session = captureProjectSession(), version = useAppStore.getState().documentVersion
+      await runAutomaticBackup(session)
+      if (!isCurrentProjectSession(session) || useAppStore.getState().documentVersion !== version || !isCurrentDocumentSaved()) { setFailed(true); return }
       await invoke('confirm_window_close')
     } catch (e) {
       useAppStore.getState().setError(e)

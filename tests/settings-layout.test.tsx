@@ -2,6 +2,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ProjectData } from '../src/lib/types'
 const api = vi.hoisted(() => ({ updateProject: vi.fn(), readLogs: vi.fn() }))
+vi.mock('../src/components/AutoBackupSettings', () => ({ AutoBackupSettings: () => null }))
+vi.mock('../src/components/RecoveryCenter', () => ({ RecoveryCenter: () => null }))
 vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: api }))
 import { SettingsView } from '../src/components/SettingsView'
 import { useAppStore } from '../src/stores/app-store'

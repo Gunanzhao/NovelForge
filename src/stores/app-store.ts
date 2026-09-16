@@ -60,6 +60,8 @@ export function isCurrentDocumentSaved() {
 async function releaseForTransition(path: string | null, isCurrent: () => boolean) {
   const before = useAppStore.getState()
   if (!isCurrentDocumentSaved()) throw new Error('正文仍有新修改，已取消离开，请重试。')
+  if (path) { const { runAutomaticBackup } = await import('../lib/automatic-backups'); await runAutomaticBackup(captureProjectSession()) }
+  if (!isCurrent() || useAppStore.getState().projectSession !== before.projectSession || useAppStore.getState().documentVersion !== before.documentVersion || !isCurrentDocumentSaved()) throw new Error('备份期间正文或项目发生变化，请重新保存后离开。')
   if (path) await (before.projectLease ? projectApi.release(path, before.projectLease) : projectApi.release?.(path))
   const after = useAppStore.getState()
   if (!isCurrent() || after.projectSession !== before.projectSession || after.documentVersion !== before.documentVersion || !isCurrentDocumentSaved()) {

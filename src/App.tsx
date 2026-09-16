@@ -1,3 +1,4 @@
+import { useAutomaticBackups } from './lib/automatic-backups'
 import { OperationNotice } from './components/OperationNotice'
 import { ProjectBackup } from './components/ProjectBackup'
 import { DocumentConflictDialog } from './components/DocumentConflictDialog'
@@ -101,6 +102,7 @@ function StatusBar() {
 }
 
 export default function App() {
+  useAutomaticBackups()
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
   useEffect(() => {
     const resize = () => setViewportWidth(window.innerWidth)

@@ -1662,3 +1662,14 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 .wiki-rename-reference pre, .wiki-rename-candidate pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; margin: 6px 0 0; }
 .wiki-rename-candidate { padding-block: 8px; }
 .wiki-rename-preview details { min-width: 0; max-height: 260px; overflow: auto; }
+.automatic-backup-form, .backup-cleanup { display: grid; gap: 12px; min-width: 0; }
+.backup-health { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.backup-health > div { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; overflow-wrap: anywhere; }
+.backup-policy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.backup-archive { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 12px; }
+.backup-archive > span { display: grid; gap: 6px; min-width: 0; }
+.backup-archive code, .backup-cleanup code { overflow-wrap: anywhere; }
+.backup-cleanup ul { padding-inline-start: 20px; }
+@container workspace (max-width: 760px) { .backup-health, .backup-policy-grid { grid-template-columns: minmax(0, 1fr); } .backup-archive { flex-direction: column; align-items: stretch; } }
+.recovery-center, .recovery-center-detail { display: grid; gap: 12px; min-width: 0; }
+.recovery-center-text { min-height: 220px; max-height: 50vh; resize: vertical; }

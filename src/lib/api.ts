@@ -1,3 +1,4 @@
+import type { AutoBackupStatus } from './auto-backup-types'
 import type { RenameChanges, WikiRenameOperation } from './wiki-rename'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
@@ -33,6 +34,10 @@ async function openProjectWithLease(path: string): Promise<ProjectData> {
   return { ...result.data, leaseToken: result.leaseToken }
 }
 export const projectApi = {
+  autoBackupStatus: (path:string) => command<AutoBackupStatus>('auto_backup_status',{path},false),
+  configureAutoBackup: (input:{projectPath:string;enabled:boolean;directory:string;trigger:'daily'|'session';keep:number}) => command<AutoBackupStatus>('configure_auto_backup',{input},false),
+  runAutoBackup: (input:{projectPath:string;manual:boolean}) => command<AutoBackupStatus>('run_auto_backup',{input},false),
+  cleanupAutoBackups: (input:{projectPath:string;archiveIds:string[]}) => command<AutoBackupStatus>('cleanup_auto_backups',{input},false),
   applyWikiRename: (input: { projectPath: string; targetId: string; changes: RenameChanges }) => command<{data: ProjectData; operationId: string}>('apply_wiki_rename', {input}),
   undoWikiRename: (input: { projectPath: string; operationId: string }) => command<{data: ProjectData; operationId: string}>('undo_wiki_rename', {input}),
   listWikiRenames: (input: { projectPath: string; targetId: string }) => command<WikiRenameOperation[]>('list_wiki_renames', {input}),
@@ -66,6 +71,7 @@ export const projectApi = {
     ? command<DocumentData>('save_document_checked', { input, expectedContent: input.expectedContent ?? input.content }, false)
     : command<DocumentData>('save_document', { input }),
   listRecovery: (path: string) => command<RecoveryItem[]>('list_recovery', { path }),
+  recoveryAsChapter: (input:{projectPath:string;recoveryId:string;expectedContent:string;parentId:string;title:string;requestId:string}) => command<ProjectData>('recovery_as_chapter',{input},false),
   readRecovery: (input: { projectPath: string; recoveryId: string }) => command<string>('read_recovery', { input }),
   restoreRecovery: (input: { projectPath: string; recoveryId: string }) => command<ProjectData>('restore_recovery', { input }),
   discardRecovery: (input: { projectPath: string; recoveryId: string }) => command<RecoveryItem[]>('discard_recovery', { input }),
