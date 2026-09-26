@@ -33,6 +33,7 @@ pub(crate) mod entity_history;
 pub(crate) mod export;
 pub(crate) mod guard;
 pub(crate) mod manuscript;
+pub(crate) mod manuscript_import;
 pub(crate) mod project;
 pub(crate) mod recovery;
 pub(crate) mod search;

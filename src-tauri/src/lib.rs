@@ -81,6 +81,7 @@ pub fn run() {
             commands::entity_history::name_entity_version,
             commands::entity_history::restore_entity_version,
             commands::chapter_memory::confirm_chapter_memory,
+            commands::manuscript_import::import_manuscript,
             commands::wiki_rename::apply_wiki_rename,
             commands::wiki_rename::undo_wiki_rename,
             commands::wiki_rename::list_wiki_renames,
