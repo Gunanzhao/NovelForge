@@ -1,3 +1,4 @@
+import { MEMORY_SUMMARY_INSTRUCTION, parseChapterMemory } from './chapter-memory'
 import type { AiCompletionInput, EntityRecord, NodeRecord } from './types'
 import { linkedAttachments } from './attachment-data'
 import { sortManuscriptNodes } from './planning-data'
@@ -18,7 +19,7 @@ export interface AiPreferences {
 
 export interface AiContextItem {
   id: string
-  kind: 'node' | 'entity' | 'selection' | 'paragraph'
+  kind: 'node' | 'entity' | 'memory' | 'selection' | 'paragraph'
   title: string
   detail: string
   nodeId?: string
@@ -148,7 +149,7 @@ export function contextItems(
     id: node.id, kind: 'node' as const, title: node.title, detail: node.id === currentNodeId ? '当前编辑章节' : node.kind === 'chapter' ? '正文 · 章节' : '正文 · 节',
   }))
   const attachmentIds = new Set(linkedAttachments(entities, nodes, currentNodeId).map(entity => entity.id))
-  const hiddenKinds = new Set(['annotation', 'mention-ignore', 'prompt-preset', 'inbox', 'checklist-template', 'chapter-checklist'])
+  const hiddenKinds = new Set(['chapter-memory','annotation', 'mention-ignore', 'prompt-preset', 'inbox', 'checklist-template', 'chapter-checklist'])
   const entityItems = entities.filter((entity) => !hiddenKinds.has(entity.kind) && (entity.kind !== 'attachment' || attachmentIds.has(entity.id))).sort((left, right) => left.kind.localeCompare(right.kind) || left.title.localeCompare(right.title, 'zh-CN')).map((entity) => ({
     id: entity.id, kind: 'entity' as const, title: entity.title, detail: entity.kind === 'attachment' ? '关联附件说明（仅文本）' : entity.kind,
   }))
@@ -174,11 +175,17 @@ export function contextItems(
       range: { from: paragraph.from, to: paragraph.to },
     })
   }
-  return [...localItems, ...nodeItems, ...entityItems]
+  const memoryItems:AiContextItem[]=entities.flatMap(entity=>{
+    const memory=parseChapterMemory(entity),node=memory?nodes.find(node=>node.id===memory.chapterId):null
+    if(!memory?.confirmed||!node||(node.id===currentNodeId&&currentContent!==undefined&&currentContent!==memory.sourceText))return []
+    return [{id:entity.id,kind:'memory',title:node.title+' · 章节记忆',detail:'作者已确认 · 来源：'+node.title,nodeId:node.id}]
+  })
+  return [...localItems, ...nodeItems, ...entityItems, ...memoryItems]
 }
 
 export function buildAiPrompt(action: AiAction, context: Array<{ title: string; kind: string; content: string }>, instruction: string) {
   const actionLabel = AI_ACTIONS.find((item) => item.id === action)?.label ?? '辅助'
+  if (action === 'chapter-summary') instruction = MEMORY_SUMMARY_INSTRUCTION + '\n' + instruction
   const contextText = context.map((item) => `【${item.kind}｜${item.title}】\n${item.content.trim()}`).join('\n\n')
   return `任务：${actionLabel}\n\n写作要求：${instruction.trim() || '请严格依据上下文完成任务，避免添加无法推断的事实。'}\n\n明确选中的上下文：\n${contextText || '（未选择上下文）'}`
 }
@@ -187,7 +194,9 @@ export function localAssist(action: AiAction, context: Array<{ title: string; ki
   const actionLabel = AI_ACTIONS.find((item) => item.id === action)?.label ?? '辅助'
   const excerpts = context.map((item) => `${item.title}：${item.content.replace(/\s+/gu, ' ').trim().slice(0, 260)}`).filter(Boolean)
   const body = excerpts.length ? excerpts.join('\n') : '尚未选择上下文。'
-  const localContent = action === 'summary'
+  const chapterSource=context.find(item=>item.kind.includes('章节')||item.kind.includes('整章')) ?? context[0]
+  const quote=chapterSource?.content.split(/\n+/u).find(line=>line.trim()&&!line.startsWith('#'))?.trim() ?? ''
+  const localContent = action === 'chapter-summary' ? JSON.stringify({summary:quote ? '本地摘录草稿：'+quote : '请补充章节摘要。',events:'',knowledge:'',changes:'',planted:'',resolved:'',next:'',sources:quote?[{field:'summary',quote}]:[]},null,2) : action === 'summary'
     ? `【本地摘要草稿】\n${body}\n\n写作要求：${instruction.trim() || '请继续补充并校对关键情节。'}`
     : `【本地${actionLabel}草稿】\n基于以下已选上下文生成的离线工作稿：\n${body}\n\n写作要求：${instruction.trim() || '请在此基础上继续编辑。'}`
   return { endpoint: '', apiKey: '', model: 'novelforge-local', systemPrompt: '', prompt: '', localContent }

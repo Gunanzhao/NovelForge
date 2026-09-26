@@ -11,7 +11,7 @@ export function parseAnnotation(entity:EntityRecord):ManuscriptAnnotation|null {
   if(entity.kind!=='annotation'||typeof c.chapterId!=='string'||typeof c.anchorRevision!=='string'||typeof c.sourceText!=='string'||typeof c.body!=='string'||!Number.isInteger(c.from)||!Number.isInteger(c.to))return null
   const from=c.from as number,to=c.to as number
   if(from<0||to<=from||to>c.sourceText.length)return null
-  return {id:entity.id,chapterId:c.chapterId,revision:c.anchorRevision,sourceText:c.sourceText,from,to,body:c.body,category:typeof c.category==='string'&&c.category in ANNOTATION_CATEGORIES?c.category as AnnotationCategory:'other',status:c.status==='resolved'?'resolved':'open',entity}
+  return {id:entity.id,chapterId:c.chapterId,revision:c.anchorRevision,sourceText:c.sourceText,from,to,body:c.body,category:typeof c.category==='string'&&Object.hasOwn(ANNOTATION_CATEGORIES,c.category)?c.category as AnnotationCategory:'other',status:c.status==='resolved'?'resolved':'open',entity}
 }
 export function mapTextAnchor(anchor:LocatedAnchor,changes:ChangeDesc):LocatedAnchor {
   let deleted=0

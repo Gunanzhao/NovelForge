@@ -77,7 +77,7 @@ export function planWikiRename(data: ProjectData, documents: Record<string,strin
     plan.references.push(...found.references);plan.plainCandidates.push(...found.plainCandidates)
   }
   for (const record of data.entities) {
-    for (const field of stringFields({content:record.kind === 'annotation' ? {body:record.content.body} : record.content,tags:record.tags})) {
+    for (const field of stringFields({content:record.kind === 'annotation' ? {body:record.content.body} : record.kind === 'chapter-memory' ? {} : record.content,tags:record.tags})) {
       const found=scan(field.text,entity.title,{refKind:'entity',refId:record.id,title:record.title,fieldPath:field.path})
       plan.references.push(...found.references);plan.plainCandidates.push(...found.plainCandidates)
     }

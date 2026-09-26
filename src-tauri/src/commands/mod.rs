@@ -26,6 +26,7 @@ use zip::{CompressionMethod, ZipWriter};
 pub(crate) mod ai;
 pub(crate) mod auto_backup;
 pub(crate) mod backup;
+pub(crate) mod chapter_memory;
 pub(crate) mod consistency;
 pub(crate) mod entities;
 pub(crate) mod entity_history;
@@ -161,6 +162,7 @@ const RECOVERY_DIRECTORIES: &[&str] = &[
     "relationships",
     "notes",
     "annotations",
+    "chapter-memories",
     "mentions",
     "story-arcs",
     "prompts",
@@ -682,6 +684,7 @@ fn rebuild_entities_from_markdown(root: &Path, connection: &Connection) -> Resul
         ("relationship", "relationships"),
         ("note", "notes"),
         ("annotation", "annotations"),
+        ("chapter-memory", "chapter-memories"),
         ("mention-ignore", "mentions"),
         ("story-arc", "story-arcs"),
         ("prompt-preset", "prompts"),

@@ -1683,3 +1683,15 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 .annotation-tasks-compact .annotation-filters { grid-template-columns: minmax(0, 1fr); }
 @container workspace (max-width: 760px) { .annotation-filters { grid-template-columns: minmax(0, 1fr); } }
 .cm-manuscript-annotation { text-decoration-line: underline; text-decoration-style: dotted; text-decoration-color: var(--accent); text-underline-offset: 4px; background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.memory-workspace { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; min-width: 0; }
+.memory-chapters { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.memory-chapters button { text-align: start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: inherit; overflow-wrap: anywhere; }
+.memory-chapters button.active { border-color: var(--accent); }
+.memory-chapters small { display: block; color: var(--muted); }
+.memory-editor-region, .memory-editor, .memory-fields, .memory-sources, .memory-source { min-width: 0; }
+.memory-editor, .memory-fields, .memory-sources, .memory-source, .memory-stale { display: grid; gap: 12px; }
+.memory-source { border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.memory-source blockquote { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto; }
+.memory-source-text { min-height: 240px; max-height: 50vh; resize: vertical; }
+.memory-source-picker > :not(summary) { margin-block-start: 12px; }
+@container workspace (max-width: 900px) { .memory-workspace { grid-template-columns: minmax(0, 1fr); } .memory-chapters { max-height: 180px; overflow: auto; } }

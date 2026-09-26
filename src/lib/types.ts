@@ -1,5 +1,5 @@
 export type NodeKind = 'volume' | 'chapter' | 'section'
-export type EntityKind = 'annotation' | 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note' | 'relationship' | 'attachment' | 'mention-ignore' | 'story-arc' | 'prompt-preset' | 'inbox' | 'checklist-template' | 'chapter-checklist'
+export type EntityKind = 'chapter-memory' | 'annotation' | 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note' | 'relationship' | 'attachment' | 'mention-ignore' | 'story-arc' | 'prompt-preset' | 'inbox' | 'checklist-template' | 'chapter-checklist'
 export type ViewId = 'dashboard' | 'manuscript' | EntityKind | 'character-statistics' | 'consistency' | 'statistics' | 'ai' | 'search' | 'trash' | 'settings'
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type ThemeMode = 'light' | 'dark' | 'system'
@@ -125,6 +125,7 @@ export interface EntityDraft {
 }
 
 export const ENTITY_LABELS: Record<EntityKind, string> = {
+  'chapter-memory': '章节摘要与故事记忆',
   annotation: '批注与修订',
   character: '人物',
   location: '地点',
@@ -154,6 +155,7 @@ export const NODE_STATUS_LABELS: Record<string, string> = {
 }
 
 export const ENTITY_FIELDS: Record<EntityKind, Array<{ key: string; label: string; multiline?: boolean }>> = {
+  'chapter-memory': [{key:'summary',label:'摘要',multiline:true},{key:'events',label:'关键事件',multiline:true}],
   annotation: [{key:'body',label:'批注',multiline:true},{key:'category',label:'分类'},{key:'status',label:'处理状态'}],
   character: [
     { key: 'alias', label: '别名' }, { key: 'gender', label: '性别' }, { key: 'age', label: '年龄' }, { key: 'birthday', label: '生日' },

@@ -1,3 +1,5 @@
+import { memoryContextText, parseChapterMemory, parseMemoryDraft, useMemoryImport } from '../lib/chapter-memory'
+import { runGuarded } from '../lib/draft-guard'
 import { attachmentContextText } from '../lib/attachment-data'
 import { parseTemperature } from '../lib/ai-data'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -170,6 +172,14 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
     if (item.id === 'ai-target' && draftTarget && targetContext) {
       return draftTarget.originalContent.slice(targetContext.range.from, targetContext.range.to)
     }
+    if (item.kind === 'memory') {
+      const entity=data?.entities.find(entity=>entity.id===item.id),memory=entity?parseChapterMemory(entity):null
+      if(!memory)throw new Error('章节记忆不存在')
+      const node=data?.nodes.find(node=>node.id===memory.chapterId)
+      if(!node)throw new Error('记忆来源章节不存在')
+      const source=document?.node.id===memory.chapterId?document.content:(await projectApi.getDocument({projectPath:currentProjectPath,nodeId:memory.chapterId})).content
+      return memoryContextText(memory,source,node.title)
+    }
     if (item.kind === 'node') {
       if (document?.node.id === item.id) content = document.content
       else content = (await projectApi.getDocument({ projectPath: currentProjectPath, nodeId: item.id })).content
@@ -191,6 +201,7 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
     for (const item of selectedItems) context.push({ title: item.title, kind: item.detail, content: await loadItemContent(item) })
     const current = useAppStore.getState()
     if (current.projectSession !== projectSession || current.projectPath !== currentProjectPath || current.document?.node.id !== document?.node.id) throw new Error('项目或章节已切换，请重新选择上下文。')
+    for (const item of selectedItems.filter(item => item.kind === 'memory')) { if (JSON.stringify(current.data?.entities.find(entity => entity.id === item.id)) !== JSON.stringify(data?.entities.find(entity => entity.id === item.id))) throw new Error('记忆已更新，请重新选择上下文') }
     setLoadedContext(context)
     return context
   }
@@ -202,7 +213,7 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
       const target = resolveTarget()
       if (isSelectionAction(action) && target.kind !== 'selection') throw new Error('当前任务需要先在编辑器中选中一段正文。')
       setResultApplication('builtin'); setReviewOpen(false)
-      await task.start(target, isSelectionAction(action) ? 'rewrite' : 'generate', async () => {
+      await task.start(target, isSelectionAction(action) ? 'rewrite' : action === 'chapter-summary' ? 'analyze' : 'generate', async () => {
         const context = await loadSelectedContext()
         const prompt = buildAiPrompt(action, context, instruction)
         const local = localAssist(action, context, instruction)
@@ -262,7 +273,7 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
           <Field label="写作要求"><textarea ref={instructionRef} className="text-area ai-instruction-input" disabled={busy} value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="例如：保持第一人称，增加悬念，不改变已有设定…" /></Field>
           <div className="ai-context-section">
             <div className="panel-title"><h3>参考资料</h3><span>{selectedItems.length} 项上下文</span></div>
-            <p className="ai-context-hint">只有勾选的资料会加入请求</p>
+            <p className="ai-context-hint">只有勾选的资料会加入请求；已确认记忆会在发送前核对来源正文。</p><Button variant="outline" disabled={busy || !items.some(item => item.kind === 'memory')} onClick={() => setSelectedIds(ids => new Set([...ids,...items.filter(item => item.kind === 'memory').map(item => item.id)]))}>选中已确认章节记忆</Button>
             <div className="ai-context-tools"><label>最近章节<select aria-label="最近章节" value={recentCount} disabled={busy} onChange={(event) => setRecentCount(Number(event.target.value))}><option value="1">1 章</option><option value="3">3 章</option><option value="5">5 章</option><option value="10">10 章</option></select></label><Button variant="outline" disabled={busy || !recentItems.length} onClick={selectRecentChapters}>选中最近 {recentCount} 章</Button></div>
             {selectionReady ? <div className="ai-selection-hint">已捕获当前选区：{editorSelection?.text.length.toLocaleString()} 字，可用于润色、改写、扩写或缩写。</div> : null}
             <div className="ai-context-list">{items.length ? items.map((item) => <label className={'ai-context-item' + (selectedIds.has(item.id) ? ' active' : '')} key={item.id}><input type="checkbox" disabled={busy} checked={selectedIds.has(item.id)} onChange={() => toggleContext(item)} /><span><strong>{item.title}</strong><small>{item.detail}</small></span></label>) : <div className="empty-state">没有可用的正文或资料。</div>}</div>
@@ -287,6 +298,7 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
             <Button variant="outline" onClick={() => void navigator.clipboard?.writeText(result.content)}><Clipboard size={13} />复制</Button>
             {resultApplication === 'builtin' ? <Button variant="outline" disabled={busy} title="使用左侧当前任务、要求和参考资料" onClick={() => void runAssistant()}>重新生成</Button> : null}
             <Button variant="outline" disabled={busy} onClick={task.clear}>取消</Button>
+            {resultComplete && task.target?.kind === 'chapter' && <Button variant="outline" disabled={busy || !targetCurrent} onClick={() => runGuarded(() => { const target=task.target!;useMemoryImport.setState({draft:{...parseMemoryDraft(target.node,target.originalContent,result.content),projectPath:target.project,session:target.session}});useAppStore.getState().setView('chapter-memory') })}>审阅为章节记忆草稿</Button>}
             {document && resultComplete && !busy ? selectionAction ? <><Button variant="outline" disabled={!targetCurrent || task.target?.conflict} onClick={() => task.insert('after')}>插入选区后</Button><Button disabled={!targetCurrent || !task.edits.some(edit => edit.state === 'pending') || task.edits.some(edit => edit.state === 'pending' && edit.conflict)} onClick={() => task.accept()}>替换选区</Button></> : task.application === 'analyze' ? null : <><Button disabled={!targetCurrent} onClick={() => applyResult('append')}>{task.target?.kind === 'cursor' ? '插入原光标处' : resultApplication === 'generate' ? '插入后方' : '追加到正文'}</Button>{resultApplication === 'builtin' && task.target?.kind === 'chapter' ? <Button variant="outline" disabled={!targetCurrent} onClick={() => applyResult('replace')}>替换当前正文</Button> : null}</> : null}
           </div>
         </> : <div className="ai-result-empty"><Sparkles size={26} /><strong>{task.phase === 'failed' ? '本次生成失败' : busy ? '正在等待模型返回正文' : task.phase === 'cancelled' ? '已停止接收结果' : '等待一次辅助任务'}</strong><span>{busy ? '可以继续编辑正文或切换页面；思考模型可能需要较长时间。' : task.phase === 'failed' ? '请按上方提示调整后重试，原文未被覆盖。' : '在左侧选择任务和参考资料，结果将在这里显示。完成后可以编辑、复制或应用到正文。'}</span></div>}

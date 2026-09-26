@@ -187,6 +187,7 @@ pub fn kind_directory(kind: &str) -> Result<&'static str, String> {
         "checklist-template" => Ok("checklist-templates"),
         "chapter-checklist" => Ok("checklists"),
         "annotation" => Ok("annotations"),
+        "chapter-memory" => Ok("chapter-memories"),
         _ => Err(format!("不支持的资料类型：{}", kind)),
     }
 }

@@ -34,6 +34,7 @@ async function openProjectWithLease(path: string): Promise<ProjectData> {
   return { ...result.data, leaseToken: result.leaseToken }
 }
 export const projectApi = {
+  confirmChapterMemory: (input:{projectPath:string;entityId:string;expected:EntityState}) => command<ProjectData>('confirm_chapter_memory',{input}),
   autoBackupStatus: (path:string) => command<AutoBackupStatus>('auto_backup_status',{path},false),
   configureAutoBackup: (input:{projectPath:string;enabled:boolean;directory:string;trigger:'daily'|'session';keep:number}) => command<AutoBackupStatus>('configure_auto_backup',{input},false),
   runAutoBackup: (input:{projectPath:string;manual:boolean}) => command<AutoBackupStatus>('run_auto_backup',{input},false),

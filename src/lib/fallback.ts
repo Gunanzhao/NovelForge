@@ -47,7 +47,7 @@ function recordEntityVersion(store: FallbackStore, entity: EntityRecord, label: 
 const memory = new Map<string, FallbackStore>()
 const STORAGE_PREFIX = 'novelforge-fallback:'
 const NODE_STATUSES = new Set(['not-started', 'draft', 'first-draft', 'editing', 'done', 'locked'])
-const ENTITY_KINDS = new Set(['annotation','character', 'location', 'world', 'timeline', 'foreshadowing', 'outline', 'scene', 'note', 'relationship', 'attachment', 'mention-ignore', 'story-arc', 'prompt-preset', 'inbox', 'checklist-template', 'chapter-checklist'])
+const ENTITY_KINDS = new Set(['chapter-memory','annotation','character', 'location', 'world', 'timeline', 'foreshadowing', 'outline', 'scene', 'note', 'relationship', 'attachment', 'mention-ignore', 'story-arc', 'prompt-preset', 'inbox', 'checklist-template', 'chapter-checklist'])
 
 function uid() {
   return globalThis.crypto?.randomUUID?.() ?? ('fallback-' + Date.now() + '-' + Math.random().toString(16).slice(2))
@@ -588,6 +588,15 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     else next.wikiRenames.push({id:operationId,targetId,label,createdAt:now,undoneBy:null,changes})
     updateTime(next.data);persist(projectPath,next)
     return {data:next.data,operationId} as T
+  }
+  if (command === 'confirm_chapter_memory') {
+    const current=entity(store,String(input?.entityId))
+    if(!current||current.kind!=='chapter-memory'||!sameEntityState(entityState(current),input?.expected as EntityState))throw new Error('章节记忆已变化，请重新审阅')
+    const chapter=node(store,String(current.content.chapterId)),source=current.content.sourceText
+    if(!chapter||chapter.kind==='volume'||typeof source!=='string'||store.documents[chapter.id]!==source)throw new Error('来源正文已变化，请重新核对')
+    const sources=current.content.sources as Array<{field:string;from:number;to:number;quote:string}>
+    if(!Array.isArray(sources)||!sources.length||sources.some(item=>!Number.isInteger(item.from)||!Number.isInteger(item.to)||item.from<0||item.to<=item.from||item.to>source.length||source.slice(item.from,item.to)!==item.quote||!['summary','events','knowledge','changes','planted','resolved','next'].includes(item.field)))throw new Error('请添加与原文一致的来源段落')
+    recordEntityVersion(store,current,'确认前');current.content={...current.content,status:'confirmed',confirmedAt:new Date().toISOString()};current.updatedAt=new Date().toISOString();recordEntityVersion(store,current,'作者确认章节记忆');updateTime(store.data);persist(projectPath,store);return store.data as T
   }
   if (command === 'list_entity_history') {
     const versions = store.entityHistory.filter(version => version.entityId === input?.entityId).slice().reverse()

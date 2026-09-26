@@ -1,3 +1,4 @@
+import { ChapterMemoryView } from './components/ChapterMemoryView'
 import { clearAnnotationLocations } from './lib/annotations'
 import { AnnotationTasks } from './components/AnnotationTasks'
 import { useAutomaticBackups } from './lib/automatic-backups'
@@ -192,6 +193,7 @@ export default function App() {
 
   function viewContent() {
     if (!data) return null
+    if (activeView === 'chapter-memory') return <ChapterMemoryView />
     if (activeView === 'annotation') return <AnnotationTasks />
     if (activeView === 'dashboard') return <Dashboard />
     if (activeView === 'manuscript') return <EditorPane />

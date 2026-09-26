@@ -12,6 +12,7 @@ const DIRECTORIES: &[&str] = &[
     "relationships",
     "notes",
     "annotations",
+    "chapter-memories",
     "research",
     "attachments",
     "mentions",
