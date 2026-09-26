@@ -36,3 +36,12 @@ it('reopening uses the transactionally saved orphan marker for duplicated passag
  clearAnnotationLocations()
  expect(annotationLocation(annotation,'重复段落。',{content:'重复段落。',anchors:[{id:'a',revision:'r',from:0,to:0,orphaned:true}]}).orphaned).toBe(true)
 })
+
+it('preserves CRLF offsets when new paragraphs precede an annotation',()=>{
+ const source='开头。\r\n目标段落。结束。'
+ const text='新增。\r\n另一段。\r\n'+source
+ const from=source.indexOf('目标'),to=from+4
+ expect(locateTextAnchor({sourceText:source,from,to},text)).toEqual({from:text.indexOf('目标'),to:text.indexOf('目标')+4,orphaned:false})
+ const annotation={id:'crlf',revision:'r',sourceText:'旧正文。目标段落',from:4,to:8} as ManuscriptAnnotation
+ expect(annotationLocation(annotation,text,{content:source,anchors:[{id:'crlf',revision:'r',from,to,orphaned:false}]})).toEqual({from:text.indexOf('目标'),to:text.indexOf('目标')+4,orphaned:false})
+})

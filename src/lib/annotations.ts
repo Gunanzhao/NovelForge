@@ -25,7 +25,7 @@ export function mapTextAnchor(anchor:LocatedAnchor,changes:ChangeDesc):LocatedAn
 export function locateTextAnchor(anchor:TextAnchor,text:string):LocatedAnchor {
   if(anchor.sourceText===text)return {from:anchor.from,to:anchor.to,orphaned:false}
   const edits=aiEdits(anchor.sourceText,text)
-  const changes=ChangeSet.of(edits.map(edit=>({from:edit.from,to:edit.to,insert:edit.after})),anchor.sourceText.length)
+  const changes=ChangeSet.of(edits.map(edit=>({from:edit.from,to:edit.to,insert:edit.after})),anchor.sourceText.length, '\n')
   return mapTextAnchor({...anchor,orphaned:false},changes)
 }
 const cache=new Map<string,{revision:string;base:string;from:number;to:number;text:string;location:LocatedAnchor}>()
@@ -35,7 +35,7 @@ export function annotationLocation(annotation:ManuscriptAnnotation,text:string,t
   if(cached&&cached.revision===annotation.revision&&cached.base===annotation.sourceText&&cached.from===annotation.from&&cached.to===annotation.to&&cached.text===text)return cached.location
   const tracked=tracking?.anchors.find(anchor=>anchor.id===annotation.id&&anchor.revision===annotation.revision)
   const location=annotation.sourceText===text?{from:annotation.from,to:annotation.to,orphaned:false}:tracked&&tracking
-    ? tracking.content===text?tracked:mapTextAnchor(tracked,ChangeSet.of(aiEdits(tracking.content,text).map(edit=>({from:edit.from,to:edit.to,insert:edit.after})),tracking.content.length))
+    ? tracking.content===text?tracked:mapTextAnchor(tracked,ChangeSet.of(aiEdits(tracking.content,text).map(edit=>({from:edit.from,to:edit.to,insert:edit.after})),tracking.content.length, '\n'))
     :locateTextAnchor(annotation,text)
   cache.set(annotation.id,{revision:annotation.revision,base:annotation.sourceText,from:annotation.from,to:annotation.to,text,location})
   if(cache.size>500)cache.delete(cache.keys().next().value!)
