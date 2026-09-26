@@ -2,18 +2,32 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.1.1-rc.8（预发布）**。
+当前版本：**1.2.0-rc.1（预发布）**。
 
 [![main CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Amain)
 
 ## 下载
 
-- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.8/NovelForge_1.1.1-rc.8_x64-setup.exe)
-- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.8/novelforge.exe)
-- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.1.1-rc.8/SHA256SUMS.txt)
+- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.1/NovelForge_1.2.0-rc.1_x64-setup.exe)
+- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.1/novelforge.exe)
+- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.1/SHA256SUMS.txt)
 - [版本说明与历史 Release](https://github.com/Gunanzhao/NovelForge/releases)
 
 已有安装版用户运行新安装包升级；直接运行独立 EXE 不会更新旧快捷方式。桌面版需要 Windows WebView2。
+
+## 1.2.0-rc.1 相比 1.1.1-rc.8
+
+- **资料版本历史**：人物、地点、世界观和附件说明支持自动历史、命名版本、字段差异，以及整条或指定字段恢复；恢复前保留当前版本。
+- **Wiki 安全改名**：预览明确引用的受影响位置，选择更新范围、保留旧名别名，并支持整次撤销；普通同名文字仅列为候选。
+- **自动备份与恢复中心**：选择项目外的独立目录，按日或写作会话检查变化后备份；提供备份状态、清理预览、恢复到新目录，以及孤立恢复稿查看和另存章节。
+- **批注与修订任务**：从正文选区添加批注，随编辑跟踪位置；支持全书筛选、来源跳转与处理状态，原文被删除后标记失联。
+- **章节摘要与故事记忆**：整理关键事件、人物已知信息、关系与物品变化、伏笔及承接事项；保留原文依据，作者确认后才可加入 AI 上下文，正文变化后提示复核。
+- **TXT / Markdown 稿件导入**：编码检查、分章预览、手动边界和逐章调整，明确确认后批量创建；失败回滚，重复请求不会重复创建章节。
+- **审查修复**：修复 Windows 换行稿件的 AI 选区、应用、结果重编辑和批注定位；修正卡片主题、附件计数及剧情线标题对齐，升级 TLS 依赖修复安全公告。
+
+本地验证：475项前端测试、159项Rust测试通过（7项按原设置跳过），类型检查、Lint、Rustfmt、Clippy、Windows构建及生产桌面流程通过。21个主要页面在三种宽度、浅深主题下共126组布局检查，并结合截图检查文本和对齐。
+
+详见 [1.2.0-rc.1 发布说明](docs/release-1.2.0-rc.1.md)、[六项功能验收](docs/writing-workflow-implementation.md)和[全仓审查记录](docs/full-audit-writing-workflow-2026-09-27.md)。
 
 ## 1.1.1-rc.8 相比 1.1.1-rc.7
 
@@ -97,6 +111,14 @@ GTK 和 urlpattern 依赖链仍有 `proc-macro-error` 及五个 `unic-*` 包停�
 5. 使用导出生成阅读文件，使用整项目备份保留正文、资料、附件和历史。
 
 常用快捷键：`Ctrl+S` 保存，`Ctrl+P` 快速打开，`Ctrl+Shift+P`（兼容 `Ctrl+K`）打开命令面板，`Ctrl+Shift+I` 记录灵感，`Ctrl+0` 打开 AI 辅助。
+
+## 新写作流程
+
+- **资料版本与改名**：打开已保存资料，在历史面板查看或命名版本、选择恢复字段；改名先预览引用位置再应用。未保存草稿、目标变化或撤销后存在新编辑时会阻止覆盖。
+- **独立备份**：在项目设置的数据与日志中配置自动备份目录和策略。应用在写作暂停、项目或窗口关闭前检查；应用关闭后不会在后台定时运行。正文自动保存、项目内历史和项目外备份分别提供状态；同一磁盘的备份不能防止整盘损坏。
+- **正文批注**：选择原文，在章节辅助栏添加批注；在“批注与修订”集中处理。失联批注保留原文依据，供作者重新判断。
+- **章节记忆**：打开“章节记忆”，填写或导入待审阅摘要，选择原文依据后确认。AI 生成的摘要始终先进入草稿；未确认或已过期的记录不能作为已确认记忆加入请求。
+- **稿件导入**：打开“稿件导入”，选择TXT/Markdown、检查编码与分章、调整标题和内容、选择目标卷，勾选确认后创建。支持UTF-8、带BOM的UTF-16及手动GB18030；本版不支持DOCX导入。源文件保持不变，预览中的修改只用于新章节。
 
 ## 正文内使用 AI
 
