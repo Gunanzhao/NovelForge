@@ -4,8 +4,8 @@
 
 ## 问题与进度
 
-- WF-A01：CRLF原稿的AI选区取字使用CodeMirror LF坐标，可能包含错误的前后文字。已增加原文位置映射与过期选区拒绝，13项AI任务回归及typecheck/lint通过；需要桌面AI专项复验。
-- WF-A02：AI编辑器写入器要求原始正文与CodeMirror LF正文完全相等，CRLF原稿上会拒绝应用。待修复并验证逐项接受、撤销及正文冲突保护。
+- WF-A01：CRLF原稿的AI选区取字使用CodeMirror LF坐标，可能包含错误的前后文字。已增加原文位置映射与过期选区拒绝，13项AI任务回归及typecheck/lint通过；CRLF与LF生产桌面选区预览、请求范围专项均已通过。
+- WF-A02：AI编辑器写入器要求原始正文与CodeMirror LF正文完全相等，CRLF原稿上会拒绝应用。已将原文变化映射到CodeMirror换行坐标，纯换行归一不作为语义冲突；14项AI任务回归、typecheck/lint通过。生产桌面CRLF和LF两种专项通过：逐项接受、撤销/重做、保留原文、窄窗操作栏及保存；CRLF保护历史与操作前原稿逐字符相同。证据：tmp/editor-ai-ui-crlf-1790442734635/result.json、tmp/editor-ai-ui-1790442740116/result.json。
 
 - WF-A03：首次推送Rust CI因RUSTSEC-2026-0285失败，锁定依赖rustls从0.23.43升级至0.23.45；159项Rust回归通过（7项跳过）。本机未安装cargo-audit，完整审计须由下一次云端CI复验，不绕过审计门禁。
 

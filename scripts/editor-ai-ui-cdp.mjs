@@ -4,7 +4,8 @@ import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-const run = resolve('tmp/editor-ai-ui-' + Date.now())
+const crlf = process.argv.includes('--crlf')
+const run = resolve('tmp/editor-ai-ui-' + (crlf ? 'crlf-' : '') + Date.now())
 mkdirSync(run, { recursive: true })
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 const child = spawn(resolve('src-tauri/target/release/novelforge.exe'), [], { windowsHide: true, stdio: 'ignore', env: { ...process.env, WEBVIEW2_USER_DATA_FOLDER: resolve(run, 'profile'), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--remote-debugging-port=9469' } })
@@ -42,14 +43,16 @@ try {
   const projectPath=resolve(run,'project')
   const data=await call('create_project',{input:{path:projectPath,title:'正文 AI 验收',author:'',genre:'',description:'',targetWords:1000}})
   const chapter=data.nodes.find(node=>node.kind==='chapter')
-  const original='# 雨夜\n\n前文。风很冷。灯很暗。后文。\n\n远处的钟声响了，街灯下的影子慢慢走过。'.replaceAll('\\n','\n')
+  let original='# 雨夜\n\n前文。风很冷。灯很暗。后文。\n\n远处的钟声响了，街灯下的影子慢慢走过。'.replaceAll('\\n','\n')
+  if(crlf)original=original.replaceAll('\n','\r\n')
+  const displayed=original.replaceAll('\r\n','\n')
   await saveChecked({input:{projectPath,nodeId:chapter.id,content:original,reason:'合成测试'}})
   const preferences={mode:'provider',endpoint:`http://127.0.0.1:${server.address().port}/v1`,model:'synthetic-writer'}
   await ev(`localStorage.setItem('novelforge:ai-preferences:v1',${JSON.stringify(JSON.stringify(preferences))});localStorage.setItem('novelforge:recent-projects',${JSON.stringify(JSON.stringify([{path:projectPath,title:'正文 AI 验收',updatedAt:''}]))});location.reload()`)
   await sleep(800);await waitFor(`!!document.querySelector('.recent-project')`);await ev(`document.querySelector('.recent-project').click()`)
   await waitFor(`!!document.querySelector('.cm-content')?.cmTile?.root?.view`)
   await ev(`window.editor=()=>document.querySelector('.cm-content').cmTile.root.view`)
-  const start=original.indexOf('风很冷')
+  const start=displayed.indexOf('风很冷')
   await ev(`editor().focus();editor().dispatch({selection:{anchor:${start},head:${start+8}}})`)
   await waitFor(`!!document.querySelector('.editor-ai-floating')`)
   await capture('selection-toolbar')
@@ -70,7 +73,7 @@ try {
   await capture('full-shared-result')
   await ev(`Array.from(document.querySelectorAll('.nav-item')).find(e=>e.textContent.trim()==='正文').click()`)
   await waitFor(`document.querySelector('.ai-host').classList.contains('ai-host-inline')`)
-  await ev(`editor().dispatch({changes:[{from:0,insert:'开场。'},{from:editor().state.doc.length,insert:'结尾。'}]})`)
+  if(!crlf)await ev(`editor().dispatch({changes:[{from:0,insert:'开场。'},{from:editor().state.doc.length,insert:'结尾。'}]})`)
   await click('修改对比 · 2');await capture('inline-diff')
   await click('接受此项')
   await waitFor(`editor().state.doc.toString().includes('风很暖。灯很暗。')`)
@@ -79,11 +82,17 @@ try {
   await ev('editor().focus()')
   await cmd('Input.dispatchKeyEvent',{type:'keyDown',key:'z',code:'KeyZ',modifiers:2,windowsVirtualKeyCode:90})
   await cmd('Input.dispatchKeyEvent',{type:'keyUp',key:'z',code:'KeyZ',modifiers:2,windowsVirtualKeyCode:90})
-  assert.equal(await ev('editor().state.doc.toString()'),'开场。'+original+'结尾。')
+  assert.equal(await ev('editor().state.doc.toString()'),(crlf?'':'开场。')+displayed+(crlf?'':'结尾。'))
   await cmd('Input.dispatchKeyEvent',{type:'keyDown',key:'y',code:'KeyY',modifiers:2,windowsVirtualKeyCode:89})
   await cmd('Input.dispatchKeyEvent',{type:'keyUp',key:'y',code:'KeyY',modifiers:2,windowsVirtualKeyCode:89})
   assert.equal(await ev('editor().state.doc.toString()'),first)
   await click('保留原文')
+  if(crlf){
+    // Identical existing snapshots are intentionally reused, regardless of their label.
+    const history=await call('list_history',{input:{projectPath,nodeId:chapter.id}})
+    const contents=await Promise.all(history.map(item=>call('read_history',{input:{projectPath,revisionId:item.id}})))
+    assert.ok(contents.includes(original),'History must retain the exact pre-AI CRLF source')
+  }
   const records=[]
   for(const [width,height] of [[1440,900],[1100,750],[1100,650]]){
     await cmd('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});await sleep(400)
@@ -94,7 +103,7 @@ try {
   }
   await ev(`document.documentElement.dataset.theme='dark'`);await sleep(350);await capture('editor-ai-dark')
   await waitFor(`window.__TAURI_INTERNALS__.invoke('get_document',${JSON.stringify({input:{projectPath,nodeId:chapter.id}})}).then(d=>d.content===${JSON.stringify(first)})`)
-  writeFileSync(resolve(run,'result.json'),JSON.stringify({result:'EDITOR_AI_UI_PASS',records,requests:requests.length,paidGeneration:false},null,2))
+  writeFileSync(resolve(run,'result.json'),JSON.stringify({result:'EDITOR_AI_UI_PASS',records,requests:requests.length,paidGeneration:false,crlf,protectedOriginalLineEndings:crlf},null,2))
   console.log('EDITOR_AI_UI_PASS '+run)
 } catch(error) {
   if(socket){try{await capture('failure');console.log(await ev('document.body.innerText.slice(-3500)'))}catch{/* app exited */}}

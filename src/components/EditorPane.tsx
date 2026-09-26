@@ -1,4 +1,4 @@
-import { normalizeLineBreaks, normalizedRangeFromSource } from '../lib/newline-offsets'
+import { normalizeLineBreaks, normalizedRangeFromSource, editorChangesFromSource } from '../lib/newline-offsets'
 import { annotationExtension } from '../lib/annotation-extension'
 import { useTextNavigation } from '../lib/text-navigation'
 import { chapterAnnotations } from '../lib/annotations'
@@ -126,12 +126,13 @@ export function EditorPane() {
     const current = useAppStore.getState()
     if (current.projectPath && current.document) {
       aiEditorCleanup.current = registerAiEditor({ project: current.projectPath, session: current.projectSession, node: current.document.node.id }, (source, changes, acceptance) => {
-        if (!view.dom.isConnected || view.state.doc.toString() !== source) return false
+        if (!view.dom.isConnected || useAppStore.getState().document?.content !== source || view.state.doc.toString() !== normalizeLineBreaks(source)) return false
+        const editorChanges = editorChangesFromSource(source, changes)
         let end = 0
-        changes.iterChangedRanges((_from, _to, _newFrom, newTo) => { end = newTo })
-        view.dispatch({ changes, selection: { anchor: end }, annotations: isolateHistory.of('full'), effects: acceptance ? aiAcceptanceEffect.of(acceptance) : [], userEvent: 'input.ai' })
+        editorChanges.iterChangedRanges((_from, _to, _newFrom, newTo) => { end = newTo })
+        view.dispatch({ changes: editorChanges, selection: { anchor: end }, annotations: isolateHistory.of('full'), effects: acceptance ? aiAcceptanceEffect.of(acceptance) : [], userEvent: 'input.ai' })
         view.focus()
-        return view.state.doc.toString() !== source || changes.empty
+        return view.state.doc.toString() !== normalizeLineBreaks(source) || editorChanges.empty
       })
     }
     if (projectPath && document) {

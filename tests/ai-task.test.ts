@@ -1,5 +1,7 @@
+import { editorChangesFromSource, normalizeLineBreaks } from '../src/lib/newline-offsets'
+import type { AiAcceptance } from '../src/lib/ai-edit'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { ChangeSet } from '@codemirror/state'
+import { ChangeSet, EditorState } from '@codemirror/state'
 const mocks = vi.hoisted(() => ({ createHistorySnapshot: vi.fn(async () => {}), generate: vi.fn(), cancel: vi.fn(), aiCancel: vi.fn(async () => {}), aiComplete: vi.fn() }))
 vi.mock('../src/lib/api', () => ({ isDesktop: true, projectApi: { createHistorySnapshot: mocks.createHistorySnapshot, aiComplete: mocks.aiComplete, aiCancel: mocks.aiCancel } }))
 vi.mock('../src/lib/codex', () => ({ codexApi: mocks }))
@@ -151,4 +153,37 @@ it('captures the exact original CRLF passage from editor LF selection coordinate
 it('refuses an obsolete editor selection rather than sending unrelated source text', () => {
   useAppStore.setState({ editorSelection: { nodeId: node.id, from: 3, to: 11, text: '已经过期的选区' } })
   expect(() => captureAiTarget('selection')).toThrow('选区正文已变化')
+})
+
+it('applies separate CRLF suggestions through editor transactions and permits undo and reaccept', async () => {
+  const content = '# 标题\r\n风很冷。\r\n灯很暗。\r\n后文。'
+  const plain = normalizeLineBreaks(content), from = plain.indexOf('风'), to = plain.indexOf('后文')
+  useAppStore.setState({ document: { node, content }, editorSelection: { nodeId: node.id, from, to, text: plain.slice(from, to) } })
+  let editor = EditorState.create({ doc: plain })
+  const inverses: Array<{ changes: ChangeSet; acceptance?: AiAcceptance }> = []
+  const unregister = registerAiEditor(captureAiTarget('selection'), (source, changes, acceptance) => {
+    if (editor.doc.toString() !== normalizeLineBreaks(source)) return false
+    const mapped = editorChangesFromSource(source, changes), before = editor.doc.toString()
+    inverses.push({ changes: mapped.invert(editor.doc), acceptance })
+    editor = editor.update({ changes: mapped }).state
+    useAiTask.getState().observe(before, editor.doc.toString(), mapped, acceptance)
+    useAppStore.getState().updateContent(editor.doc.toString())
+    return true
+  })
+  try {
+    await useAiTask.getState().start(captureAiTarget('selection'), 'rewrite', async () => request('风很暖。\r\n灯很亮。\r\n'))
+    const ids = useAiTask.getState().edits.map(edit => edit.id)
+    for (const id of ids) { await useAiTask.getState().accept(id); expect(useAiTask.getState().error, JSON.stringify({ id, source: useAiTask.getState().source, edits: useAiTask.getState().edits })).toBe('') }
+    expect(editor.doc.toString()).toBe('# 标题\n风很暖。\n灯很亮。\n后文。')
+    expect(mocks.createHistorySnapshot).toHaveBeenCalledWith(expect.objectContaining({ content }))
+    const inverse = inverses.at(-1)!, before = editor.doc.toString()
+    editor = editor.update({ changes: inverse.changes }).state
+    useAiTask.getState().observe(before, editor.doc.toString(), inverse.changes, { ...inverse.acceptance!, accepted: false })
+    useAppStore.getState().updateContent(editor.doc.toString())
+    const pending = useAiTask.getState().edits.filter(edit => edit.state === 'pending')
+    expect(pending.length).toBeGreaterThan(0)
+    await useAiTask.getState().accept(pending[0].id)
+    expect(useAiTask.getState().error).toBe('')
+    expect(editor.doc.toString()).toBe('# 标题\n风很暖。\n灯很亮。\n后文。')
+  } finally { unregister() }
 })

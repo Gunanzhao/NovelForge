@@ -1,4 +1,4 @@
-import { normalizeLineBreaks, sourceRangeFromNormalizedText } from '../lib/newline-offsets'
+import { normalizeLineBreaks, sourceRangeFromNormalizedText, newlineNormalizationChanges } from '../lib/newline-offsets'
 import { protectBeforeChange } from '../lib/history'
 import { create } from 'zustand'
 import { ChangeSet, type ChangeDesc } from '@codemirror/state'
@@ -65,6 +65,13 @@ export function captureAiTarget(kind: AiTarget['kind'], range?: { from: number; 
   return { project: state.projectPath, session: state.projectSession, node: doc.node.id, title: doc.node.title, kind,
     from, to, conflict: false, originalFrom: from, originalText: doc.content.slice(from, to), originalContent: doc.content }
 }
+// Compare visible text while retaining exact original-source coordinates for protected writes.
+function rewriteEdits(before: string, after: string, offset: number): AiEdit[] {
+  return aiEdits(normalizeLineBreaks(before), normalizeLineBreaks(after)).map(edit => {
+    const range = sourceRangeFromNormalizedText(before, edit.from, edit.to)
+    return { ...edit, from: offset + range.from, to: offset + range.to, before: before.slice(range.from, range.to) }
+  })
+}
 function isCurrent(target: AiTarget) {
   const state = useAppStore.getState()
   return state.projectPath === target.project && state.projectSession === target.session && state.document?.node.id === target.node
@@ -78,14 +85,16 @@ export function registerAiEditor(target: Pick<AiTarget, 'project' | 'session' | 
 }
 function writeChanges(target: AiTarget, source: string, content: string, changes: ChangeSet, acceptance?: AiAcceptance) {
   if (!isCurrent(target) || isNodeLocked(useAppStore.getState().data?.nodes ?? [], target.node)) throw new Error('目标章节已切换或锁定，无法应用结果。')
-  if (editorWriter && editorWriter.target.project === target.project && editorWriter.target.session === target.session && editorWriter.target.node === target.node) {
+  const hasEditor = editorWriter && editorWriter.target.project === target.project && editorWriter.target.session === target.session && editorWriter.target.node === target.node
+  if (hasEditor && editorWriter) {
     if (!editorWriter.write(source, changes, acceptance)) throw new Error('编辑器正文已变化，未应用结果。')
   } else {
     if (useAppStore.getState().document?.content !== source) throw new Error('目标正文已变化，未应用结果。')
     useAiTask.getState().observe(source, content, changes, acceptance)
     useAppStore.getState().updateContent(content)
   }
-  if (useAppStore.getState().document?.content !== content) throw new Error('正文未完成更新，请重新检查。')
+  const saved = useAppStore.getState().document?.content
+  if (hasEditor ? saved !== normalizeLineBreaks(content) : saved !== content) throw new Error('正文未完成更新，请重新检查。')
 }
 
 export const useAiTask = create<AiTask>((set, get) => ({
@@ -120,7 +129,7 @@ export const useAiTask = create<AiTask>((set, get) => ({
       }
       const mapping = get().mapping!
       const live = get().target!
-      const edits = application === 'rewrite' ? !live.conflict ? aiEdits(target.originalText, result.content, live.from) : aiEdits(target.originalText, result.content, target.originalFrom).map(edit => ({ ...edit, ...mapAiRange(edit, mapping) })) : []
+      const edits = application === 'rewrite' ? !live.conflict ? rewriteEdits(live.originalText, result.content, live.from) : rewriteEdits(target.originalText, result.content, target.originalFrom).map(edit => ({ ...edit, ...mapAiRange(edit, mapping) })) : []
       set({ result, edits, phase: 'complete', id: null })
     } catch (error) {
       if (!valid()) return
@@ -143,18 +152,22 @@ export const useAiTask = create<AiTask>((set, get) => ({
   editResult(content) {
     const { result, target, mapping, edits, phase, application } = get()
     if (!result || !target || !mapping || phase !== 'complete' || edits.some(edit => edit.state === 'accepted')) return
-    set({ token: crypto.randomUUID(), result: { ...result, content }, edits: application === 'rewrite' ? !target.conflict ? aiEdits(target.originalText, content, target.from) : aiEdits(target.originalText, content, target.originalFrom).map(edit => ({ ...edit, ...mapAiRange(edit, mapping) })) : [] })
+    set({ token: crypto.randomUUID(), result: { ...result, content }, edits: application === 'rewrite' ? !target.conflict ? rewriteEdits(target.originalText, content, target.from) : rewriteEdits(target.originalText, content, target.originalFrom).map(edit => ({ ...edit, ...mapAiRange(edit, mapping) })) : [] })
   },
   observe(before, after, knownChanges, acceptance) {
     const { target, source, mapping, edits } = get()
     if (!target || !mapping || !isCurrent(target) || source === after) return
-    const changes = source === before && knownChanges ? knownChanges : textChanges(source, after)
+    const normalization = source !== before && knownChanges && normalizeLineBreaks(source) === before ? newlineNormalizationChanges(source) : null
+    const changes = normalization && knownChanges ? normalization.compose(knownChanges) : source === before && knownChanges ? knownChanges : textChanges(source, after)
     const affected = acceptance?.token === get().token ? acceptance : null
-    const nextTarget = { ...target, ...mapAiRange(target, changes) }
-    if (target.kind !== 'cursor' && after.slice(nextTarget.from, nextTarget.to) === target.originalText) nextTarget.conflict = false
+    const targetBase = normalization ? { ...target, from: normalization.mapPos(target.from, 1), to: normalization.mapPos(target.to, -1), originalText: normalizeLineBreaks(target.originalText) } : target
+    const effective = normalization && knownChanges ? knownChanges : changes
+    const nextTarget = { ...targetBase, ...mapAiRange(targetBase, effective) }
+    if (target.kind !== 'cursor' && after.slice(nextTarget.from, nextTarget.to) === targetBase.originalText) nextTarget.conflict = false
     set({ source: after, mapping: mapping.composeDesc(changes.desc), target: nextTarget, edits: edits.map(edit => {
-      if (affected?.ids.includes(edit.id)) return { ...edit, from: changes.mapPos(edit.from, -1), to: changes.mapPos(edit.to, 1), conflict: false, state: affected.accepted ? 'accepted' : 'pending' }
-      return { ...edit, ...mapAiRange(edit, changes) }
+      if (affected?.ids.includes(edit.id)) return { ...edit, ...(normalization ? { before: normalizeLineBreaks(edit.before), after: normalizeLineBreaks(edit.after) } : {}), from: changes.mapPos(edit.from, -1), to: changes.mapPos(edit.to, 1), conflict: false, state: affected.accepted ? 'accepted' : 'pending' }
+      const base = normalization ? { ...edit, from: normalization.mapPos(edit.from, 1), to: normalization.mapPos(edit.to, -1), before: normalizeLineBreaks(edit.before), after: normalizeLineBreaks(edit.after) } : edit
+      return { ...base, ...mapAiRange(base, effective) }
     }) })
   },
   async accept(id) {

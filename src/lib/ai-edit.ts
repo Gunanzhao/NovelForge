@@ -34,7 +34,7 @@ export function textChanges(before: string, after: string): ChangeSet {
   let endBefore = before.length, endAfter = after.length
   while (endBefore > start && endAfter > start && before[endBefore - 1] === after[endAfter - 1]) { endBefore--; endAfter-- }
   if (endBefore < before.length && /[\uDC00-\uDFFF]/u.test(before[endBefore])) { endBefore++; endAfter++ }
-  return ChangeSet.of({ from: start, to: endBefore, insert: after.slice(start, endAfter) }, before.length)
+  return ChangeSet.of({ from: start, to: endBefore, insert: after.slice(start, endAfter) }, before.length, '\n')
 }
 
 /** Bounded LCS: character edits for ordinary passages, sentence edits for long passages. */
@@ -82,7 +82,7 @@ export function applyAiEdits(source: string, edits: AiEdit[]): { content: string
     }
     end = edit.to
   }
-  const changes = ChangeSet.of(pending.map(edit => ({ from: edit.from, to: edit.to, insert: edit.after })), source.length)
+  const changes = ChangeSet.of(pending.map(edit => ({ from: edit.from, to: edit.to, insert: edit.after })), source.length, '\n')
   // ChangeSet uses UTF-16 positions, like CodeMirror and the stored selection.
   let content = source
   for (const edit of [...pending].reverse()) content = content.slice(0, edit.from) + edit.after + content.slice(edit.to)
