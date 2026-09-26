@@ -27,3 +27,20 @@ it('refuses stale memory saves and retains the local author edits for review',as
  await projectApi.upsertEntity({projectPath:path,id:'memory',kind:'chapter-memory',title:'第一章记忆',tags:[],content:{...blankMemoryFields(),chapterId:node.id,sourceText:source,summary:'另一处已保存的修改',status:'draft',sources:[]}})
  fireEvent.click(screen.getByRole('button',{name:'保存记忆草稿'}));await screen.findByRole('alert');expect((screen.getByLabelText('章节摘要') as HTMLTextAreaElement).value).toBe('本地尚未保存的复核')
 })
+
+it('maps textarea LF selections back to unchanged CRLF source offsets',async()=>{
+ const {path,node}=await fixture(false)
+ const source='# 章节\r\n林月拿到钥匙。\r\n后文'
+ const doc=await projectApi.saveDocument({projectPath:path,nodeId:node.id,content:source,reason:'CRLF回归'})
+ useAppStore.setState({document:{...doc,persistedContent:source}})
+ render(<ChapterMemoryView/>);await screen.findByLabelText('记忆依据原文')
+ const textarea=screen.getByLabelText('记忆依据原文') as HTMLTextAreaElement
+ textarea.focus();const from=textarea.value.indexOf('林月');textarea.setSelectionRange(from,from+7);fireEvent.select(textarea)
+ fireEvent.click(screen.getByRole('button',{name:'添加所选原文依据'}))
+ expect(screen.getByText('林月拿到钥匙。')).toBeTruthy()
+ fireEvent.change(screen.getByLabelText('章节摘要'),{target:{value:'拿到钥匙'}})
+ fireEvent.click(screen.getByRole('button',{name:'保存记忆草稿'}));await screen.findByText('草稿已保存；尚未纳入已确认记忆。')
+ const entity=useAppStore.getState().data!.entities.find(item=>item.kind==='chapter-memory')!
+ expect(entity.content.sourceText).toBe(source)
+ expect(entity.content.sources).toEqual([expect.objectContaining({from:source.indexOf('林月'),to:source.indexOf('林月')+7,quote:'林月拿到钥匙。'})])
+})
