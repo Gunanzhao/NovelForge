@@ -1695,3 +1695,13 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 .memory-source-text { min-height: 240px; max-height: 50vh; resize: vertical; }
 .memory-source-picker > :not(summary) { margin-block-start: 12px; }
 @container workspace (max-width: 900px) { .memory-workspace { grid-template-columns: minmax(0, 1fr); } .memory-chapters { max-height: 180px; overflow: auto; } }
+
+/* Manuscript import reuses the archive editor width and responsive centering. */
+.import-controls { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 16px; }
+.import-controls input[type="file"] { max-width: 100%; }
+.import-controls p { overflow-wrap: anywhere; }
+.import-boundaries { display: grid; gap: 8px; max-height: 240px; overflow: auto; }
+.import-boundaries label, .import-confirm { display: flex; align-items: flex-start; gap: 10px; overflow-wrap: anywhere; }
+.import-boundaries input, .import-confirm input { flex: 0 0 auto; margin-top: 3px; }
+.import-manual-boundary { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
+.import-source { min-height: 260px; width: 100%; resize: vertical; }

@@ -1,3 +1,4 @@
+import { validateImportChapters, type ImportManuscriptInput } from './manuscript-import'
 import type { RenameChanges, WikiRenameOperation } from './wiki-rename'
 import type {
   EntityState, EntityVersion, EntityInput, EntityRecord, ExportInput, HistoryItem, NodeRecord, ProjectData,
@@ -21,6 +22,7 @@ interface TrashSnapshot {
 interface FallbackStore {
   data: ProjectData
   documents: Record<string, string>
+  importRequests: Record<string, string>
   wikiRenames: Array<WikiRenameOperation & {targetId: string; changes: RenameChanges}>
   annotationTracking: Record<string, import('./types').AnnotationTracking>
   entityHistory: EntityVersion[]
@@ -74,6 +76,7 @@ function readStore(path: string) {
     const raw = localStorage.getItem(key)
     if (raw) {
       const parsed = JSON.parse(raw) as FallbackStore
+      parsed.importRequests ??= {}
       parsed.wikiRenames ??= []
       parsed.annotationTracking ??= {}
       parsed.entityHistory ??= []
@@ -115,6 +118,7 @@ function makeProject(input: ProjectInput): FallbackStore {
       recovery: [],
     },
     documents: { [chapterId]: content },
+    importRequests: {},
     wikiRenames: [],
     annotationTracking: {},
     entityHistory: [],
@@ -348,6 +352,31 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     if (!current) throw new Error('章节不存在')
     if (current.kind === 'volume') throw new Error('卷没有正文文件')
     return { node: current, content: store.documents[id] ?? '', annotationTracking: store.annotationTracking[id] } as T
+  }
+  if (command === 'import_manuscript') {
+    const request = args.input as ImportManuscriptInput
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(request.requestId)) throw new Error('导入请求标识无效')
+    const signature = canonical(request)
+    if (store.importRequests[request.requestId]) {
+      if (store.importRequests[request.requestId] !== signature) throw new Error('请求标识已用于其他操作')
+      return store.data as T
+    }
+    const next = structuredClone(store)
+    const parent = validateNodeTarget(next, 'chapter', request.parentId)
+    if (!parent || isNodeLocked(next.data.nodes, parent.id)) throw new Error('目标卷已锁定或不可用')
+    validateImportChapters(request.chapters, next.data.nodes.filter(item => item.parentId === parent.id).map(item => item.title))
+    for (const chapter of request.chapters) {
+      for (const char of chapter.content) { const code = char.charCodeAt(0); if (code < 32 && ![9, 10, 13].includes(code)) throw new Error('正文包含二进制控制字符') }
+      const orderIndex = Math.max(-1, ...next.data.nodes.filter(item => item.parentId === parent.id).map(item => item.orderIndex)) + 1
+      const createdAt = new Date().toISOString()
+      const current: NodeRecord = { id: uid(), kind: 'chapter', parentId: parent.id, title: chapter.title.trim(), orderIndex, status: 'draft', filePath: fallbackNodePath(next, 'chapter', parent, orderIndex), createdAt, updatedAt: createdAt }
+      next.data.nodes.push(current)
+      next.documents[current.id] = chapter.content
+    }
+    next.importRequests[request.requestId] = signature
+    updateTime(next.data)
+    persist(projectPath, next)
+    return next.data as T
   }
   if (command === 'create_node') {
     const kind = input?.kind as NodeRecord['kind']

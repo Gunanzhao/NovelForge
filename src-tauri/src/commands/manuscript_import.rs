@@ -248,6 +248,47 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
     #[test]
+    fn imported_chapters_survive_backup_restore_and_reopen() {
+        let (root, input) = fixture();
+        let imported = import_manuscript(input.clone()).unwrap();
+        let backups =
+            std::env::temp_dir().join(format!("novelforge-import-backups-{}", storage::new_id()));
+        fs::create_dir_all(&backups).unwrap();
+        let report = backup::create(
+            input.project_path.clone(),
+            backups.to_string_lossy().into_owned(),
+        )
+        .unwrap();
+        let restored = tauri::async_runtime::block_on(backup::restore_backup(
+            report.path,
+            backups.to_string_lossy().into_owned(),
+        ))
+        .unwrap();
+        let reopened = open_project(restored.path.clone()).unwrap();
+        for chapter in &input.chapters {
+            let original = imported
+                .nodes
+                .iter()
+                .find(|node| node.title == chapter.title)
+                .unwrap();
+            let node = reopened
+                .nodes
+                .iter()
+                .find(|node| node.id == original.id)
+                .unwrap();
+            let document = get_document(crate::models::NodeActionInput {
+                project_path: restored.path.clone(),
+                node_id: node.id.clone(),
+            })
+            .unwrap();
+            assert_eq!(document.content, chapter.content);
+        }
+        guard::release_project(restored.path).unwrap();
+        guard::release_project(input.project_path).unwrap();
+        fs::remove_dir_all(backups).unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
     fn second_insert_failure_rolls_back_first_file_and_all_rows() {
         let (root, input) = fixture();
         let (_, db) = project_connection(&input.project_path).unwrap();

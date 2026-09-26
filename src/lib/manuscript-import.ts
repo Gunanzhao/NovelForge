@@ -2,6 +2,7 @@ export const MAX_IMPORT_BYTES = 32 * 1024 * 1024
 export type ImportEncoding = 'auto' | 'utf-8' | 'utf-16le' | 'utf-16be' | 'gb18030'
 export interface ImportBoundary { offset: number; title: string; line: number }
 export interface ImportedChapter { title: string; content: string }
+export interface ImportManuscriptInput { projectPath: string; parentId: string; requestId: string; chapters: ImportedChapter[] }
 
 /** Decode once into a preview. No replacement characters or guessed legacy encoding. */
 export function decodeManuscript(bytes: Uint8Array, encoding: ImportEncoding = 'auto'): { text: string; encoding: Exclude<ImportEncoding, 'auto'> } {

@@ -1,3 +1,4 @@
+import { ManuscriptImportView } from './components/ManuscriptImportView'
 import { ChapterMemoryView } from './components/ChapterMemoryView'
 import { clearAnnotationLocations } from './lib/annotations'
 import { AnnotationTasks } from './components/AnnotationTasks'
@@ -193,6 +194,7 @@ export default function App() {
 
   function viewContent() {
     if (!data) return null
+    if (activeView === 'manuscript-import') return <ManuscriptImportView />
     if (activeView === 'chapter-memory') return <ChapterMemoryView />
     if (activeView === 'annotation') return <AnnotationTasks />
     if (activeView === 'dashboard') return <Dashboard />

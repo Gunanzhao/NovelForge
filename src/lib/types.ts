@@ -1,6 +1,6 @@
 export type NodeKind = 'volume' | 'chapter' | 'section'
 export type EntityKind = 'chapter-memory' | 'annotation' | 'character' | 'location' | 'world' | 'timeline' | 'foreshadowing' | 'outline' | 'scene' | 'note' | 'relationship' | 'attachment' | 'mention-ignore' | 'story-arc' | 'prompt-preset' | 'inbox' | 'checklist-template' | 'chapter-checklist'
-export type ViewId = 'dashboard' | 'manuscript' | EntityKind | 'character-statistics' | 'consistency' | 'statistics' | 'ai' | 'search' | 'trash' | 'settings'
+export type ViewId = 'manuscript-import' | 'dashboard' | 'manuscript' | EntityKind | 'character-statistics' | 'consistency' | 'statistics' | 'ai' | 'search' | 'trash' | 'settings'
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type ExportFormat = 'markdown' | 'txt' | 'html' | 'docx' | 'epub' | 'pdf'
