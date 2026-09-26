@@ -522,7 +522,7 @@ code { padding: 1px 4px; border-radius: 3px; background: var(--surface-2); font-
 .mention-row,
 .mention-candidate {
   align-items: center;
-  background: color-mix(in srgb, var(--panel) 82%, var(--accent) 18%);
+  background: color-mix(in srgb, var(--surface) 82%, var(--accent) 18%);
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--text);
@@ -645,7 +645,7 @@ code { padding: 1px 4px; border-radius: 3px; background: var(--surface-2); font-
 }
 
 .story-arc-color-input {
-  background: var(--panel);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
   height: 36px;
@@ -654,7 +654,7 @@ code { padding: 1px 4px; border-radius: 3px; background: var(--surface-2); font-
 }
 
 .story-arc-section {
-  background: var(--panel);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 11px;
   display: grid;
@@ -1057,7 +1057,7 @@ code { padding: 1px 4px; border-radius: 3px; background: var(--surface-2); font-
 }
 
 .character-statistics-layout > aside {
-  background: var(--panel);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 11px;
   display: grid;
@@ -1121,7 +1121,7 @@ code { padding: 1px 4px; border-radius: 3px; background: var(--surface-2); font-
 
 .character-matrix thead th,
 .character-matrix tbody th {
-  background: var(--panel);
+  background: var(--surface);
   position: sticky;
   z-index: 1;
 }
@@ -1462,10 +1462,10 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 .project-backup [role="alert"] { color:var(--red); overflow-wrap:anywhere; }
 .welcome-card .project-backup { margin-top:24px; }
 
-.toast-notice { position:fixed; z-index:110; bottom:46px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:14px; max-width:calc(100vw - 40px); padding:12px 18px; border:1px solid var(--border); border-radius:10px; background:var(--panel); color:var(--text); box-shadow:0 4px 24px #0002; }
+.toast-notice { position:fixed; z-index:110; bottom:46px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:14px; max-width:calc(100vw - 40px); padding:12px 18px; border:1px solid var(--line); border-radius:10px; background:var(--surface); color:var(--text); box-shadow:0 4px 24px #0002; }
 .toast-notice button { border:0; background:transparent; color:var(--accent); white-space:nowrap; cursor:pointer; }
 .codex-check-actions { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
-.codex-connection-status { margin:12px 0; padding:10px 12px; border:1px solid var(--border); border-radius:8px; }
+.codex-connection-status { margin:12px 0; padding:10px 12px; border:1px solid var(--line); border-radius:8px; }
 .codex-connection-status p { margin:4px 0; }
 .codex-resolved-path { overflow-wrap:anywhere; font-size:12px; color:var(--muted); }
 
@@ -1656,7 +1656,7 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 @container workspace (max-width: 760px) { .entity-history-values { grid-template-columns: minmax(0, 1fr); } }
 .wiki-rename-preview, .wiki-rename-undo { display: grid; gap: 12px; min-width: 0; }
 .wiki-rename-references { display: grid; gap: 10px; max-height: 360px; overflow: auto; }
-.wiki-rename-reference { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.wiki-rename-reference { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
 .wiki-rename-reference span, .wiki-rename-candidate { min-width: 0; }
 .wiki-rename-reference strong, .wiki-rename-reference small { display: block; overflow-wrap: anywhere; }
 .wiki-rename-reference pre, .wiki-rename-candidate pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; margin: 6px 0 0; }
@@ -1664,7 +1664,7 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 .wiki-rename-preview details { min-width: 0; max-height: 260px; overflow: auto; }
 .automatic-backup-form, .backup-cleanup { display: grid; gap: 12px; min-width: 0; }
 .backup-health { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.backup-health > div { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; overflow-wrap: anywhere; }
+.backup-health > div { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; overflow-wrap: anywhere; }
 .backup-policy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .backup-archive { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 12px; }
 .backup-archive > span { display: grid; gap: 6px; min-width: 0; }
@@ -1675,22 +1675,22 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 .recovery-center-text { min-height: 220px; max-height: 50vh; resize: vertical; }
 .annotation-content, .annotation-composer, .annotation-list { display: grid; gap: 12px; min-width: 0; }
 .annotation-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.annotation-card { border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
+.annotation-card { border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
 .annotation-card small { display: block; color: var(--muted); }
 .annotation-card p, .annotation-card blockquote, .annotation-composer blockquote { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
-.annotation-card blockquote, .annotation-composer blockquote { max-height: 160px; overflow: auto; border-inline-start: 3px solid var(--border); padding-inline-start: 10px; }
+.annotation-card blockquote, .annotation-composer blockquote { max-height: 160px; overflow: auto; border-inline-start: 3px solid var(--line); padding-inline-start: 10px; }
 .annotation-orphan { color: var(--muted); }
 .annotation-tasks-compact .annotation-filters { grid-template-columns: minmax(0, 1fr); }
 @container workspace (max-width: 760px) { .annotation-filters { grid-template-columns: minmax(0, 1fr); } }
 .cm-manuscript-annotation { text-decoration-line: underline; text-decoration-style: dotted; text-decoration-color: var(--accent); text-underline-offset: 4px; background: color-mix(in srgb, var(--accent) 9%, transparent); }
 .memory-workspace { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; min-width: 0; }
 .memory-chapters { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.memory-chapters button { text-align: start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: inherit; overflow-wrap: anywhere; }
+.memory-chapters button { text-align: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; overflow-wrap: anywhere; }
 .memory-chapters button.active { border-color: var(--accent); }
 .memory-chapters small { display: block; color: var(--muted); }
 .memory-editor-region, .memory-editor, .memory-fields, .memory-sources, .memory-source { min-width: 0; }
 .memory-editor, .memory-fields, .memory-sources, .memory-source, .memory-stale { display: grid; gap: 12px; }
-.memory-source { border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.memory-source { border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
 .memory-source blockquote { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 200px; overflow: auto; }
 .memory-source-text { min-height: 240px; max-height: 50vh; resize: vertical; }
 .memory-source-picker > :not(summary) { margin-block-start: 12px; }
@@ -1705,3 +1705,7 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 .import-boundaries input, .import-confirm input { flex: 0 0 auto; margin-top: 3px; }
 .import-manual-boundary { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
 .import-source { min-height: 260px; width: 100%; resize: vertical; }
+
+.chapter-memory-view, .manuscript-import-view, .annotation-tasks:not(.annotation-tasks-compact) { padding: 24px; }
+.chapter-memory-view > .view-header, .manuscript-import-view .view-header, .annotation-tasks:not(.annotation-tasks-compact) > .view-header { padding: 0 0 18px; }
+.annotation-tasks:not(.annotation-tasks-compact) > .view-header { width: 100%; max-width: 760px; margin-inline: auto; }
