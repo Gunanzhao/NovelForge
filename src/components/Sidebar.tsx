@@ -20,25 +20,25 @@ import {
 } from '../lib/chapter-workflow'
 import type { ChapterWorkflowFilter } from '../lib/chapter-workflow'
 
-const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
-  { id: 'dashboard', label: '总览', icon: LayoutDashboard },
-  { id: 'manuscript', label: '正文', icon: BookOpen },
-  { id: 'manuscript-import', label: '稿件导入', icon: FilePlus2 },
-  { id: 'outline', label: '写作规划', icon: BookOpen },
-  { id: 'character', label: '人物', icon: CircleUserRound },
-  { id: 'location', label: '地点', icon: GalleryVerticalEnd },
-  { id: 'world', label: '世界观 Wiki', icon: Globe2 },
-  { id: 'timeline', label: '时间线', icon: Clock3 },
-  { id: 'foreshadowing', label: '伏笔', icon: GitBranch },
-  { id: 'story-arc', label: '剧情线', icon: GitBranch },
-  { id: 'inbox', label: '灵感箱', icon: Inbox },
-  { id: 'relationship', label: '人物关系图', icon: Network },
-  { id: 'attachment', label: '资料附件', icon: Paperclip },
-  { id: 'chapter-memory', label: '章节记忆', icon: BookOpen },
-  { id: 'annotation', label: '批注与修订', icon: ShieldCheck },
-  { id: 'consistency', label: '一致性检查', icon: ShieldCheck },
-  { id: 'statistics', label: '详细统计', icon: BarChart3 },
-  { id: 'ai', label: 'AI 辅助', icon: Sparkles },
+const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon; group: '写作' | '资料' | '分析与辅助' }> = [
+  { id: 'dashboard', label: '总览', icon: LayoutDashboard, group: '写作' },
+  { id: 'manuscript', label: '正文', icon: BookOpen, group: '写作' },
+  { id: 'manuscript-import', label: '稿件导入', icon: FilePlus2, group: '写作' },
+  { id: 'outline', label: '写作规划', icon: BookOpen, group: '写作' },
+  { id: 'character', label: '人物', icon: CircleUserRound, group: '资料' },
+  { id: 'location', label: '地点', icon: GalleryVerticalEnd, group: '资料' },
+  { id: 'world', label: '世界观 Wiki', icon: Globe2, group: '资料' },
+  { id: 'timeline', label: '时间线', icon: Clock3, group: '写作' },
+  { id: 'foreshadowing', label: '伏笔', icon: GitBranch, group: '写作' },
+  { id: 'story-arc', label: '剧情线', icon: GitBranch, group: '写作' },
+  { id: 'inbox', label: '灵感箱', icon: Inbox, group: '写作' },
+  { id: 'relationship', label: '人物关系图', icon: Network, group: '分析与辅助' },
+  { id: 'attachment', label: '资料附件', icon: Paperclip, group: '资料' },
+  { id: 'chapter-memory', label: '章节记忆', icon: BookOpen, group: '写作' },
+  { id: 'annotation', label: '批注与修订', icon: ShieldCheck, group: '写作' },
+  { id: 'consistency', label: '一致性检查', icon: ShieldCheck, group: '分析与辅助' },
+  { id: 'statistics', label: '详细统计', icon: BarChart3, group: '分析与辅助' },
+  { id: 'ai', label: 'AI 辅助', icon: Sparkles, group: '分析与辅助' },
 ]
 
 function nodeChildren(nodes: NodeRecord[], parentId: string) {
@@ -259,7 +259,7 @@ export function Sidebar({
       <div className="sidebar-head"><div><h2>项目导航</h2><small>{data.project.title}</small></div><IconButton icon={Plus} label="新建卷" onClick={() => onAddNode('volume', null)} /></div>
       <div className="sidebar-nav-groups">
       <div className="nav-list">
-        {([{ title: '写作', ids: ['dashboard', 'manuscript', 'outline', 'timeline', 'foreshadowing', 'story-arc', 'inbox'] }, { title: '资料', ids: ['character', 'location', 'world', 'attachment'] }, { title: '分析与辅助', ids: ['relationship', 'consistency', 'statistics', 'ai'] }]).map(group => <Disclosure key={group.title} title={group.title} storageKey={'nav:' + group.title} defaultOpen className="nav-group">{navItems.filter(item => group.ids.includes(item.id)).map(({ id, label, icon: Icon }) => <button key={id} className={cn('nav-item', activeView === id && 'active')} onClick={() => id === 'manuscript' ? setView('manuscript') : setView(id)}><Icon size={15} strokeWidth={1.8} /><span>{label}</span>{id === 'character' ? <span className="count">{data.entities.filter((entity) => entity.kind === 'character').length}</span> : null}</button>)}</Disclosure>)}
+        {([{ title: '写作' }, { title: '资料' }, { title: '分析与辅助' }]).map(group => <Disclosure key={group.title} title={group.title} storageKey={'nav:' + group.title} defaultOpen className="nav-group">{navItems.filter(item => item.group === group.title).map(({ id, label, icon: Icon }) => <button key={id} className={cn('nav-item', activeView === id && 'active')} onClick={() => id === 'manuscript' ? setView('manuscript') : setView(id)}><Icon size={15} strokeWidth={1.8} /><span>{label}</span>{id === 'character' ? <span className="count">{data.entities.filter((entity) => entity.kind === 'character').length}</span> : null}</button>)}</Disclosure>)}
         <button className={cn('nav-item', activeView === 'search' && 'active')} onClick={() => setView('search')}><Search size={15} strokeWidth={1.8} /><span>全文搜索</span><span className="count">⌘</span></button>
       </div>
       </div><div className="sidebar-section-label"><span>正文结构</span><span>{data.nodes.filter((node) => node.kind === 'chapter').length} 章</span></div>
