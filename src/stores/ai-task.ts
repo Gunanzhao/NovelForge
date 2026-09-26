@@ -1,3 +1,4 @@
+import { normalizeLineBreaks, sourceRangeFromNormalizedText } from '../lib/newline-offsets'
 import { protectBeforeChange } from '../lib/history'
 import { create } from 'zustand'
 import { ChangeSet, type ChangeDesc } from '@codemirror/state'
@@ -54,8 +55,12 @@ export function captureAiTarget(kind: AiTarget['kind'], range?: { from: number; 
   const state = useAppStore.getState(), doc = state.document
   if (!state.projectPath || !doc) throw new Error('请先打开一个章节。')
   const selection = state.editorSelection?.nodeId === doc.node.id ? state.editorSelection : null
-  const from = kind === 'chapter' ? 0 : range?.from ?? selection?.from ?? doc.content.length
-  const to = kind === 'chapter' ? doc.content.length : kind === 'cursor' ? from : range?.to ?? selection?.to ?? from
+  // Explicit ranges already belong to stored source text; live selections belong to CodeMirror's LF text.
+  const selected = !range && selection && kind !== 'chapter'
+    ? sourceRangeFromNormalizedText(doc.content, selection.from, kind === 'cursor' ? selection.from : selection.to) : null
+  if (!range && selection && kind === 'selection' && normalizeLineBreaks(doc.content).slice(selection.from, selection.to) !== selection.text) throw new Error('选区正文已变化，请重新选择。')
+  const from = kind === 'chapter' ? 0 : range?.from ?? selected?.from ?? doc.content.length
+  const to = kind === 'chapter' ? doc.content.length : kind === 'cursor' ? from : range?.to ?? selected?.to ?? from
   if (from < 0 || to < from || to > doc.content.length || (kind === 'selection' && from === to)) throw new Error('请先选择要处理的正文。')
   return { project: state.projectPath, session: state.projectSession, node: doc.node.id, title: doc.node.title, kind,
     from, to, conflict: false, originalFrom: from, originalText: doc.content.slice(from, to), originalContent: doc.content }

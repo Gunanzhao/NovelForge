@@ -136,3 +136,19 @@ it('does not apply an AI edit to a chapter changed while its snapshot was pendin
   finish(); await applying
   expect(useAppStore.getState().document?.content).toBe('用户在等待期间修改正文')
 })
+
+it('captures the exact original CRLF passage from editor LF selection coordinates', () => {
+  const content = '# 章节\r\n前文。\r\n风很冷。\r\n灯很暗。\r\n后文。'
+  const normalized = content.replace(/\r\n/gu, '\n')
+  const from = normalized.indexOf('风'), to = normalized.indexOf('后文')
+  useAppStore.setState({ document: { node, content }, editorSelection: { nodeId: node.id, from, to, text: normalized.slice(from, to) } })
+  const target = captureAiTarget('selection')
+  expect(target.originalText).toBe('风很冷。\r\n灯很暗。\r\n')
+  expect(target.from).toBe(content.indexOf('风'))
+  expect(captureAiTarget('cursor').from).toBe(content.indexOf('风'))
+  expect(captureAiTarget('selection', { from: target.from, to: target.to }).originalText).toBe(target.originalText)
+})
+it('refuses an obsolete editor selection rather than sending unrelated source text', () => {
+  useAppStore.setState({ editorSelection: { nodeId: node.id, from: 3, to: 11, text: '已经过期的选区' } })
+  expect(() => captureAiTarget('selection')).toThrow('选区正文已变化')
+})
