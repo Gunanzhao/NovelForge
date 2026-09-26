@@ -9,12 +9,19 @@
 
 - WF-A03：首次推送Rust CI因RUSTSEC-2026-0285失败，锁定依赖rustls从0.23.43升级至0.23.45；159项Rust回归通过（7项跳过）。本机未安装cargo-audit，完整审计须由下一次云端CI复验，不绕过审计门禁。
 
-## 尚待完成的审查范围
+## 本地全量审查结论与待交付项
 
-- 已填表单和长文本在1100/1440/1920、浅深主题下的溢出、对齐和可访问性，覆盖所有主要页面；已有资料18组与新页面18组基础几何检查不替代此范围。
-- 保存/导航/外部冲突、历史/回收站/恢复、附件路径、搜索索引、导入/导出、AI生命周期和上下文、设置持久化的交叉路径。
-- 依赖审计、前端与Rust完整回归、构建和真实桌面专项；第一次推送CI和主分支同步；全部修复后的第二次推送及CI。
-- README、版本号、Release说明、安装包/独立EXE/校验文件与云端版本一致性。
+WF-A01～WF-A05均已修复并逐项提交。已完成源码交叉检查、完整前端/Rust回归、主要页面长文本视觉矩阵及生产桌面专项；不能将本地通过当作云端CI或发布已完成。
+
+- 475项前端测试（77个文件）、159项Rust测试通过（7项按原设置跳过）；typecheck/lint/rustfmt/Clippy通过。
+- pnpm audit --audit-level high：未发现已知漏洞；Rust完整依赖审计仍待第二次推送CI。
+- Windows生产EXE已重建；完整desktop-e2e-cdp通过，覆盖正文与树操作、历史、资料、Wiki、规划、搜索、AI取消、回收站及六种导出。测试原有裁剪诊断不影响对应断言完成。
+- 六项writing-workflow生产专项通过，证据tmp/workflow-acceptance/evidence.json，本次run为tmp/workflow-1790443342054。
+- CRLF AI桌面专项通过：tmp/editor-ai-ui-crlf-1790443348920/result.json。
+- Provider请求取消及连接释放通过，合成服务未使用真实生成额度：tmp/provider-lifecycle-1790443354381/result.json。
+- 旧写入IPC拒绝、编辑会话、远程图片授权、关闭/导航草稿保护、外部冲突恢复、备份恢复、撤销及版本UI专项通过：tmp/reliability-ui-1790443358177/result.json。
+- 设置桌面专项通过：tmp/settings-ui-1790443365892/metrics.json。
+- 待完成：第二次统一推送、CI安全审计及主分支同步；README、版本号、Release说明、安装包/独立EXE/校验文件与云端版本一致性。
 
 - WF-A04：批注前方插入CRLF段落时，变化集默认归一换行导致位移少算。明确按原文LF分隔构建变化集、保留CR字符，覆盖初始定位与持久化锚点重映射；7项批注回归、typecheck/lint通过。
 
