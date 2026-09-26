@@ -46,15 +46,3 @@ export function memoryContextText(memory:ChapterMemory,content:string,chapterTit
 }
 export const MEMORY_SUMMARY_INSTRUCTION='请仅依据所选章节生成JSON对象，字符串字段：summary（章节摘要）、events（关键事件）、knowledge（人物各自已知信息）、changes（关系身份物品变化）、planted（本章埋设伏笔）、resolved（本章回收伏笔）、next（下一章承接事项）。另附sources数组，每项包含field（对应字段名）和quote（该章节中的连续原文引文）。不确定的信息明确写为待作者核对，不补造事实；没有依据的字段留空。输出只作待确认草稿。'
 
-/** HTML textareas normalize CRLF/CR to LF; translate their selection to original UTF-16 offsets. */
-export function sourceRangeFromTextarea(source: string, from: number, to: number): { from: number; to: number } {
-  let normalized = 0, start = -1, end = -1
-  for (let offset = 0; offset <= source.length; offset++) {
-    if (normalized === from && start < 0) start = offset
-    if (normalized === to) { end = offset; break }
-    if (source[offset] === '\r' && source[offset + 1] === '\n') offset++
-    normalized++
-  }
-  if (start < 0 || end < start) throw new Error('原文选区无效，请重新选择。')
-  return { from: start, to: end }
-}

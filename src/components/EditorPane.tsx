@@ -1,3 +1,4 @@
+import { normalizeLineBreaks, normalizedRangeFromSource } from '../lib/newline-offsets'
 import { annotationExtension } from '../lib/annotation-extension'
 import { useTextNavigation } from '../lib/text-navigation'
 import { chapterAnnotations } from '../lib/annotations'
@@ -104,8 +105,9 @@ export function EditorPane() {
   const textJump=useTextNavigation(state=>state.request)
   function applyTextJump(view:EditorView){
     const request=useTextNavigation.getState().request
-    if(!request||!isCurrentProjectSession(request.session)||useAppStore.getState().document?.node.id!==request.nodeId||view.state.doc.toString()!==request.content)return
-    view.dispatch({selection:{anchor:request.from,head:request.to},effects:EditorView.scrollIntoView(request.from,{y:'center'})});view.focus();useTextNavigation.setState({request:null})
+    if(!request||!isCurrentProjectSession(request.session)||useAppStore.getState().document?.node.id!==request.nodeId||useAppStore.getState().document?.content!==request.content||view.state.doc.toString()!==normalizeLineBreaks(request.content))return
+    const range=normalizedRangeFromSource(request.content,request.from,request.to)
+    view.dispatch({selection:{anchor:range.from,head:range.to},effects:EditorView.scrollIntoView(range.from,{y:'center'})});view.focus();useTextNavigation.setState({request:null})
   }
   useEffect(()=>{if(textJump&&editorViewRef.current)applyTextJump(editorViewRef.current)},[textJump,document?.node.id,editorMode])
 

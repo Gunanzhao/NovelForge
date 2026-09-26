@@ -1,3 +1,4 @@
+import { normalizeLineBreaks, sourceRangeFromNormalizedText } from '../lib/newline-offsets'
 import { useEffect, useRef, useState } from 'react'
 import { projectApi } from '../lib/api'
 import { ANNOTATION_CATEGORIES, annotationLocation, chapterAnnotations, type AnnotationCategory, type ManuscriptAnnotation, type TextAnchor } from '../lib/annotations'
@@ -35,7 +36,7 @@ function AnnotationTasksContent({compact}:{compact:boolean}) {
   function currentDocument(item:ManuscriptAnnotation){return document?.node.id===item.chapterId?document:documents[item.chapterId]}
   function location(item:ManuscriptAnnotation){const doc=currentDocument(item);return doc?annotationLocation(item,doc.content,doc.annotationTracking):null}
   const visible=annotations.filter(item=>(categoryFilter==='all'||item.category===categoryFilter)&&(statusFilter==='all'||statusFilter===item.status||statusFilter==='orphaned'&&(location(item)?.orphaned||!data.nodes.some(node=>node.id===item.chapterId))))
-  function start(){if(!document||!selection||selection.nodeId!==document.node.id||selection.to<=selection.from||document.content.slice(selection.from,selection.to)!==selection.text)return;setAnchor({chapterId:document.node.id,sourceText:document.content,from:selection.from,to:selection.to});setError('')}
+  function start(){if(!document||!selection||selection.nodeId!==document.node.id||selection.to<=selection.from||normalizeLineBreaks(document.content).slice(selection.from,selection.to)!==selection.text)return;const range=sourceRangeFromNormalizedText(document.content,selection.from,selection.to);setAnchor({chapterId:document.node.id,sourceText:document.content,...range});setError('')}
   async function save(){
     if(pending.current||!anchor||!body.trim()||!projectPath)return false
     const session=captureProjectSession();pending.current=true;setBusy(true);setDraftSaving(draftId,true);setError('')
