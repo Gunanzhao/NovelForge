@@ -639,7 +639,8 @@ code { padding: 1px 4px; border-radius: 3px; background: var(--surface-2); font-
   padding: 0 24px 28px;
 }
 
-.story-arc-form {
+.story-arc-form, .story-arc-editor > .view-header {
+  width: 100%;
   margin: 0 auto;
   max-width: 920px;
 }
@@ -1709,3 +1710,7 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 .chapter-memory-view, .manuscript-import-view, .annotation-tasks:not(.annotation-tasks-compact) { padding: 24px; }
 .chapter-memory-view > .view-header, .manuscript-import-view .view-header, .annotation-tasks:not(.annotation-tasks-compact) > .view-header { padding: 0 0 18px; }
 .annotation-tasks:not(.annotation-tasks-compact) > .view-header { width: 100%; max-width: 760px; margin-inline: auto; }
+
+/* Nested editors already provide their own horizontal page padding. */
+.story-arc-editor > .view-header { padding: 25px 0 18px; }
+.attachments-view > .view-header > div:first-child { min-width: 0; flex: 1; }

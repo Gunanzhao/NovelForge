@@ -42,7 +42,7 @@ try {
     if(doc.content.length) await call('upsert_entity', { input: { projectPath, kind: 'annotation', title: '长篇修订任务', tags: [], content: { chapterId, sourceText: doc.content, from: 0, to: Math.min(5,doc.content.length), anchorRevision: 'layout-fixture', body: longText, category: 'continuity', status: 'open' } } })
   }
   const source = resolve(run,'reference.txt'); writeFileSync(source,'Synthetic reference')
-  await call('import_attachment',{input:{projectPath,sourcePath:source,description:'用于界面验证的合成附件'}})
+  await call('import_attachment',{input:{projectPath,sourcePath:source,description:fullMatrix ? '用于界面验证的合成附件。'.repeat(100) : '用于界面验证的合成附件'}})
   await ev(`localStorage.setItem('novelforge:recent-projects',${JSON.stringify(JSON.stringify([{ path: projectPath, title: '名字工具合成验证', updatedAt: '' }]))});location.reload()`)
   await sleep(900)
   await waitFor(`!!document.querySelector('.recent-project')`)
@@ -58,7 +58,10 @@ try {
     const value = await ev(`(()=>{const main=document.querySelector('.ai-host-full:not([hidden])')??document.querySelector('main'),r=main.getBoundingClientRect();const controls=[...main.querySelectorAll('button,input,select,textarea,p,h1,h2,blockquote')].filter(e=>e.getClientRects().length&&!e.closest('details:not([open])'));return {width:innerWidth,height:innerHeight,body:document.body.scrollWidth,workspace:r.width,overflow:controls.filter(e=>{const f=e.getBoundingClientRect();return f.left<r.left-1||f.right>r.right+1}).map(e=>(e.getAttribute('aria-label')||e.textContent||e.placeholder).slice(0,50))}})()`)
     const alignment = await ev(`(()=>{const detail=document.querySelector('main .archive-editor-detail');if(!detail||!detail.getClientRects().length)return null;const parent=detail.parentElement,r=detail.getBoundingClientRect(),p=parent.getBoundingClientRect();return {width:r.width,centerError:Math.abs(r.left+r.width/2-(p.left+parent.clientLeft+parent.clientWidth/2))}})()`)
     if(alignment){assert.ok(alignment.width<=761,label+' editor width');assert.ok(alignment.centerError<1,label+' editor centering '+JSON.stringify(alignment))}
-    metrics.push({label,...value,alignment})
+    const textLayout = await ev(`(()=>{const summary=document.querySelector('main .special-summary span'),header=document.querySelector('.story-arc-editor .view-header h1'),field=document.querySelector('.story-arc-editor .field');let countLines=0;if(summary){const range=document.createRange();range.selectNodeContents(summary);countLines=new Set([...range.getClientRects()].map(r=>Math.round(r.top))).size}return {countLines,titleOffset:header&&field?Math.abs(header.getBoundingClientRect().left-field.getBoundingClientRect().left):0}})()`)
+    assert.ok(textLayout.countLines<=1,label+' summary text wraps vertically')
+    assert.ok(textLayout.titleOffset<1,label+' nested editor title misaligned')
+    metrics.push({label,...value,alignment,textLayout})
     const shot=await cmd('Page.captureScreenshot',{format:'png'});writeFileSync(resolve(run,label+'.png'),Buffer.from(shot.data,'base64'))
     assert.ok(value.body<=value.width,label+' body overflow');assert.deepEqual(value.overflow,[],label+' controls overflow')
   }
