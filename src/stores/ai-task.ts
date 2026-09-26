@@ -18,6 +18,7 @@ export interface AiTarget extends AiRange {
   title: string
   kind: 'selection' | 'cursor' | 'chapter'
   originalFrom: number
+  originalTo: number
   originalText: string
   originalContent: string
 }
@@ -63,7 +64,7 @@ export function captureAiTarget(kind: AiTarget['kind'], range?: { from: number; 
   const to = kind === 'chapter' ? doc.content.length : kind === 'cursor' ? from : range?.to ?? selected?.to ?? from
   if (from < 0 || to < from || to > doc.content.length || (kind === 'selection' && from === to)) throw new Error('请先选择要处理的正文。')
   return { project: state.projectPath, session: state.projectSession, node: doc.node.id, title: doc.node.title, kind,
-    from, to, conflict: false, originalFrom: from, originalText: doc.content.slice(from, to), originalContent: doc.content }
+    from, to, conflict: false, originalFrom: from, originalTo: to, originalText: doc.content.slice(from, to), originalContent: doc.content }
 }
 // Compare visible text while retaining exact original-source coordinates for protected writes.
 function rewriteEdits(before: string, after: string, offset: number): AiEdit[] {
@@ -152,7 +153,7 @@ export const useAiTask = create<AiTask>((set, get) => ({
   editResult(content) {
     const { result, target, mapping, edits, phase, application } = get()
     if (!result || !target || !mapping || phase !== 'complete' || edits.some(edit => edit.state === 'accepted')) return
-    set({ token: crypto.randomUUID(), result: { ...result, content }, edits: application === 'rewrite' ? !target.conflict ? rewriteEdits(target.originalText, content, target.from) : rewriteEdits(target.originalText, content, target.originalFrom).map(edit => ({ ...edit, ...mapAiRange(edit, mapping) })) : [] })
+    set({ token: crypto.randomUUID(), result: { ...result, content }, edits: application === 'rewrite' ? !target.conflict ? rewriteEdits(target.originalText, content, target.from) : rewriteEdits(target.originalContent.slice(target.originalFrom, target.originalTo), content, target.originalFrom).map(edit => ({ ...edit, ...mapAiRange(edit, mapping) })) : [] })
   },
   observe(before, after, knownChanges, acceptance) {
     const { target, source, mapping, edits } = get()

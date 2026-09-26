@@ -187,3 +187,23 @@ it('applies separate CRLF suggestions through editor transactions and permits un
     expect(editor.doc.toString()).toBe('# 标题\n风很暖。\n灯很亮。\n后文。')
   } finally { unregister() }
 })
+
+it('reediting an AI result preserves nonconflicting hunks after CRLF normalization', async () => {
+  const content='# 标题\r\n风很冷。\r\n灯很暗。\r\n后文。',plain=normalizeLineBreaks(content)
+  const from=plain.indexOf('风'),to=plain.indexOf('后文')
+  useAppStore.setState({document:{node,content},editorSelection:{nodeId:node.id,from,to,text:plain.slice(from,to)}})
+  await useAiTask.getState().start(captureAiTarget('selection'),'rewrite',async()=>request('风很暖。\n灯很亮。\n'))
+  const editor=EditorState.create({doc:plain}),pos=plain.indexOf('冷')
+  const changes=ChangeSet.of({from:pos,to:pos+1,insert:'凉'},plain.length)
+  const after=editor.update({changes}).state.doc.toString()
+  useAiTask.getState().observe(plain,after,changes)
+  useAppStore.getState().updateContent(after)
+  useAiTask.getState().editResult('风很暖。\n灯很明。\n')
+  const lamp=useAiTask.getState().edits.find(e=>e.before==='暗')!
+  expect(lamp).toBeDefined()
+  expect(lamp.conflict).toBe(false)
+  expect(after.slice(lamp.from,lamp.to)).toBe('暗')
+  await useAiTask.getState().accept(lamp.id)
+  expect(useAiTask.getState().error).toBe('')
+  expect(useAppStore.getState().document?.content).toBe('# 标题\n风很凉。\n灯很明。\n后文。')
+})
