@@ -78,7 +78,20 @@ async function releaseForTransition(path: string | null, isCurrent: () => boolea
 function readRecent(): RecentProject[] {
   try {
     const value = localStorage.getItem(RECENT_KEY)
-    return value ? JSON.parse(value) as RecentProject[] : []
+    if (!value || value.length > 128_000) return []
+    const parsed: unknown = JSON.parse(value)
+    if (!Array.isArray(parsed)) return []
+    const seen = new Set<string>()
+    return parsed.filter((item): item is RecentProject => {
+      if (!item || typeof item !== 'object') return false
+      const entry = item as Record<string, unknown>
+      if (typeof entry.path !== 'string' || !entry.path.trim() || entry.path.length > 4096
+        || typeof entry.title !== 'string' || !entry.title.trim() || entry.title.length > 1000
+        || typeof entry.updatedAt !== 'string' || !Number.isFinite(Date.parse(entry.updatedAt))
+        || seen.has(entry.path)) return false
+      seen.add(entry.path)
+      return true
+    }).slice(0, 8).map(({ path, title, updatedAt }) => ({ path, title, updatedAt }))
   } catch {
     return []
   }

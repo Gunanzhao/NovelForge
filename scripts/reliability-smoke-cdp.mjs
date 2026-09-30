@@ -118,6 +118,3 @@ try {
   socket?.close()
   if (child.pid) { try { execFileSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }) } catch { /* already exited */ } }
 }
-
-
-

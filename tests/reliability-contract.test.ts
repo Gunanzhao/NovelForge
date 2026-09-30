@@ -13,4 +13,3 @@ it('shares Unicode lifecycle fixtures with the Rust/desktop contract (demo is no
   const reopened = await fallbackInvoke<DocumentData>('get_document', { input: { projectPath: path, nodeId: node.id } })
   expect(reopened.content).toBe(fixture.body)
 })
-
