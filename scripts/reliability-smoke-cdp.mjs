@@ -1,7 +1,7 @@
 /* global console, process, fetch, URL, crypto, WebSocket, setTimeout, clearTimeout */
 import assert from 'node:assert/strict'
 import { spawn, execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -158,6 +158,11 @@ try {
   assert.throws(() => assert.equal(typeof { code: fixture.conflictCode }, 'string'))
   console.log('PASS: production Windows IPC/serde, Unicode, null/missing/optional, drift controls, leases, reopen, conflict rescue, backup restore and exported body')
 } catch (error) {
+  if (!started) {
+    const startupLog = join(temporary, 'localappdata', 'NovelForge', 'logs', 'startup.log')
+    const codes = existsSync(startupLog) ? readFileSync(startupLog, 'utf8').match(/STARTUP_[A-Z_]+/g) : []
+    console.error('Startup state', { exitCode: child.exitCode, signalCode: child.signalCode, runtimeConfigured: Boolean(process.env.WEBVIEW2_BROWSER_EXECUTABLE_FOLDER), codes })
+  }
   console.error(started ? 'PRODUCT_OR_TEST_FAILURE' : 'STARTUP_OR_ENVIRONMENT_FAILURE', error)
   process.exitCode = 1
 } finally {

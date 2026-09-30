@@ -230,6 +230,7 @@ Windows 无终端启动失败时显示原生提示，日志位于 `%LOCALAPPDATA
 Windows 生产构建后可运行独立门禁：
 
 ```powershell
+./scripts/ensure-webview2-runtime.ps1 -ProbeOnly
 node scripts/reliability-smoke-cdp.mjs
 ./scripts/startup-diagnostics-test.ps1 -Executable ./src-tauri/target/release/novelforge.exe
 ```

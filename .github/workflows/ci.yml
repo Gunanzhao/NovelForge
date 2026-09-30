@@ -112,21 +112,31 @@ jobs:
           node-version: 22
           cache: pnpm
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             src-tauri/target
           key: windows-reliability-${{ hashFiles('src-tauri/Cargo.lock') }}
+      - name: Ensure genuine WebView2 Runtime
+        shell: pwsh
+        run: ./scripts/ensure-webview2-runtime.ps1
       - run: pnpm install --frozen-lockfile
       - name: Complete Windows Rust suite
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked
       - name: Build production desktop
         run: pnpm tauri build --no-bundle
-      - name: Real WebView2 IPC and data lifecycle smoke
-        run: node scripts/reliability-smoke-cdp.mjs
-
+      - name: Cache successful Windows build before desktop checks
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: windows-reliability-${{ hashFiles('src-tauri/Cargo.lock') }}
       - name: Native startup failure notice without a terminal
         shell: pwsh
         run: ./scripts/startup-diagnostics-test.ps1 -Executable ./src-tauri/target/release/novelforge.exe
+      - name: Real WebView2 IPC and data lifecycle smoke
+        run: node scripts/reliability-smoke-cdp.mjs
