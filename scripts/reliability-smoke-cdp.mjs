@@ -16,6 +16,8 @@ const backups = join(temporary, '备份')
 mkdirSync(projectPath); mkdirSync(backups)
 for (const name of ['appdata', 'localappdata', 'webview']) mkdirSync(join(temporary, name))
 const port = Number(process.env.NOVELFORGE_SMOKE_PORT ?? 9337)
+const startupTimeout = Number(process.env.NOVELFORGE_SMOKE_STARTUP_MS ?? 40000)
+assert.ok(Number.isFinite(startupTimeout) && startupTimeout > 0 && startupTimeout <= 120000, 'startup budget must be within 120 seconds')
 const executable = resolve(process.argv[2] ?? 'src-tauri/target/release/novelforge.exe')
 const launch = () => spawn(executable, [], { windowsHide: true, stdio: 'ignore', env: { ...process.env, APPDATA: join(temporary, 'appdata'), LOCALAPPDATA: join(temporary, 'localappdata'), WEBVIEW2_USER_DATA_FOLDER: join(temporary, 'webview'), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}` } })
 let child = launch()
@@ -26,7 +28,8 @@ try {
   let target
   let launchError
   child.on('error', error => { launchError = error })
-  for (let attempt = 0; attempt < 160; attempt++) {
+  const launchStarted = Date.now()
+  for (; Date.now() - launchStarted < startupTimeout;) {
     if (launchError) throw launchError
     try {
       const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(1000) })).json()
@@ -37,6 +40,7 @@ try {
     await delay(250)
   }
   if (!target) throw new Error('ENVIRONMENT: WebView2 unavailable; runner needs a Windows desktop session and WebView2 runtime')
+  console.log('WebView2 initial page ready in', Date.now() - launchStarted, 'ms')
   socket = new WebSocket(target.webSocketDebuggerUrl)
   await new Promise((yes, no) => { socket.addEventListener('open', yes, { once: true }); socket.addEventListener('error', no, { once: true }) })
   let next = 0
@@ -144,12 +148,14 @@ try {
   await delay(500)
   child = launch()
   let restarted
-  for (let attempt = 0; attempt < 160; attempt++) {
-    try { restarted = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(page => page.type === 'page' && page.url.startsWith('http://tauri.localhost')) } catch { /* starting */ }
+  const restartStarted = Date.now()
+  for (; Date.now() - restartStarted < startupTimeout;) {
+    try { restarted = (await (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(1000) })).json()).find(page => page.type === 'page' && page.url.startsWith('http://tauri.localhost')) } catch { /* starting */ }
     if (restarted) break
     await delay(250)
   }
   assert.ok(restarted, 'restart must expose WebView2')
+  console.log('WebView2 restarted page ready in', Date.now() - restartStarted, 'ms')
   socket = new WebSocket(restarted.webSocketDebuggerUrl)
   await new Promise((yes, no) => { socket.addEventListener('open', yes, { once: true }); socket.addEventListener('error', no, { once: true }) })
   socket.addEventListener('message', route)

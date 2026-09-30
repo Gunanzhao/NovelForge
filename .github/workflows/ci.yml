@@ -139,4 +139,6 @@ jobs:
         shell: pwsh
         run: ./scripts/startup-diagnostics-test.ps1 -Executable ./src-tauri/target/release/novelforge.exe
       - name: Real WebView2 IPC and data lifecycle smoke
+        env:
+          NOVELFORGE_SMOKE_STARTUP_MS: 120000
         run: node scripts/reliability-smoke-cdp.mjs
