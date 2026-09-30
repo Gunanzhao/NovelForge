@@ -14,6 +14,7 @@ pub(crate) mod database;
 pub(crate) mod errors;
 pub(crate) mod filesystem;
 pub(crate) mod history;
+pub(crate) mod history_cleanup;
 pub(crate) mod logging;
 pub(crate) mod mirror;
 pub(crate) mod search_index;

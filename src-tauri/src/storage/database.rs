@@ -110,6 +110,7 @@ pub fn open_db_typed(root: &Path) -> Result<Connection, StorageError> {
     if schema != errors::SCHEMA_VERSION {
         connection.pragma_update(None, "user_version", errors::SCHEMA_VERSION)?;
     }
+    history_cleanup::recover(root, &mut connection).map_err(StorageError::Journal)?;
     batch::recover(root, &mut connection)?;
     Ok(connection)
 }

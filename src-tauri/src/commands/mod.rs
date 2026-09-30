@@ -32,6 +32,7 @@ pub(crate) mod entities;
 pub(crate) mod entity_history;
 pub(crate) mod export;
 pub(crate) mod guard;
+pub(crate) mod history_cleanup;
 pub(crate) mod manuscript;
 pub(crate) mod manuscript_import;
 pub(crate) mod project;
@@ -934,6 +935,15 @@ fn recovered_project_connection(root: &Path) -> Result<Connection, String> {
                 .any(|e| e.path().extension().and_then(|v| v.to_str()) == Some("json")))
     {
         return Err("BATCH_RECOVERY:数据库重建无法确认未完成日志的提交状态；保留数据库及原始日志，请只读救援".into());
+    }
+    let cleanup_dir = storage::safe_relative(root, ".novelforge/history-cleanup")?;
+    if cleanup_dir.exists()
+        && fs::read_dir(cleanup_dir)
+            .map_err(|e| e.to_string())?
+            .filter_map(Result::ok)
+            .any(|e| e.path().extension().and_then(|v| v.to_str()) == Some("json"))
+    {
+        return Err("BATCH_RECOVERY:历史清理事务待处理，不能重建数据库丢失提交状态".into());
     }
     validate_recovery_tree(root)?;
     let mut moved = Vec::new();

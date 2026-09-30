@@ -63,6 +63,8 @@ pub fn run() {
             commands::project::open_project,
             commands::rescue::inspect_project_rescue,
             commands::rescue::verify_project_recovery,
+            commands::history_cleanup::preview_history_cleanup,
+            commands::history_cleanup::apply_history_cleanup,
             commands::project::list_documents,
             commands::manuscript::create_node,
             commands::manuscript::set_node_status,
