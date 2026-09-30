@@ -1,4 +1,5 @@
 mod commands;
+mod diagnostics;
 mod drafts;
 mod models;
 
@@ -19,12 +20,25 @@ async fn confirm_window_close(window: tauri::WebviewWindow) -> Result<(), String
 }
 
 pub fn run() {
+    diagnostics::begin();
+    // Explicit offline acceptance switch; does not open or change a project.
+    if std::env::args().any(|arg| arg == "--diagnostic-startup-failure-test") {
+        diagnostics::fail("synthetic failure", true);
+        return;
+    }
     let builder = tauri::Builder::default()
         .manage(commands::codex::CodexState::default())
         .setup(|app| {
-            tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
-                .on_navigation(commands::navigation::workspace_navigation_allowed)
-                .build()?;
+            tauri::WebviewWindowBuilder::from_config(
+                app,
+                app.config()
+                    .app
+                    .windows
+                    .first()
+                    .ok_or("WINDOW_CONFIG_MISSING")?,
+            )?
+            .on_navigation(commands::navigation::workspace_navigation_allowed)
+            .build()?;
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -117,7 +131,7 @@ pub fn run() {
             commands::project::update_project
         ]);
     if let Err(error) = builder.run(tauri::generate_context!()) {
-        eprintln!("NovelForge 启动失败：{error}");
+        diagnostics::fail(&error.to_string(), false);
     }
 }
 

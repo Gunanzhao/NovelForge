@@ -280,12 +280,12 @@ fn replace_file(source: &Path, target: &Path) -> Result<(), String> {
 }
 
 pub fn remove_file_if_exists(path: &Path) -> Result<(), String> {
-    if path.exists() {
-        fs::remove_file(path).map_err(|error| format!("删除临时文件失败：{}", error))?;
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("删除临时文件失败：{error}")),
     }
-    Ok(())
 }
-
 pub fn move_to_trash(root: &Path, original: &Path, ref_id: &str) -> Result<String, String> {
     ensure_within_root(root, original)?;
     if !original.exists() {

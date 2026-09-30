@@ -32,6 +32,8 @@ jobs:
         run: pnpm audit --audit-level high
       - name: Typecheck
         run: pnpm typecheck
+      - name: Typecheck configuration
+        run: pnpm typecheck:config
       - name: Lint
         run: pnpm lint
       - name: Test
@@ -124,3 +126,7 @@ jobs:
         run: pnpm tauri build --no-bundle
       - name: Real WebView2 IPC and data lifecycle smoke
         run: node scripts/reliability-smoke-cdp.mjs
+
+      - name: Native startup failure notice without a terminal
+        shell: pwsh
+        run: ./scripts/startup-diagnostics-test.ps1 -Executable ./src-tauri/target/release/novelforge.exe

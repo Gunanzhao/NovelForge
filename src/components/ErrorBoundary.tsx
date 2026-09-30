@@ -1,13 +1,14 @@
+import { snapshotScheduler } from '../lib/draft-snapshots'
 import { Component, type ReactNode } from 'react'
 import { useAppStore } from '../stores/app-store'
 import { writeClipboardText } from '../lib/clipboard'
 
 /** Store lives outside the failed React subtree. Never reload or clear it. */
-export class ErrorBoundary extends Component<{ children: ReactNode; label?: string }, { failed: boolean; rescue: string; status: string }> {
-  state = { failed: false, rescue: '', status: '' }
+export class ErrorBoundary extends Component<{ children: ReactNode; label?: string }, { failed: boolean; rescue: string; forms: string; status: string }> {
+  state = { failed: false, rescue: '', forms: '', status: '' }
   static getDerivedStateFromError() { return { failed: true } }
   componentDidCatch() {
-    this.setState({ rescue: useAppStore.getState().document?.content ?? '' })
+    this.setState({ rescue: useAppStore.getState().document?.content ?? '', forms: JSON.stringify(snapshotScheduler.rescue(), null, 2) })
   }
   render() {
     if (!this.state.failed) return this.props.children
@@ -25,6 +26,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode; label?: stri
         } catch { this.setState({ status: '下载失败，请在上方文本框中全选复制。' }) }
         finally { if (url) { const objectUrl = url; setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000) } }
       }}>下载救援稿</button>
+      <details><summary>资料与独立草稿救援（可全选复制）</summary><textarea aria-label="资料草稿救援" readOnly value={this.state.forms} style={{ width: '100%', minHeight: 180 }} /></details>
       <button onClick={() => this.setState({ failed: false, status: '' })}>重新显示</button>
       {this.state.status ? <p role="status">{this.state.status}</p> : null}
     </section>

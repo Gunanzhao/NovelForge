@@ -10,9 +10,9 @@ import { fallbackInvoke } from './fallback'
 
 export const isDesktop = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
-async function command<T>(name: string, args: Record<string, unknown>, fallback = true) {
+async function command<T>(name: string, args: Record<string, unknown>, transport: 'demoAllowed' | 'desktopOnly' = 'demoAllowed') {
   if (isDesktop) return invoke<T>(name, args)
-  if (fallback) return fallbackInvoke<T>(name, args)
+  if (transport === 'demoAllowed') return fallbackInvoke<T>(name, args)
   throw new Error('当前不是 Tauri 桌面运行环境。')
 }
 
@@ -30,26 +30,26 @@ export interface BackupReport { path: string; fileCount: number; totalBytes: num
 export interface UpdateInfo { currentVersion: string; latestVersion: string; available: boolean; url: string }
 async function openProjectWithLease(path: string): Promise<ProjectData> {
   if (!isDesktop) return command<ProjectData>('open_project', { path })
-  const result = await command<{ data: ProjectData; leaseToken: string }>('prepare_open_project', { path }, false)
+  const result = await command<{ data: ProjectData; leaseToken: string }>('prepare_open_project', { path }, 'desktopOnly')
   return { ...result.data, leaseToken: result.leaseToken }
 }
 export const projectApi = {
   importManuscript: (input: import('./manuscript-import').ImportManuscriptInput) => command<ProjectData>('import_manuscript', { input }),
   confirmChapterMemory: (input:{projectPath:string;entityId:string;expected:EntityState}) => command<ProjectData>('confirm_chapter_memory',{input}),
-  autoBackupStatus: (path:string) => command<AutoBackupStatus>('auto_backup_status',{path},false),
-  configureAutoBackup: (input:{projectPath:string;enabled:boolean;directory:string;trigger:'daily'|'session';keep:number}) => command<AutoBackupStatus>('configure_auto_backup',{input},false),
-  runAutoBackup: (input:{projectPath:string;manual:boolean}) => command<AutoBackupStatus>('run_auto_backup',{input},false),
-  cleanupAutoBackups: (input:{projectPath:string;archiveIds:string[]}) => command<AutoBackupStatus>('cleanup_auto_backups',{input},false),
+  autoBackupStatus: (path:string) => command<AutoBackupStatus>('auto_backup_status',{path},'desktopOnly'),
+  configureAutoBackup: (input:{projectPath:string;enabled:boolean;directory:string;trigger:'daily'|'session';keep:number}) => command<AutoBackupStatus>('configure_auto_backup',{input},'desktopOnly'),
+  runAutoBackup: (input:{projectPath:string;manual:boolean}) => command<AutoBackupStatus>('run_auto_backup',{input},'desktopOnly'),
+  cleanupAutoBackups: (input:{projectPath:string;archiveIds:string[]}) => command<AutoBackupStatus>('cleanup_auto_backups',{input},'desktopOnly'),
   applyWikiRename: (input: { projectPath: string; targetId: string; changes: RenameChanges }) => command<{data: ProjectData; operationId: string}>('apply_wiki_rename', {input}),
   undoWikiRename: (input: { projectPath: string; operationId: string }) => command<{data: ProjectData; operationId: string}>('undo_wiki_rename', {input}),
   listWikiRenames: (input: { projectPath: string; targetId: string }) => command<WikiRenameOperation[]>('list_wiki_renames', {input}),
-  checkUpdates: () => command<UpdateInfo>('check_updates', {}, false),
-  backup: (path: string, directory: string) => command<BackupReport>('backup_project', { path, directory }, false),
-  validateBackup: (path: string) => command<BackupReport>('validate_backup', { path }, false),
-  restoreBackup: (path: string, directory: string) => command<BackupReport>('restore_backup', { path, directory }, false),
-  openExternalUrl: (url: string) => command<void>('open_external_url', { url }, false),
-  release: (path: string, token?: string | null) => isDesktop ? (token ? command<void>('release_project_lease', { path, token }, false) : command<void>('release_project', { path }, false)) : Promise.resolve(),
-  retain: (path: string, token: string) => command<void>('retain_project_lease', { path, token }, false),
+  checkUpdates: () => command<UpdateInfo>('check_updates', {}, 'desktopOnly'),
+  backup: (path: string, directory: string) => command<BackupReport>('backup_project', { path, directory }, 'desktopOnly'),
+  validateBackup: (path: string) => command<BackupReport>('validate_backup', { path }, 'desktopOnly'),
+  restoreBackup: (path: string, directory: string) => command<BackupReport>('restore_backup', { path, directory }, 'desktopOnly'),
+  openExternalUrl: (url: string) => command<void>('open_external_url', { url }, 'desktopOnly'),
+  release: (path: string, token?: string | null) => isDesktop ? (token ? command<void>('release_project_lease', { path, token }, 'desktopOnly') : command<void>('release_project', { path }, 'desktopOnly')) : Promise.resolve(),
+  retain: (path: string, token: string) => command<void>('retain_project_lease', { path, token }, 'desktopOnly'),
   create: async (input: ProjectInput) => { const data = await command<ProjectData>('create_project', { input }); return isDesktop ? openProjectWithLease(input.path) : data },
   open: openProjectWithLease,
   createNode: (input: NodeInput) => command<ProjectData>('create_node', { input }),
@@ -60,7 +60,7 @@ export const projectApi = {
         ? await command<DocumentData>('get_document', { input }) : undefined
       return { ...data, renamedDocument }
     }
-    const result = await command<{ data: ProjectData; document: DocumentData | null }>('rename_node_checked', { input, expectedContent: input.expectedContent }, false)
+    const result = await command<{ data: ProjectData; document: DocumentData | null }>('rename_node_checked', { input, expectedContent: input.expectedContent }, 'desktopOnly')
     return { ...result.data, renamedDocument: result.document ?? undefined }
   },
   setNodeStatus: (input: { projectPath: string; nodeId: string; status: string }) => command<ProjectData>('set_node_status', { input }),
@@ -70,10 +70,10 @@ export const projectApi = {
   deleteNode: (input: { projectPath: string; nodeId: string }) => command<ProjectData>('delete_node', { input }),
   getDocument: (input: { projectPath: string; nodeId: string }) => command<DocumentData>('get_document', { input }),
   saveDocument: (input: SaveDocumentInput & { expectedContent?: string; annotationAnchors?: import('./types').AnnotationAnchor[] }) => isDesktop
-    ? command<DocumentData>('save_document_annotated', { input, expectedContent: input.expectedContent ?? input.content, annotationAnchors: input.annotationAnchors }, false)
+    ? command<DocumentData>('save_document_annotated', { input, expectedContent: input.expectedContent ?? input.content, annotationAnchors: input.annotationAnchors }, 'desktopOnly')
     : command<DocumentData>('save_document', { input }),
   listRecovery: (path: string) => command<RecoveryItem[]>('list_recovery', { path }),
-  recoveryAsChapter: (input:{projectPath:string;recoveryId:string;expectedContent:string;parentId:string;title:string;requestId:string}) => command<ProjectData>('recovery_as_chapter',{input},false),
+  recoveryAsChapter: (input:{projectPath:string;recoveryId:string;expectedContent:string;parentId:string;title:string;requestId:string}) => command<ProjectData>('recovery_as_chapter',{input},'desktopOnly'),
   readRecovery: (input: { projectPath: string; recoveryId: string }) => command<string>('read_recovery', { input }),
   restoreRecovery: (input: { projectPath: string; recoveryId: string }) => command<ProjectData>('restore_recovery', { input }),
   discardRecovery: (input: { projectPath: string; recoveryId: string }) => command<RecoveryItem[]>('discard_recovery', { input }),
@@ -95,7 +95,7 @@ export const projectApi = {
   search: (input: SearchInput) => command<SearchResult[]>('search_project', { input }),
   consistency: (path: string) => command<ConsistencyReport>('check_consistency', { path }),
   aiComplete: (input: AiCompletionInput, requestId?: string) => command<AiCompletionResult>('ai_complete', { input, requestId: requestId ?? crypto.randomUUID() }),
-  aiCancel: (requestId: string) => isDesktop ? command<void>('ai_cancel', { requestId }, false) : Promise.resolve(),
+  aiCancel: (requestId: string) => isDesktop ? command<void>('ai_cancel', { requestId }, 'desktopOnly') : Promise.resolve(),
   importAttachment: (input: { projectPath: string; sourcePath: string; description: string }) => command<ProjectData>('import_attachment', { input }),
   openAttachment: (input: { projectPath: string; nodeId: string }) => command<string>('open_attachment', { input }),
   stats: (path: string, nodeId?: string) => command<Stats>('get_statistics', { input: { projectPath: path, currentNodeId: nodeId } }),

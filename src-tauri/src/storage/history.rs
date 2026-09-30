@@ -129,7 +129,7 @@ pub fn write_recovery(
     content: &str,
 ) -> Result<(String, String), String> {
     let timestamp = Utc::now().format("%Y%m%dT%H%M%S%.3fZ").to_string();
-    let filename = format!("{}--{}.md", node_id, timestamp);
+    let filename = format!("{}--{}--{}.md", node_id, timestamp, new_id());
     let relative = format!(".novelforge/recovery/{}", filename);
     let path = safe_relative(root, &relative)?;
     atomic_write(&path, content.as_bytes())?;
@@ -177,4 +177,21 @@ pub fn needs_snapshot(
         }
     }
     Ok(true)
+}
+
+#[cfg(test)]
+mod reliability_tests {
+    use super::*;
+    #[test]
+    fn rapid_recovery_copies_never_replace_each_other() {
+        let root = std::env::temp_dir().join(format!("nf-recovery-uuid-{}", new_id()));
+        fs::create_dir_all(&root).unwrap();
+        let mut ids = std::collections::HashSet::new();
+        for i in 0..20 {
+            let (id, path) = write_recovery(&root, "node", &i.to_string()).unwrap();
+            assert!(ids.insert(id));
+            assert_eq!(fs::read_to_string(path).unwrap(), i.to_string());
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
 }

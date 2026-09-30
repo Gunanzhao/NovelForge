@@ -30,12 +30,12 @@ it('an old save or write completion cannot acknowledge the newer version, includ
   expect(acknowledge).toHaveBeenCalledWith(latest)
 })
 it('keeps serializable form payloads after render unmount and visibly retries failed snapshot writes', async () => {
-  const put = vi.fn().mockRejectedValueOnce(new Error('disk full')).mockResolvedValue(undefined), error = vi.fn()
-  const scheduler = new DraftSnapshotScheduler({ put, acknowledge: vi.fn(async () => {}) }, error)
+  const put = vi.fn().mockRejectedValueOnce(new Error('disk full')).mockResolvedValue(undefined), error = vi.fn(), recovered = vi.fn()
+  const scheduler = new DraftSnapshotScheduler({ put, acknowledge: vi.fn(async () => {}) }, error, recovered)
   const draft = { title: '人物', customFields: [{ key: '来历', value: '未保存' }] }
   scheduler.update('entity:1', { ...input, targetId: 'character:1', payload: draft }, true)
   draft.title = 'outside mutation'
   await scheduler.flush(); expect(error).toHaveBeenCalledOnce()
-  await scheduler.flush(); expect(put).toHaveBeenCalledTimes(2)
+  await scheduler.flush(); expect(put).toHaveBeenCalledTimes(2); expect(recovered).toHaveBeenCalledOnce()
   expect(scheduler.rescue()[0].payload).toEqual({ title: '人物', customFields: [{ key: '来历', value: '未保存' }] })
 })

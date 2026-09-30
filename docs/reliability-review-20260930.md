@@ -10,7 +10,7 @@ No main push, PR creation, merge, release, history rewrite or branch protection 
 
 Windows; Node 24.18.1, pnpm 11.19.0, Rust/Cargo 1.97.1 MSVC. Dependencies installed using `pnpm install --frozen-lockfile` in the task worktree. Current rusqlite is 0.32.1 (default busy timeout 5000 ms); no WAL change is planned. Preserve GLib vendor backport and optimized Linux regression.
 
-Executed against baseline: `pnpm typecheck` PASS; `pnpm lint` PASS; `pnpm test` PASS (77 files, 475 tests). `cargo test --manifest-path src-tauri/Cargo.toml --locked` is running; result pending. Baseline desktop/build not yet run. Historical published results are not this task's evidence. Local logs and synthetic fixtures stay ignored.
+Executed against baseline: `pnpm typecheck` PASS; `pnpm lint` PASS; `pnpm test` PASS (77 files, 475 tests). Baseline `cargo test --manifest-path src-tauri/Cargo.toml --locked` subsequently passed: 159 passed, 7 ignored. Baseline desktop/build was not run separately; task production build and desktop evidence follow below. Historical published results are not this task's evidence. Local logs and synthetic fixtures stay ignored.
 
 GitHub protection was read successfully: required contexts are `Frontend checks` and `Rust checks`, strict=true. Keep their names; additional Windows gates are additive. Enforcing any new check in protection requires a separate administrator action.
 
@@ -74,3 +74,30 @@ Data settings now show body-history bytes, serialized entity-history bytes and r
 Cleanup writes a separate atomic intent journal while holding an Immediate transaction; database references are removed and a small dedicated marker commits first, then unreferenced files with matching hashes are removed. Interrupted pre-commit work rolls back without deleting files; post-commit work resumes safely on connection. External changes retain the file and journal and block normal access. The operation's own marker is removed only after its journal; unrelated markers are never deleted. Database free pages are reusable, not a promise that SQLite file size shrinks immediately. Destructive cleanup was executed only on temporary synthetic fixtures.
 
 Validation: 4 Rust cleanup tests cover interruption before/after commit, external edits, named/protected/latest retention, missing history refusal, activity/recovery/marker retention, subsequent history reads and full backup creation. UI tests verify preview/confirmation/exact fingerprint and stale-session error rejection. Full frontend 488 passed; full Windows Rust 171 passed, 7 ignored; typecheck/lint passed. PR-4 commit: `4668583`.
+
+## PR-6 verified implementation
+
+Startup diagnostics use an allowlist of timestamped codes, discard arbitrary error strings, rotate startup.log at 256 KiB with one retained file, and live outside projects. Windows GUI startup failures show a native MessageBox even without a terminal; a failure to write the log has its own visible notice. The explicit offline self-test switch exercises the same failure path in the release EXE without opening a project. Linux writes diagnostics but its notification remains stderr; native GUI failure acceptance here is Windows-only.
+
+Low-priority disposition:
+
+| Item | Disposition and evidence |
+| --- | --- |
+| M6 responsibility boundaries | Added narrow drafts, diagnostics, rescue and history-cleanup modules; deferred broad save/session/export reshuffling because it is unnecessary for these fixes and would expand regression scope. |
+| module-wide unused_imports | Deferred until glob/re-export ownership can be cleaned independently; removing suppressions without organizing imports would introduce unrelated churn. Clippy with -D warnings passes the current tree. |
+| async session errors | Implemented: AutoBackupSettings rechecks current session after the directory operation rejects; stale cleanup/recovery results are also guarded. |
+| ambiguous transport boolean | Implemented: explicit demoAllowed / desktopOnly modes retain existing fallback behavior. |
+| configuration type checks | Implemented typecheck:config for Vite/Vitest TypeScript, run in Frontend checks; checkJs=false explicitly. JavaScript remains covered by ESLint. |
+| recovery/trash names | Recovery copies now have UUID suffixes; 20 rapid copies retain distinct bodies. Existing trash ref_id + original filename retained; extra UUID hardening deferred without collision evidence. |
+| removal helper | Implemented direct remove_file, swallowing only NotFound. |
+| concurrent navigation | Existing policy drops another request while a confirmation is pending; different-destination regression proves one confirmation executes only the first callback. |
+| M7 / M8 / M9 | Existing UUID-v4 token/ownership and held-lock insertion invariants retained. No demonstrated security flaw/panic/bottleneck; speculative changes deferred. |
+| CSP, GLib backport, evidence | Unchanged policies, vendor source and optimized regression preserved; large screenshots/logs remain ignored local artifacts. No Release published. |
+
+Final snapshot audit additionally guards transition frames so old form fields cannot be attributed to a new project/entity, exposes serialized form rescue text at the error boundary, and clears a visible write error only after a successful retry. A real App/store/scheduler integration test keeps typing every 500 ms with no 900 ms gap and verifies the 10-second snapshot before automatic save. This supplements, rather than substitutes for, the production process-kill/restart test.
+
+Windows validation on the final code: pnpm typecheck, pnpm typecheck:config, pnpm lint; pnpm test (84 files, 491 passed); cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check; cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings; cargo test --manifest-path src-tauri/Cargo.toml --locked (173 passed, 7 existing opt-in ignored); pnpm tauri build --no-bundle: all PASS. Existing bundle-size advisory remains non-fatal.
+
+Release EXE validation: scripts/startup-diagnostics-test.ps1 PASS with process-owned visible native window and isolated STARTUP_SELF_TEST log; scripts/reliability-smoke-cdp.mjs PASS with real registered Tauri dispatch, Unicode lifecycle, conflict recovery, backup/export, future-format no-write, unresolved-journal restart and independent snapshot process-kill/restart. Original pnpm test:e2e:desktop PASS across editor/tree/drag/drop/history/entity/wiki/statistics/settings/recovery/planning/search/mock-AI/cancellation/trash/exports. The full desktop run used temporary APPDATA/LOCALAPPDATA and mock provider, with native-dialog/webdriver/real-Codex options disabled. It is not a native-file-dialog or screenshot matrix and did not use paid AI.
+
+Local evidence indexes (ignored tmp/): final-frontend.log, pr6-full-rust.log, final-clippy.log, final-build.log, final-startup.log, final-reliability-desktop.log, final-full-desktop.log. Initial startup-window title lookup was replaced by PID-scoped enumeration; only the final passing run is acceptance. CI adds the same native startup and IPC scripts after the production Windows build. PR-5 commit: 015ee2b.

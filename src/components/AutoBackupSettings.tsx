@@ -44,7 +44,7 @@ export function AutoBackupSettings({projectPath}:{projectPath:string}) {
     }catch(error){if(current())setError(String(error))}
     finally{pending.current=false;if(current())setBusy(false)}
   }
-  async function choose(){const session=captureProjectSession();try{const directory=await chooseDirectory();if(directory&&isCurrentProjectSession(session))setSettings(previous=>({...previous,directory}))}catch(error){setError(String(error))}}
+  async function choose(){const session=captureProjectSession();try{const directory=await chooseDirectory();if(directory&&isCurrentProjectSession(session))setSettings(previous=>({...previous,directory}))}catch(error){if(isCurrentProjectSession(session))setError(String(error))}}
   if(!isDesktop)return null
   return <Panel className="settings-card automatic-backup-settings"><h2>自动备份与恢复中心</h2>
     <div className="backup-health"><div><strong>正文保存</strong><span>{saved==='saved'?'当前正文已保存':saved==='saving'?'正在保存':saved==='error'?'保存失败':'有待保存内容'}</span></div><div><strong>项目内历史</strong><span>正文快照与资料版本保存在当前项目内</span></div><div><strong>独立目录备份</strong><span>{running?'正在备份…':shared?.settings.lastSuccess?'最近成功：'+new Date(shared.settings.lastSuccess).toLocaleString():'尚无自动备份成功记录'}</span></div></div>

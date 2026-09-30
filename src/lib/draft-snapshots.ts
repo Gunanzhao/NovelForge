@@ -11,7 +11,7 @@ export const snapshotApi = {
   acknowledge: async (id: string) => { if (isDesktop) await invoke('acknowledge_draft_snapshot', { id }); else for (const [key, value] of demo) if (value.id === id) demo.delete(key) },
   list: async (): Promise<DraftSnapshot[]> => isDesktop ? invoke('list_draft_snapshots') : [...demo.values()],
 }
-export const snapshotScheduler = new DraftSnapshotScheduler(snapshotApi, error => useSnapshotStatus.setState({ error }))
+export const snapshotScheduler = new DraftSnapshotScheduler(snapshotApi, error => useSnapshotStatus.setState({ error }), () => useSnapshotStatus.setState({ error: null }))
 export function captureFormDraft(targetId: string, label: string, payload: unknown, dirty: boolean) {
   const state = useAppStore.getState()
   if (!state.projectPath || !state.data) return
