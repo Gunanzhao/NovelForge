@@ -101,3 +101,23 @@ Windows validation on the final code: pnpm typecheck, pnpm typecheck:config, pnp
 Release EXE validation: scripts/startup-diagnostics-test.ps1 PASS with process-owned visible native window and isolated STARTUP_SELF_TEST log; scripts/reliability-smoke-cdp.mjs PASS with real registered Tauri dispatch, Unicode lifecycle, conflict recovery, backup/export, future-format no-write, unresolved-journal restart and independent snapshot process-kill/restart. Original pnpm test:e2e:desktop PASS across editor/tree/drag/drop/history/entity/wiki/statistics/settings/recovery/planning/search/mock-AI/cancellation/trash/exports. The full desktop run used temporary APPDATA/LOCALAPPDATA and mock provider, with native-dialog/webdriver/real-Codex options disabled. It is not a native-file-dialog or screenshot matrix and did not use paid AI.
 
 Local evidence indexes (ignored tmp/): final-frontend.log, pr6-full-rust.log, final-clippy.log, final-build.log, final-startup.log, final-reliability-desktop.log, final-full-desktop.log. Initial startup-window title lookup was replaced by PID-scoped enumeration; only the final passing run is acceptance. CI adds the same native startup and IPC scripts after the production Windows build. PR-5 commit: 015ee2b.
+
+## Final local acceptance and commit index (2026-10-01)
+
+Tested code SHA: abf0b1d4c655c93544527573c3492e02a72cdfed. This final report-only commit changes no tested application code. Full local commands and result counts are recorded under PR-6; after the report commit, rerun frontend/config type checks and lint, and verify Git whitespace/working-tree state before pushing. Windows Node 24.18.1, pnpm 11.19.0, Rust/MSVC 1.97.1 were used; CI selects Node 22 and stable Rust. Seven opt-in Rust tests remain ignored, not passed.
+
+| Stage | Commit | Main changed paths / evidence |
+| --- | --- | --- |
+| Plan | f4ec928 | docs/reliability-review-20260930.md |
+| PR-1 | dedcf72 | .github/workflows/ci.yml; scripts/reliability-smoke-cdp.mjs; tests/fixtures/reliability-contract.json; src-tauri/src/reliability_contract_tests.rs; tests/reliability-contract.test.ts |
+| PR-2 | 95b0ab1 | src/stores/app-store.ts; src/components/ErrorBoundary.tsx; src/main.tsx; src/App.tsx; tests/recent-boundary.test.tsx |
+| PR-3 | 59cfff8 | src-tauri/src/drafts.rs; src/lib/draft-snapshot-scheduler.ts; src/lib/draft-snapshots.ts; src/hooks/useUnsavedDraft.ts; src/components/DraftSnapshotRecovery.tsx; registered view forms; tests/draft-snapshots.test.ts |
+| PR-4 | 4668583 | src-tauri/src/storage/errors.rs, database.rs, batch.rs, recovery.rs; commands/project.rs, rescue.rs; src/components/ProjectRescue.tsx; conservative_recovery_tests.rs |
+| PR-5 | 015ee2b | src-tauri/src/storage/history_cleanup.rs; commands/history_cleanup.rs; src/components/HistoryStorage.tsx; cleanup Rust/UI tests |
+| PR-6 | abf0b1d | src-tauri/src/diagnostics.rs; src-tauri/src/lib.rs; scripts/startup-diagnostics-test.ps1; history/filesystem helpers; config/transport/session maintenance; snapshot identity/runtime and navigation tests; README.md |
+
+Pre-push fetch confirms origin/main remains 88bbdcc7ddde1e73e0a91f8d41da82ec717588ce, the task branch descends from that baseline, and no same-named remote task branch exists. Origin fetch/push both point to https://github.com/Gunanzhao/NovelForge.git. Original main and its four dirty/untracked entries remain unchanged; only the isolated task worktree is committed. No credentials, real drafts/databases, build outputs or screenshots were staged. The task branch is codex/reliability-review-20260930. No PR, main update, merge, Release or branch-protection change is authorized or performed.
+
+Delivery verification: push the final docs commit, compare its local SHA with git ls-remote, then follow every triggered GitHub run for that exact SHA to completion. The delivery response records the actual final SHA and verified run URLs/outcomes; no previous green run substitutes for this gate. At report-commit time remote CI has not yet been triggered. Existing path-filtered Codex CLI compatibility is preserved; if not triggered, record that fact rather than claiming a new compatibility run passed.
+
+Remaining limits: no native file-dialog/screenshot matrix, no real AI generation, no OS-wide disk exhaustion or real-user permission mutations. Those are not replaced by mock claims; detailed scope is above. Linux native startup GUI notice remains unsupported. N4 lightweight-connection optimization, broad refactoring, unused-import cleanup, batch undo-payload compaction and optional M7/M8/trash hardening are deliberately deferred with reasons. The added Windows job is not yet a required branch-protection context; administrator action is optional and outside this task.
