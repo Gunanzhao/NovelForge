@@ -34,7 +34,7 @@ export function StoryArcView() {
   const [busy, setBusy] = useState(false)
   const [baseline, setBaseline] = useState(() => JSON.stringify({ title: '', draft: blankArc() }))
   const draftId = 'story-arc:' + projectPath
-  useUnsavedDraft(draftId, '剧情线', JSON.stringify({ title, draft }) !== baseline, save, () => { const saved = JSON.parse(baseline); setTitle(saved.title); setDraft(saved.draft) })
+  useUnsavedDraft(draftId, '剧情线', JSON.stringify({ title, draft }) !== baseline, save, () => { const saved = JSON.parse(baseline); setTitle(saved.title); setDraft(saved.draft) }, { targetId: draftId, payload: { title, draft } })
   const [dragging, setDragging] = useState<string | null>(null)
   const arcs = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'story-arc')
     .sort((left, right) => parseStoryArc(right).priority - parseStoryArc(left).priority || left.title.localeCompare(right.title, 'zh-CN')), [data?.entities])

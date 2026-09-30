@@ -55,7 +55,7 @@ export function SceneView({ chapterId, onChapterChange }: { chapterId: string; o
   const [busy, setBusy] = useState(false)
   const [baseline, setBaseline] = useState(() => JSON.stringify(blankDraft()))
   const draftId = 'SceneView:' + projectPath
-  useUnsavedDraft(draftId, '场景卡', JSON.stringify(draft) !== baseline, save, () => setDraft(JSON.parse(baseline) as SceneDraft))
+  useUnsavedDraft(draftId, '场景卡', JSON.stringify(draft) !== baseline, save, () => setDraft(JSON.parse(baseline) as SceneDraft), { targetId: draftId, payload: draft })
   const [draggedSceneId, setDraggedSceneId] = useState<string | null>(null)
 
   const chapters = useMemo(() => sortChapterNodes(data?.nodes ?? []), [data?.nodes])

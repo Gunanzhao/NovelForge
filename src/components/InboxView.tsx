@@ -29,7 +29,7 @@ export function QuickInboxCapture() {
   const [tags, setTags] = useState('')
   const [busy, setBusy] = useState(false)
   const draftId = 'quick-inbox:' + projectPath
-  useUnsavedDraft(draftId, '快速灵感', Boolean(title || content || tags), save, () => { setTitle(''); setContent(''); setTags('') })
+  useUnsavedDraft(draftId, '快速灵感', Boolean(title || content || tags), save, () => { setTitle(''); setContent(''); setTags('') }, { targetId: draftId, payload: { title, content, tags } })
 
   useEffect(() => {
     const show = () => { if (useAppStore.getState().projectPath) setOpen(true) }

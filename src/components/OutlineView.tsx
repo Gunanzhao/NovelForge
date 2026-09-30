@@ -72,7 +72,7 @@ export function OutlineView() {
   const [busy, setBusy] = useState(false)
   const [baseline, setBaseline] = useState(() => JSON.stringify(blankDraft()))
   const draftId = 'OutlineView:' + projectPath
-  useUnsavedDraft(draftId, '大纲', JSON.stringify(draft) !== baseline, save, () => setDraft(JSON.parse(baseline) as OutlineDraft))
+  useUnsavedDraft(draftId, '大纲', JSON.stringify(draft) !== baseline, save, () => setDraft(JSON.parse(baseline) as OutlineDraft), { targetId: draftId, payload: draft })
 
   const targets = useMemo<OutlineTarget[]>(() => {
     if (!data) return []

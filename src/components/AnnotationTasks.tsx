@@ -22,7 +22,7 @@ function AnnotationTasksContent({compact}:{compact:boolean}) {
   const draftId='annotation:'+projectPath+':'+String(compact)
   const dirty=body.trim().length>0
   function discard(){setBody('');setAnchor(null);newId.current=crypto.randomUUID()}
-  useUnsavedDraft(draftId,'正文批注',dirty,save,discard)
+  useUnsavedDraft(draftId,'正文批注',dirty,save,discard, { targetId: draftId, payload: { body, anchor, category } })
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false}},[])
   useEffect(()=>{
     if(compact||!projectPath||!data)return

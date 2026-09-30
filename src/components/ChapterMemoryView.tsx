@@ -35,7 +35,7 @@ function MemoryEditor({projectPath,chapterId}:{projectPath:string;chapterId:stri
   const storedMemory=snapshot?parseChapterMemory(snapshot):null
   const status=storedMemory?memoryStatus(storedMemory,currentText):'draft'
   function reset(){newId.current=saved?.id??newId.current;const memory=saved?parseChapterMemory(saved):null;const next=memory?{chapterId,sourceText:memory.sourceText,fields:memory.fields,sources:memory.sources}:{chapterId,sourceText:currentText??'',fields:blankMemoryFields(),sources:[]};setSnapshot(saved?structuredClone(saved):undefined);setDraft(next);setBaseline(JSON.stringify(next));setError('');setNotice('');setRange(null);markDraftSaved(draftId)}
-  useUnsavedDraft(draftId,'章节记忆',dirty,()=>save(false),reset)
+  useUnsavedDraft(draftId,'章节记忆',dirty,()=>save(false),reset, { targetId: 'chapter-memory:' + chapterId, payload: draft })
   useEffect(()=>{
     mounted.current=true
     let active=true

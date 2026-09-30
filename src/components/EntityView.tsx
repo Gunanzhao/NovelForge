@@ -102,7 +102,7 @@ export function EntityView({ kind }: { kind: EntityKind }) {
   const [baseline, setBaseline] = useState(() => JSON.stringify({ draft: blankDraft(kind), customFields: [] }))
   const draftId = 'entity:' + projectPath + ':' + kind
   const dirty = JSON.stringify({ draft, customFields }) !== baseline
-  useUnsavedDraft(draftId, ENTITY_LABELS[kind] + '资料', dirty, submit, () => { const saved = JSON.parse(baseline) as { draft: EntityDraft; customFields: Array<{ key: string; value: string }> }; setDraft(saved.draft); setCustomFields(saved.customFields) })
+  useUnsavedDraft(draftId, ENTITY_LABELS[kind] + '资料', dirty, submit, () => { const saved = JSON.parse(baseline) as { draft: EntityDraft; customFields: Array<{ key: string; value: string }> }; setDraft(saved.draft); setCustomFields(saved.customFields) }, { targetId: kind + ':' + (selectedEntityId ?? 'new'), payload: { draft, customFields } })
   const [busy, setBusy] = useState(false)
   const saving = useRef(false)
   const newEntityId = useRef<string | null>(null)

@@ -15,7 +15,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode; label?: stri
       <h2>{this.props.label ?? '工作区'}显示失败</h2>
       <p>当前正文仍保留在内存中。请先复制或下载救援稿，再尝试重新显示。</p>
       <textarea aria-label="救援正文" readOnly value={this.state.rescue} style={{ width: '100%', minHeight: 180 }} />
-      <button onClick={() => { void writeClipboardText(this.state.rescue).then(() => this.setState({ status: '正文已复制' })).catch(() => this.setState({ status: '复制失败，请在上方文本框中全选复制。' })) }}>复制正文</button>
+      <button onClick={() => { void writeClipboardText(this.state.rescue).then(ok => this.setState({ status: ok ? '正文已复制' : '复制失败，请在上方文本框中全选复制。' })).catch(() => this.setState({ status: '复制失败，请在上方文本框中全选复制。' })) }}>复制正文</button>
       <button onClick={() => {
         let url: string | undefined
         try {

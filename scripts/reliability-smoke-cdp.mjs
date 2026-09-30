@@ -1,4 +1,4 @@
-/* global console, process, fetch, URL, WebSocket, setTimeout, clearTimeout */
+/* global console, process, fetch, URL, crypto, WebSocket, setTimeout, clearTimeout */
 import assert from 'node:assert/strict'
 import { spawn, execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -16,7 +16,8 @@ const backups = join(temporary, '备份')
 mkdirSync(projectPath); mkdirSync(backups)
 const port = Number(process.env.NOVELFORGE_SMOKE_PORT ?? 9337)
 const executable = resolve(process.argv[2] ?? 'src-tauri/target/release/novelforge.exe')
-const child = spawn(executable, [], { windowsHide: true, stdio: 'ignore', env: { ...process.env, WEBVIEW2_USER_DATA_FOLDER: join(temporary, 'webview'), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}` } })
+const launch = () => spawn(executable, [], { windowsHide: true, stdio: 'ignore', env: { ...process.env, APPDATA: join(temporary, 'appdata'), LOCALAPPDATA: join(temporary, 'localappdata'), WEBVIEW2_USER_DATA_FOLDER: join(temporary, 'webview'), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}` } })
+let child = launch()
 let socket
 let started = false
 try {
@@ -34,14 +35,15 @@ try {
   await new Promise((yes, no) => { socket.addEventListener('open', yes, { once: true }); socket.addEventListener('error', no, { once: true }) })
   let next = 0
   const pending = new Map()
-  socket.addEventListener('message', event => {
+  const route = event => {
     const message = JSON.parse(event.data)
     const waiter = pending.get(message.id)
     if (!waiter) return
     pending.delete(message.id); clearTimeout(waiter.timer)
     if (message.error) waiter.no(new Error(JSON.stringify(message.error)))
     else waiter.yes(message.result)
-  })
+  }
+  socket.addEventListener('message', route)
   const evaluate = expression => new Promise((yes, no) => {
     const id = ++next
     pending.set(id, { yes, no, timer: setTimeout(() => { pending.delete(id); no(new Error('IPC timeout')) }, 30000) })
@@ -107,6 +109,30 @@ try {
   assert.ok(readFileSync(exported, 'utf8').includes(content), 'export must include actual complete body')
   await invoke('release_project_lease', { path: restored.path, token: restoredProject.leaseToken })
   await invoke('release_project_lease', { path: projectPath, token: opened.leaseToken })
+  const draft = { id: crypto.randomUUID(), projectId: created.project.id, projectPath, targetId: 'document:' + node.id, label: '强制退出验收', version: Date.now() * 1000, capturedAt: new Date().toISOString(), payload: { content: '仅独立快照保存的正文😀' } }
+  await invoke('put_draft_snapshot', { input: draft })
+  const newer = { ...draft, id: crypto.randomUUID(), version: draft.version + 1, payload: { content: '强制退出前的新版本😀' } }
+  await invoke('put_draft_snapshot', { input: newer })
+  await invoke('acknowledge_draft_snapshot', { id: draft.id })
+  socket.close()
+  execFileSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true })
+  await delay(500)
+  child = launch()
+  let restarted
+  for (let attempt = 0; attempt < 160; attempt++) {
+    try { restarted = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(page => page.type === 'page' && page.url.startsWith('http://tauri.localhost')) } catch { /* starting */ }
+    if (restarted) break
+    await delay(250)
+  }
+  assert.ok(restarted, 'restart must expose WebView2')
+  socket = new WebSocket(restarted.webSocketDebuggerUrl)
+  await new Promise((yes, no) => { socket.addEventListener('open', yes, { once: true }); socket.addEventListener('error', no, { once: true }) })
+  socket.addEventListener('message', route)
+  for (let attempt = 0; attempt < 80; attempt++) { if (await evaluate('Boolean(window.__TAURI_INTERNALS__?.invoke)')) break; await delay(250) }
+  const surviving = await invoke('list_draft_snapshots', {})
+  assert.equal(surviving.find(item => item.id === newer.id)?.payload.content, newer.payload.content)
+  await invoke('acknowledge_draft_snapshot', { id: newer.id })
+  console.log('PASS: independent draft survives forced EXE termination, restart and old-version acknowledgement')
   // Response drift negative controls: field rename/error envelope changes fail validators.
   assert.throws(() => assert.equal({ body: saved.content }.content, content))
   assert.throws(() => assert.equal(typeof { code: fixture.conflictCode }, 'string'))

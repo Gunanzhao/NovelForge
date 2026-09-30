@@ -75,7 +75,7 @@ export function TimelineView() {
   const [busy, setBusy] = useState(false)
   const [baseline, setBaseline] = useState(() => JSON.stringify(blankDraft()))
   const draftId = 'TimelineView:' + projectPath
-  useUnsavedDraft(draftId, '时间线', JSON.stringify(draft) !== baseline, save, () => setDraft(JSON.parse(baseline) as TimelineDraft))
+  useUnsavedDraft(draftId, '时间线', JSON.stringify(draft) !== baseline, save, () => setDraft(JSON.parse(baseline) as TimelineDraft), { targetId: draftId, payload: draft })
 
   const chapters = useMemo(() => sortChapterNodes(data?.nodes ?? []), [data?.nodes])
   const events = useMemo(() => sortTimelineEntities((data?.entities ?? []).filter((entity) => entity.kind === 'timeline')), [data?.entities])

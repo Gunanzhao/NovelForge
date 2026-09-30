@@ -1,4 +1,5 @@
 mod commands;
+mod drafts;
 mod models;
 
 #[path = "storage/mod.rs"]
@@ -39,6 +40,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             confirm_window_close,
+            drafts::put_draft_snapshot,
+            drafts::list_draft_snapshots,
+            drafts::acknowledge_draft_snapshot,
             commands::updates::check_updates,
             commands::guard::save_document_checked,
             commands::guard::save_document_annotated,
