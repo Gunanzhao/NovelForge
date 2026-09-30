@@ -1,7 +1,7 @@
-/* global console, process, fetch, URL, crypto, WebSocket, setTimeout, clearTimeout */
+/* global console, process, fetch, URL, crypto, WebSocket, setTimeout, clearTimeout, AbortSignal */
 import assert from 'node:assert/strict'
 import { spawn, execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -10,23 +10,29 @@ import { setTimeout as delay } from 'node:timers/promises'
 // No native file dialogs or real AI accounts. All data are synthetic and retained
 // on failure for diagnosis; runner temp handles eventual cleanup.
 const fixture = JSON.parse(readFileSync(new URL('../tests/fixtures/reliability-contract.json', import.meta.url), 'utf8').replace(/^\uFEFF/, ''))
-const temporary = mkdtempSync(join(tmpdir(), 'novelforge-可靠性-'))
+const temporary = realpathSync(mkdtempSync(join(tmpdir(), 'novelforge-可靠性-')))
 const projectPath = join(temporary, '中文小说')
 const backups = join(temporary, '备份')
 mkdirSync(projectPath); mkdirSync(backups)
+for (const name of ['appdata', 'localappdata', 'webview']) mkdirSync(join(temporary, name))
 const port = Number(process.env.NOVELFORGE_SMOKE_PORT ?? 9337)
 const executable = resolve(process.argv[2] ?? 'src-tauri/target/release/novelforge.exe')
 const launch = () => spawn(executable, [], { windowsHide: true, stdio: 'ignore', env: { ...process.env, APPDATA: join(temporary, 'appdata'), LOCALAPPDATA: join(temporary, 'localappdata'), WEBVIEW2_USER_DATA_FOLDER: join(temporary, 'webview'), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}` } })
 let child = launch()
 let socket
 let started = false
+let startupProbe = { endpoint: 'not probed', pages: [] }
 try {
   let target
   let launchError
   child.on('error', error => { launchError = error })
   for (let attempt = 0; attempt < 160; attempt++) {
     if (launchError) throw launchError
-    try { target = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(page => page.type === 'page' && page.url.startsWith('http://tauri.localhost')) } catch { /* startup */ }
+    try {
+      const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(1000) })).json()
+      startupProbe = { endpoint: 'reachable', pages: pages.map(page => ({ type: page.type, location: page.url.startsWith('http://tauri.localhost') ? 'tauri-http' : page.url.startsWith('file:') ? 'file' : page.url === 'about:blank' ? 'blank' : 'other' })) }
+      target = pages.find(page => page.type === 'page' && page.url.startsWith('http://tauri.localhost'))
+    } catch (error) { startupProbe.endpoint = error.cause?.code ?? error.name }
     if (target) break
     await delay(250)
   }
@@ -161,7 +167,13 @@ try {
   if (!started) {
     const startupLog = join(temporary, 'localappdata', 'NovelForge', 'logs', 'startup.log')
     const codes = existsSync(startupLog) ? readFileSync(startupLog, 'utf8').match(/STARTUP_[A-Z_]+/g) : []
-    console.error('Startup state', { exitCode: child.exitCode, signalCode: child.signalCode, runtimeConfigured: Boolean(process.env.WEBVIEW2_BROWSER_EXECUTABLE_FOLDER), codes })
+    console.error('Startup state', { exitCode: child.exitCode, signalCode: child.signalCode, runtimeConfigured: Boolean(process.env.WEBVIEW2_BROWSER_EXECUTABLE_FOLDER), codes, probe: startupProbe })
+    if (child.pid) {
+      try {
+        const command = `Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -eq ${child.pid} -or $_.ParentProcessId -eq ${child.pid} } | Select-Object Name,ProcessId,ParentProcessId | ConvertTo-Json -Compress`
+        console.error('Test process state', execFileSync('powershell.exe', ['-NoProfile', '-Command', command], { encoding: 'utf8', windowsHide: true, timeout: 10000 }).trim())
+      } catch { console.error('Test process inspection unavailable') }
+    }
   }
   console.error(started ? 'PRODUCT_OR_TEST_FAILURE' : 'STARTUP_OR_ENVIRONMENT_FAILURE', error)
   process.exitCode = 1
