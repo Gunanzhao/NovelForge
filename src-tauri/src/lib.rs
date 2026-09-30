@@ -115,3 +115,6 @@ pub fn run() {
 
 #[cfg(test)]
 mod rust_tests;
+
+#[cfg(test)]
+mod reliability_contract_tests;

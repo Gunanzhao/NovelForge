@@ -95,3 +95,32 @@ jobs:
         run: cargo audit --file Cargo.lock
       - name: Regression for the GTK GLib security backport (optimized)
         run: cargo test --manifest-path ../scripts/glib-regression/Cargo.toml --release --locked
+
+  windows-reliability:
+    name: Windows reliability
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: windows-reliability-${{ hashFiles('src-tauri/Cargo.lock') }}
+      - run: pnpm install --frozen-lockfile
+      - name: Complete Windows Rust suite
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+      - name: Build production desktop
+        run: pnpm tauri build --no-bundle
+      - name: Real WebView2 IPC and data lifecycle smoke
+        run: node scripts/reliability-smoke-cdp.mjs
