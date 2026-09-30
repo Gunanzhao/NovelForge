@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 pub(crate) mod batch;
 pub(crate) mod database;
+pub(crate) mod errors;
 pub(crate) mod filesystem;
 pub(crate) mod history;
 pub(crate) mod logging;

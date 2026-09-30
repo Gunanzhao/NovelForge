@@ -61,6 +61,8 @@ pub fn run() {
             commands::navigation::open_external_url,
             commands::project::create_project,
             commands::project::open_project,
+            commands::rescue::inspect_project_rescue,
+            commands::rescue::verify_project_recovery,
             commands::project::list_documents,
             commands::manuscript::create_node,
             commands::manuscript::set_node_status,

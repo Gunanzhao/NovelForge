@@ -109,6 +109,25 @@ try {
   assert.ok(readFileSync(exported, 'utf8').includes(content), 'export must include actual complete body')
   await invoke('release_project_lease', { path: restored.path, token: restoredProject.leaseToken })
   await invoke('release_project_lease', { path: projectPath, token: opened.leaseToken })
+  const metadataPath = join(projectPath, 'project.json')
+  const metadataBytes = readFileSync(metadataPath)
+  const future = { ...JSON.parse(metadataBytes.toString()), formatVersion: 999 }
+  writeFileSync(metadataPath, JSON.stringify(future))
+  const futureBytes = readFileSync(metadataPath)
+  const databaseBytes = readFileSync(join(projectPath, '.novelforge/database.sqlite'))
+  await expectError('prepare_open_project', { path: projectPath }, 'PROJECT_FORMAT:')
+  assert.deepEqual(readFileSync(metadataPath), futureBytes)
+  assert.deepEqual(readFileSync(join(projectPath, '.novelforge/database.sqlite')), databaseBytes)
+  writeFileSync(metadataPath, metadataBytes) // restore only this synthetic fixture
+  const journals = join(restored.path, '.novelforge/batch-journal')
+  mkdirSync(journals, { recursive: true })
+  const badJournal = join(journals, crypto.randomUUID() + '.json')
+  writeFileSync(badJournal, '{truncated')
+  await expectError('prepare_open_project', { path: restored.path }, 'BATCH_RECOVERY:')
+  const rescue = await invoke('inspect_project_rescue', { path: restored.path })
+  assert.equal(rescue.unresolved, true)
+  assert.ok(rescue.files.some(file => file.content.includes(content)))
+  assert.equal(readFileSync(badJournal, 'utf8'), '{truncated')
   const draft = { id: crypto.randomUUID(), projectId: created.project.id, projectPath, targetId: 'document:' + node.id, label: '强制退出验收', version: Date.now() * 1000, capturedAt: new Date().toISOString(), payload: { content: '仅独立快照保存的正文😀' } }
   await invoke('put_draft_snapshot', { input: draft })
   const newer = { ...draft, id: crypto.randomUUID(), version: draft.version + 1, payload: { content: '强制退出前的新版本😀' } }
@@ -129,6 +148,7 @@ try {
   await new Promise((yes, no) => { socket.addEventListener('open', yes, { once: true }); socket.addEventListener('error', no, { once: true }) })
   socket.addEventListener('message', route)
   for (let attempt = 0; attempt < 80; attempt++) { if (await evaluate('Boolean(window.__TAURI_INTERNALS__?.invoke)')) break; await delay(250) }
+  await expectError('prepare_open_project', { path: restored.path }, 'BATCH_RECOVERY:')
   const surviving = await invoke('list_draft_snapshots', {})
   assert.equal(surviving.find(item => item.id === newer.id)?.payload.content, newer.payload.content)
   await invoke('acknowledge_draft_snapshot', { id: newer.id })

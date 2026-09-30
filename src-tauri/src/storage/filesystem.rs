@@ -160,6 +160,13 @@ pub fn existing_project_root(input: &str) -> Result<PathBuf, String> {
         }
         return Err("这里没有找到 project.json，不是有效的 NovelForge 项目".to_string());
     }
+    // Confirmed corruption is handled by the explicit open recovery path; all
+    // other preflight failures (including future formats) must precede writes.
+    if let Err(error) = errors::check_compatibility(&root) {
+        if !error.corrupt() {
+            return Err(error.to_string());
+        }
+    }
     Ok(root)
 }
 

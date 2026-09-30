@@ -1,3 +1,4 @@
+use super::errors::StorageError;
 use super::*;
 
 const SCHEMA: &str = r#"
@@ -85,22 +86,33 @@ CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
 "#;
 
 pub fn open_db(root: &Path) -> Result<Connection, String> {
+    open_db_typed(root).map_err(|e| e.to_string())
+}
+pub fn open_db_typed(root: &Path) -> Result<Connection, StorageError> {
+    errors::check_compatibility(root)?;
+    let pending = safe_relative(root, ".novelforge/recovery-state.json")?;
+    if pending.exists() {
+        return Err(StorageError::Journal(
+            "存在未解决的批量日志，项目保持只读救援状态".into(),
+        ));
+    }
     let database_path = safe_relative(root, ".novelforge/database.sqlite")?;
     fs::create_dir_all(
         database_path
             .parent()
-            .ok_or_else(|| "无法确定数据库目录".to_string())?,
-    )
-    .map_err(|error| format!("无法创建数据库目录：{}", error))?;
-    let mut connection = Connection::open(&database_path)
-        .map_err(|error| format!("无法打开项目数据库 {}：{}", database_path.display(), error))?;
-    connection
-        .execute_batch(SCHEMA)
-        .map_err(|error| format!("无法初始化项目数据库：{}", error))?;
-    batch::recover(root, &mut connection).map_err(|error| format!("BATCH_RECOVERY:{error}"))?;
+            .ok_or_else(|| "STORAGE_IO:数据库目录无效".to_string())?,
+    )?;
+    let mut connection = Connection::open(database_path)?;
+    // Explicit policy, same as rusqlite 0.32.1's existing default; not a 0ms fix.
+    connection.busy_timeout(std::time::Duration::from_millis(5000))?;
+    connection.execute_batch(SCHEMA)?;
+    let schema: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    if schema != errors::SCHEMA_VERSION {
+        connection.pragma_update(None, "user_version", errors::SCHEMA_VERSION)?;
+    }
+    batch::recover(root, &mut connection)?;
     Ok(connection)
 }
-
 pub fn node_from_id(connection: &Connection, node_id: &str) -> Result<Option<NodeRecord>, String> {
     let mut statement = connection.prepare(
         "SELECT id, kind, parent_id, title, order_index, status, file_path, created_at, updated_at, deleted_at, deleted_path FROM nodes WHERE id = ?1",
@@ -129,14 +141,19 @@ pub fn all_nodes(
     connection: &Connection,
     include_deleted: bool,
 ) -> Result<Vec<NodeRecord>, String> {
+    all_nodes_typed(connection, include_deleted).map_err(|e| e.to_string())
+}
+
+pub fn all_nodes_typed(
+    connection: &Connection,
+    include_deleted: bool,
+) -> Result<Vec<NodeRecord>, StorageError> {
     let query = if include_deleted {
         "SELECT id, kind, parent_id, title, order_index, status, file_path, created_at, updated_at, deleted_at, deleted_path FROM nodes ORDER BY parent_id, order_index"
     } else {
         "SELECT id, kind, parent_id, title, order_index, status, file_path, created_at, updated_at, deleted_at, deleted_path FROM nodes WHERE deleted_at IS NULL ORDER BY parent_id, order_index"
     };
-    let mut statement = connection
-        .prepare(query)
-        .map_err(|error| format!("读取节点失败：{}", error))?;
+    let mut statement = connection.prepare(query).map_err(StorageError::from)?;
     let rows = statement
         .query_map([], |row| {
             Ok(NodeRecord {
@@ -153,10 +170,10 @@ pub fn all_nodes(
                 deleted_path: row.get(10)?,
             })
         })
-        .map_err(|error| format!("读取节点失败：{}", error))?;
+        .map_err(StorageError::from)?;
     let mut nodes = Vec::new();
     for row in rows {
-        nodes.push(row.map_err(|error| format!("读取节点失败：{}", error))?);
+        nodes.push(row.map_err(StorageError::from)?);
     }
     Ok(nodes)
 }
@@ -195,20 +212,25 @@ pub fn all_entities(
     connection: &Connection,
     include_deleted: bool,
 ) -> Result<Vec<EntityRecord>, String> {
+    all_entities_typed(connection, include_deleted).map_err(|e| e.to_string())
+}
+
+pub fn all_entities_typed(
+    connection: &Connection,
+    include_deleted: bool,
+) -> Result<Vec<EntityRecord>, StorageError> {
     let query = if include_deleted {
         "SELECT id, kind, title, content_json, tags_json, file_path, created_at, updated_at, deleted_at, deleted_path FROM entities ORDER BY kind, title COLLATE NOCASE"
     } else {
         "SELECT id, kind, title, content_json, tags_json, file_path, created_at, updated_at, deleted_at, deleted_path FROM entities WHERE deleted_at IS NULL ORDER BY kind, title COLLATE NOCASE"
     };
-    let mut statement = connection
-        .prepare(query)
-        .map_err(|error| format!("读取资料条目失败：{}", error))?;
+    let mut statement = connection.prepare(query).map_err(StorageError::from)?;
     let rows = statement
         .query_map([], entity_from_row)
-        .map_err(|error| format!("读取资料条目失败：{}", error))?;
+        .map_err(StorageError::from)?;
     let mut entities = Vec::new();
     for row in rows {
-        entities.push(row.map_err(|error| format!("读取资料条目失败：{}", error))?);
+        entities.push(row.map_err(StorageError::from)?);
     }
     Ok(entities)
 }

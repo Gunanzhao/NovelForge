@@ -167,19 +167,21 @@ fn open_project_inner(root: &Path) -> Result<ProjectData, String> {
         let _ = storage::append_log(root, "INFO", "project_opened");
         return project_data(root, &connection);
     }
-    let mut connection = match storage::open_db(root) {
-        Ok(connection)
-            if storage::all_nodes(&connection, false).is_ok()
-                && storage::all_entities(&connection, false).is_ok() =>
-        {
-            connection
-        }
+    let mut connection = match storage::database::open_db_typed(root) {
         Ok(connection) => {
-            drop(connection);
-            recovered_project_connection(root)?
+            let checked = storage::database::all_nodes_typed(&connection, false)
+                .and_then(|_| storage::database::all_entities_typed(&connection, false));
+            match checked {
+                Ok(_) => connection,
+                Err(error) if error.corrupt() => {
+                    drop(connection);
+                    recovered_project_connection(root)?
+                }
+                Err(error) => return Err(error.to_string()),
+            }
         }
-        Err(error) if error.starts_with("BATCH_RECOVERY:") => return Err(error),
-        Err(_) => recovered_project_connection(root)?,
+        Err(error) if error.corrupt() => recovered_project_connection(root)?,
+        Err(error) => return Err(error.to_string()),
     };
     let nodes_empty = storage::all_nodes(&connection, false)?.is_empty();
     let entities_empty = storage::all_entities(&connection, false)?.is_empty();

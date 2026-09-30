@@ -36,6 +36,7 @@ pub(crate) mod manuscript;
 pub(crate) mod manuscript_import;
 pub(crate) mod project;
 pub(crate) mod recovery;
+pub(crate) mod rescue;
 pub(crate) mod search;
 pub(crate) mod statistics;
 pub(crate) mod trash;
@@ -919,6 +920,21 @@ fn restore_database_files(root: &Path, moved: &[(String, String)]) -> Result<(),
 }
 
 fn recovered_project_connection(root: &Path) -> Result<Connection, String> {
+    if let Err(error) = storage::errors::check_compatibility(root) {
+        if !error.corrupt() {
+            return Err(error.to_string());
+        }
+    }
+    let journal_dir = storage::safe_relative(root, ".novelforge/batch-journal")?;
+    if storage::safe_relative(root, ".novelforge/recovery-state.json")?.exists()
+        || (journal_dir.exists()
+            && fs::read_dir(journal_dir)
+                .map_err(|e| e.to_string())?
+                .filter_map(Result::ok)
+                .any(|e| e.path().extension().and_then(|v| v.to_str()) == Some("json")))
+    {
+        return Err("BATCH_RECOVERY:数据库重建无法确认未完成日志的提交状态；保留数据库及原始日志，请只读救援".into());
+    }
     validate_recovery_tree(root)?;
     let mut moved = Vec::new();
     let stamp = storage::new_id();
@@ -965,6 +981,12 @@ fn recovered_project_connection(root: &Path) -> Result<Connection, String> {
         if legacy_nodes > 0 || legacy_entities > 0 {
             let _ = storage::append_log(root, "WARN", "database_recovery_legacy_metadata");
         }
+        let recovered = project_data(root, &connection)?;
+        let report = serde_json::json!({"state":"partial-mirror-rebuild", "recoveredNodes":recovered.nodes.len(), "recoveredEntities":recovered.entities.len(), "notRecovered":["history index", "activity statistics", "batch operation state"], "pending":"Compare original quarantined database and sidecars before declaring full recovery"});
+        storage::atomic_write(
+            &storage::safe_relative(root, ".novelforge/recovery-report.json")?,
+            &serde_json::to_vec(&report).map_err(|e| e.to_string())?,
+        )?;
         Ok(connection)
     })();
     match result {
@@ -1383,3 +1405,6 @@ pub(crate) use manuscript::save_document;
 
 #[cfg(test)]
 mod annotations_regression_tests;
+
+#[cfg(test)]
+mod conservative_recovery_tests;
