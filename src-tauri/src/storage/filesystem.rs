@@ -371,9 +371,17 @@ mod atomic_tests {
         fs::create_dir(&root).unwrap();
         let copy = root.join(".project.json.backup-interrupted");
         fs::write(&copy, b"preserved").unwrap();
-        let error = existing_project_root(root.to_str().unwrap()).unwrap_err();
-        assert!(error.contains("旧版写入中断"));
-        assert!(error.contains(copy.to_str().unwrap()));
+        // The diagnostic reports canonical paths. Windows runner TEMP may use
+        // a DOS 8.3 alias, and callers may also supply parent path components.
+        let canonical_copy = fs::canonicalize(&copy).unwrap();
+        for input in [
+            root.clone(),
+            root.join("..").join(root.file_name().unwrap()),
+        ] {
+            let error = existing_project_root(input.to_str().unwrap()).unwrap_err();
+            assert!(error.contains("旧版写入中断"));
+            assert!(error.contains(canonical_copy.to_str().unwrap()), "{error}");
+        }
         assert_eq!(fs::read(copy).unwrap(), b"preserved");
         fs::remove_dir_all(root).unwrap();
     }
