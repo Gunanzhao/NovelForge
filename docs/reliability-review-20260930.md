@@ -1,11 +1,11 @@
 # Reliability review implementation and acceptance — 2026-09-30
-> 交付状态（2026-10-01）：六阶段代码及本地 Windows 验收已落实，但远端 Windows IPC 启动门禁仍失败，整体尚未全验收。最后一次完整观察为 [CI 36757524529](https://github.com/Gunanzhao/NovelForge/actions/runs/36757524529)，对应 76b446c：前端、Linux Rust、Windows 完整 Rust、生产构建及原生启动提示均通过；WebView2 调试端口等待 120 秒后仍 ECONNREFUSED。根因尚未确定，不能直接归为已证实的产品缺陷或纯 runner 限制。最终报告提交的准确本地/远端 SHA 与 CI 状态由交付回复提供。
+> 更新状态（2026-10-01）：远端 Windows IPC 阻塞已解决。修复提交 `4c0fc02ce43db623394269a575b8f282be542494` 的 [CI #172](https://github.com/Gunanzhao/NovelForge/actions/runs/36802439384) 中 Frontend checks、Rust checks、Windows reliability 全部通过，包括生产 EXE、真实 IPC、数据生命周期及强制重启。下文较早的失败记录保留为诊断历史，不能作为当前状态；既有延期项与未覆盖场景仍以各节说明为准。
 
 ## Repository and protection of existing work
 
 Verified repository: Gunanzhao/NovelForge; origin fetch and push both use the matching GitHub HTTPS repository. Original main, fetched origin/main, review baseline and task baseline all equal `88bbdcc7ddde1e73e0a91f8d41da82ec717588ce`. Work runs in a separate managed worktree on `codex/reliability-review-20260930`. The original checkout has an unstaged deletion of `docs/release-1.1.1-rc.4.md` and untracked audit documents; these remain untouched and are excluded. No submodules or merge/rebase operations were found. No applicable AGENTS.md was found in the repository or checked ancestors.
 
-No main push, PR creation, merge, release, history rewrite or branch protection change is authorized by this task. Stage labels below are acceptance stages, not remote PRs.
+The initial review scope excluded main pushes, PR creation, merges, releases, history rewrites and branch protection changes. A subsequent explicit user request on 2026-10-01 authorizes README and Release updates from this task branch; the other restrictions remain. Stage labels below are acceptance stages, not remote PRs.
 
 ## Toolchain and baseline
 
@@ -176,3 +176,12 @@ Mandatory outstanding acceptance: real IPC on the remote Windows runner. It pass
 A read-only repository runner inventory returned zero self-hosted runners. Continuing diagnosis needs an inspectable Windows graphical execution environment where WebView initialization and CDP binding can be examined. Providing or registering a dedicated runner is an infrastructure decision for the user; no runner registration, repository permission change, main push, PR, merge or Release has been performed. Whether the hosted environment or product startup path is responsible remains unresolved. Linux native startup GUI notice is also not implemented; Windows native notice has been validated both locally and remotely.
 
 Additional commit index after the six stage commits: 4872027 (final local report), 7dca8c7 (audited dependency patch), 2f8a822 (dependency report), e1fd813 (canonical-path assertion), bd32219 (CI-correction report), 371a9e8 (real WebView2 preparation), 3ed9990 (runtime report), adebe8d (startup diagnostics and normalized fixture paths), fe432cd (acceptance boundary), 8cce187 (bounded startup timing), 76b446c (timing report). The initial plan f4ec928 and six primary stage commits are listed above. The subsequent delivery report commit contains this explicit unresolved result, with no additional product changes.
+
+
+## Windows IPC follow-up — verified 2026-10-01
+
+- Diagnostic commit `e4c6afc41c8f9a505d815d9441fea827dd091071`, [CI #171](https://github.com/Gunanzhao/NovelForge/actions/runs/36801258197): native WebView creation and page load finished within about five seconds. The actual browser process had neither the requested remote debugging nor logging switches and no listening CDP socket. Its interactive session and process inspection worked. This excluded a missing runtime or stalled page initialization as the observed failure.
+- Fix `4c0fc02ce43db623394269a575b8f282be542494`: explicitly opt into a validated diagnostic CLI mode and configure the port, logging and isolated profile through the native WebView API. No arbitrary environment switches are promoted into trusted options. Normal launch does not enable debugging, and wry defaults are preserved.
+- [CI #172 success artifact](https://github.com/Gunanzhao/NovelForge/actions/runs/36802439384/artifacts/11136865273): elevated=true, interactive=true, runtime 153.0.4234.48, actual browser remote-debugging-port=9337, owned listener 127.0.0.1:9337. This matches the [upstream explanation of elevated-host environment overrides](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5640#issuecomment-4923662109). No runner registration, policy/permission changes or runtime replacement was needed.
+- Production page ready in 3966 ms; forced restart page ready in 783 ms. All existing contract, lifecycle, conflict recovery, backup/restore, export and snapshot restart assertions passed. Windows Rust: 174 passed, 7 pre-existing opt-in tests ignored. Frontend and Linux Rust jobs also passed. Local occupied-port negative control still exited 1 and captured the actual port owner; invalid runtime negative control retained diagnostics and failure status.
+- Artifacts contain allowlisted timestamps/codes, process relationships, session/elevation, known switches, runtime versions and listener state. Raw command lines, environment, body data and raw Chromium logs are excluded. Collector progress is persisted between stages so a later timeout retains earlier evidence.

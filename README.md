@@ -2,18 +2,30 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.2.0-rc.1（预发布）**。
+当前版本：**1.2.0-rc.2（预发布）**。
 
 [![main CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Amain)
 
 ## 下载
 
-- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.1/NovelForge_1.2.0-rc.1_x64-setup.exe)
-- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.1/novelforge.exe)
-- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.1/SHA256SUMS.txt)
+- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.2/NovelForge_1.2.0-rc.2_x64-setup.exe)
+- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.2/novelforge.exe)
+- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.2/SHA256SUMS.txt)
 - [版本说明与历史 Release](https://github.com/Gunanzhao/NovelForge/releases)
 
 已有安装版用户运行新安装包升级；直接运行独立 EXE 不会更新旧快捷方式。桌面版需要 Windows WebView2。
+
+## 1.2.0-rc.2 相比 1.2.0-rc.1
+
+- **独立草稿恢复**：每 10 秒尝试保存正文与已注册资料表单的独立快照；持续输入不推迟保存。异常退出后可查看、对照、复制或导出，旧版本确认不会删除新草稿。
+- **更保守的数据恢复**：区分数据库锁定、权限、磁盘满与真正损坏；损坏日志保留原证据并阻止写入，救援入口可导出安全可读正文。未知新版项目格式与数据库结构在写入前拒绝打开。
+- **可预览的历史清理**：查看占用、预览并确认后清理符合条件的旧自动历史，保留最新、命名和保护版本；清理中断可恢复，不自动清理旧稿。
+- **异常界面与启动保护**：损坏的最近项目缓存不再阻止启动；界面渲染失败时保留可复制、导出的编辑内容。Windows 启动失败显示原生提示，启动日志只记录脱敏阶段码与时间。
+- **Windows 真实 IPC 验收**：修复高权限环境中 WebView2 调试参数未生效的问题，保留生产 EXE、数据生命周期和强制重启断言；CI 成功与失败均上传脱敏诊断。
+
+可靠性代码基线 `4c0fc02` 的 [CI #172](https://github.com/Gunanzhao/NovelForge/actions/runs/36802439384) 三项检查全部通过；前端 491 项、Windows Rust 174 项通过（7 项原有忽略），生产 EXE 的真实 IPC、备份恢复、导出与强制重启验收通过。草稿保护到最后一次成功写入，不保证零丢失；容量和恢复限制见下方“草稿恢复与启动诊断”。
+
+详见 [1.2.0-rc.2 发布说明](docs/release-1.2.0-rc.2.md)和[可靠性验收报告](docs/reliability-review-20260930.md)。
 
 ## 1.2.0-rc.1 相比 1.1.1-rc.8
 
@@ -215,7 +227,7 @@ node scripts/editor-selection-ui-cdp.mjs
 node scripts/provider-responsive-ui-cdp.mjs
 ```
 
-这些检查使用独立合成项目和 WebView2 配置，截图与结果写入忽略的 `tmp/`。正文 AI 测试使用本机模拟 Provider，验证选区范围、共享任务、差异审阅、撤销重做、自动保存及浅／深色和窄窗口布局；Codex 测试只检查登录、兼容性和连接保持，不默认执行真实订阅生成。CI 包含前端、Rust 检查和 Windows CLI 兼容矩阵，实时结果见 [GitHub Actions](https://github.com/Gunanzhao/NovelForge/actions)。
+这些检查使用独立合成项目和 WebView2 配置，截图与结果写入忽略的 `tmp/`。正文 AI 测试使用本机模拟 Provider，验证选区范围、共享任务、差异审阅、撤销重做、自动保存及浅／深色和窄窗口布局；Codex 测试只检查登录、兼容性和连接保持，不默认执行真实订阅生成。CI 包含前端、Rust 和 Windows 真实 IPC 检查，另按相关文件变更运行 Windows CLI 兼容矩阵，实时结果见 [GitHub Actions](https://github.com/Gunanzhao/NovelForge/actions)。
 
 插件扩展目前采用源码内显式注册的进程内 Registry，不从磁盘动态执行任意外部 JavaScript。
 
@@ -235,4 +247,4 @@ node scripts/reliability-smoke-cdp.mjs
 ./scripts/startup-diagnostics-test.ps1 -Executable ./src-tauri/target/release/novelforge.exe
 ```
 
-这些测试只创建临时合成数据；原生窗口检查需要可用桌面会话。CI 保留 `Frontend checks`、`Rust checks`，新增 `Windows reliability`；新增检查是否设为分支保护必需项需管理员另行决定。详细实现、延期项和证据见 [可靠性验收报告](docs/reliability-review-20260930.md)。
+这些测试只创建临时合成数据；原生窗口检查需要可用桌面会话。CI 保留 `Frontend checks`、`Rust checks`，包含 `Windows reliability`；新增检查是否设为分支保护必需项需管理员另行决定。IPC 脚本通过生产 EXE 的显式 `--diagnostic-webview <端口> <隔离目录>` 参数配置 WebView API，正常启动默认不开启 CDP。诊断记录实际子进程、会话、调试参数与监听状态；CI 上传 `windows-ipc-diagnostics-<SHA>`，不包含原始命令行、环境变量或正文。详细实现、延期项和证据见 [可靠性验收报告](docs/reliability-review-20260930.md)。
