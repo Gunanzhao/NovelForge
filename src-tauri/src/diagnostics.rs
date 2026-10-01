@@ -37,7 +37,16 @@ fn record(root: &Path, code: &str, _private_detail: &str) -> std::io::Result<()>
         fs::rename(&path, old)?;
     }
     let allowed = match code {
-        "STARTUP_BEGIN" | "STARTUP_FAILED" | "STARTUP_SELF_TEST" => code,
+        "STARTUP_BEGIN"
+        | "STARTUP_FAILED"
+        | "STARTUP_SELF_TEST"
+        | "STARTUP_RUN_ENTER"
+        | "STARTUP_SETUP_ENTER"
+        | "STARTUP_CONFIG_READY"
+        | "STARTUP_WEBVIEW_BUILD_BEGIN"
+        | "STARTUP_WEBVIEW_BUILD_DONE"
+        | "STARTUP_PAGE_LOAD_STARTED"
+        | "STARTUP_PAGE_LOAD_FINISHED" => code,
         _ => "STARTUP_UNKNOWN",
     };
     let mut file = fs::OpenOptions::new()
@@ -47,8 +56,11 @@ fn record(root: &Path, code: &str, _private_detail: &str) -> std::io::Result<()>
     writeln!(file, "{} {}", chrono::Utc::now().to_rfc3339(), allowed)?;
     file.sync_all()
 }
+pub fn stage(code: &str) {
+    let _ = record(&directory(), code, "");
+}
 pub fn begin() {
-    let _ = record(&directory(), "STARTUP_BEGIN", "");
+    stage("STARTUP_BEGIN");
 }
 pub fn fail(detail: &str, self_test: bool) {
     let written = record(

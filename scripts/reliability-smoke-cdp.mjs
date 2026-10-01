@@ -19,7 +19,24 @@ const port = Number(process.env.NOVELFORGE_SMOKE_PORT ?? 9337)
 const startupTimeout = Number(process.env.NOVELFORGE_SMOKE_STARTUP_MS ?? 40000)
 assert.ok(Number.isFinite(startupTimeout) && startupTimeout > 0 && startupTimeout <= 120000, 'startup budget must be within 120 seconds')
 const executable = resolve(process.argv[2] ?? 'src-tauri/target/release/novelforge.exe')
-const launch = () => spawn(executable, [], { windowsHide: true, stdio: 'ignore', env: { ...process.env, APPDATA: join(temporary, 'appdata'), LOCALAPPDATA: join(temporary, 'localappdata'), WEBVIEW2_USER_DATA_FOLDER: join(temporary, 'webview'), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}` } })
+const diagnostics = resolve(process.env.NOVELFORGE_SMOKE_DIAGNOSTICS ?? 'tmp/windows-ipc-diagnostics')
+mkdirSync(diagnostics, { recursive: true })
+const browserArguments = `--remote-debugging-port=${port} --enable-logging --log-file="${join(temporary, 'chromium.log')}"`
+const saveDiagnostic = (name, value) => writeFileSync(join(diagnostics, name + '.json'), JSON.stringify(value, null, 2))
+saveDiagnostic('launch', { timestamp: new Date().toISOString(), node: process.version, platform: process.platform, port, startupTimeout, runtimeConfigured: Boolean(process.env.WEBVIEW2_BROWSER_EXECUTABLE_FOLDER), arguments: { remoteDebuggingPort: port, enableLogging: true, logFile: 'isolated-temp', userDataFolder: 'isolated-temp' } })
+const collect = phase => {
+  try {
+    execFileSync('pwsh.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', resolve('scripts/collect-webview-diagnostics.ps1'), '-RootProcessId', String(child.pid ?? 0), '-Port', String(port), '-OutputPath', join(diagnostics, phase + '-processes.json')], { stdio: 'pipe', windowsHide: true, timeout: 30000 })
+  } catch (error) { saveDiagnostic(phase + '-collector-error', { code: error.code, status: error.status, signal: error.signal, name: error.name }) }
+  const startupLog = join(temporary, 'localappdata', 'NovelForge', 'logs', 'startup.log')
+  const lines = existsSync(startupLog) ? readFileSync(startupLog, 'utf8').split(/\r?\n/).filter(line => /^\d{4}-\d\d-\d\dT[0-9:.+Z-]+ STARTUP_[A-Z_]+$/.test(line)) : []
+  saveDiagnostic(phase + '-startup', { lines, exitCode: child.exitCode, signalCode: child.signalCode, probe: startupProbe })
+  const chromiumLog = join(temporary, 'chromium.log')
+  // Raw Chromium output can include paths/URLs. Export only recognized facts.
+  const raw = existsSync(chromiumLog) ? readFileSync(chromiumLog, 'utf8') : ''
+  saveDiagnostic(phase + '-chromium', { logPresent: existsSync(chromiumLog), bytes: raw.length, facts: [...new Set(raw.match(/DevTools listening|bind\(\) failed|Address already in use|Access is denied|Permission denied|sandbox|crashpad|ERROR|FATAL|0x[0-9A-Fa-f]{8}/g) ?? [])] })
+}
+const launch = () => spawn(executable, [], { windowsHide: true, stdio: 'ignore', env: { ...process.env, APPDATA: join(temporary, 'appdata'), LOCALAPPDATA: join(temporary, 'localappdata'), WEBVIEW2_USER_DATA_FOLDER: join(temporary, 'webview'), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: browserArguments } })
 let child = launch()
 let socket
 let started = false
@@ -39,7 +56,7 @@ try {
     if (target) break
     await delay(250)
   }
-  if (!target) throw new Error('ENVIRONMENT: WebView2 unavailable; runner needs a Windows desktop session and WebView2 runtime')
+  if (!target) throw new Error('STARTUP: production WebView page/CDP endpoint not ready within startup budget; inspect diagnostics')
   console.log('WebView2 initial page ready in', Date.now() - launchStarted, 'ms')
   socket = new WebSocket(target.webSocketDebuggerUrl)
   await new Promise((yes, no) => { socket.addEventListener('open', yes, { once: true }); socket.addEventListener('error', no, { once: true }) })
@@ -170,20 +187,11 @@ try {
   assert.throws(() => assert.equal(typeof { code: fixture.conflictCode }, 'string'))
   console.log('PASS: production Windows IPC/serde, Unicode, null/missing/optional, drift controls, leases, reopen, conflict rescue, backup restore and exported body')
 } catch (error) {
-  if (!started) {
-    const startupLog = join(temporary, 'localappdata', 'NovelForge', 'logs', 'startup.log')
-    const codes = existsSync(startupLog) ? readFileSync(startupLog, 'utf8').match(/STARTUP_[A-Z_]+/g) : []
-    console.error('Startup state', { exitCode: child.exitCode, signalCode: child.signalCode, runtimeConfigured: Boolean(process.env.WEBVIEW2_BROWSER_EXECUTABLE_FOLDER), codes, probe: startupProbe })
-    if (child.pid) {
-      try {
-        const command = `Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -eq ${child.pid} -or $_.ParentProcessId -eq ${child.pid} } | Select-Object Name,ProcessId,ParentProcessId | ConvertTo-Json -Compress`
-        console.error('Test process state', execFileSync('powershell.exe', ['-NoProfile', '-Command', command], { encoding: 'utf8', windowsHide: true, timeout: 10000 }).trim())
-      } catch { console.error('Test process inspection unavailable') }
-    }
-  }
+  collect('failure')
   console.error(started ? 'PRODUCT_OR_TEST_FAILURE' : 'STARTUP_OR_ENVIRONMENT_FAILURE', error)
   process.exitCode = 1
 } finally {
+  if (!process.exitCode) collect('success')
   socket?.close()
   if (child.pid) { try { execFileSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }) } catch { /* already exited */ } }
 }

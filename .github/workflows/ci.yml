@@ -141,4 +141,13 @@ jobs:
       - name: Real WebView2 IPC and data lifecycle smoke
         env:
           NOVELFORGE_SMOKE_STARTUP_MS: 120000
+          NOVELFORGE_SMOKE_DIAGNOSTICS: tmp/windows-ipc-diagnostics
         run: node scripts/reliability-smoke-cdp.mjs
+      - name: Upload sanitized Windows IPC diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-ipc-diagnostics-${{ github.sha }}
+          path: tmp/windows-ipc-diagnostics/*.json
+          if-no-files-found: warn
+          retention-days: 7

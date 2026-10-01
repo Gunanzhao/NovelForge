@@ -29,16 +29,27 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .manage(commands::codex::CodexState::default())
         .setup(|app| {
-            tauri::WebviewWindowBuilder::from_config(
+            diagnostics::stage("STARTUP_SETUP_ENTER");
+            let window = tauri::WebviewWindowBuilder::from_config(
                 app,
                 app.config()
                     .app
                     .windows
                     .first()
                     .ok_or("WINDOW_CONFIG_MISSING")?,
-            )?
-            .on_navigation(commands::navigation::workspace_navigation_allowed)
-            .build()?;
+            )?;
+            diagnostics::stage("STARTUP_CONFIG_READY");
+            diagnostics::stage("STARTUP_WEBVIEW_BUILD_BEGIN");
+            window
+                .on_navigation(commands::navigation::workspace_navigation_allowed)
+                .on_page_load(|_, payload| {
+                    diagnostics::stage(match payload.event() {
+                        tauri::webview::PageLoadEvent::Started => "STARTUP_PAGE_LOAD_STARTED",
+                        tauri::webview::PageLoadEvent::Finished => "STARTUP_PAGE_LOAD_FINISHED",
+                    });
+                })
+                .build()?;
+            diagnostics::stage("STARTUP_WEBVIEW_BUILD_DONE");
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -130,6 +141,7 @@ pub fn run() {
             commands::project::read_logs,
             commands::project::update_project
         ]);
+    diagnostics::stage("STARTUP_RUN_ENTER");
     if let Err(error) = builder.run(tauri::generate_context!()) {
         diagnostics::fail(&error.to_string(), false);
     }
