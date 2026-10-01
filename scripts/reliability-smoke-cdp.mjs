@@ -21,9 +21,13 @@ assert.ok(Number.isFinite(startupTimeout) && startupTimeout > 0 && startupTimeou
 const executable = resolve(process.argv[2] ?? 'src-tauri/target/release/novelforge.exe')
 const diagnostics = resolve(process.env.NOVELFORGE_SMOKE_DIAGNOSTICS ?? 'tmp/windows-ipc-diagnostics')
 mkdirSync(diagnostics, { recursive: true })
-const browserArguments = `--remote-debugging-port=${port} --enable-logging --log-file="${join(temporary, 'chromium.log')}"`
+const launchEnvironment = { ...process.env, APPDATA: join(temporary, 'appdata'), LOCALAPPDATA: join(temporary, 'localappdata') }
+// These user-writable overrides are ignored by elevated WebView2 hosts. The
+// production EXE opts into the same probe explicitly through its native API.
+delete launchEnvironment.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
+delete launchEnvironment.WEBVIEW2_USER_DATA_FOLDER
 const saveDiagnostic = (name, value) => writeFileSync(join(diagnostics, name + '.json'), JSON.stringify(value, null, 2))
-saveDiagnostic('launch', { timestamp: new Date().toISOString(), node: process.version, platform: process.platform, port, startupTimeout, runtimeConfigured: Boolean(process.env.WEBVIEW2_BROWSER_EXECUTABLE_FOLDER), arguments: { remoteDebuggingPort: port, enableLogging: true, logFile: 'isolated-temp', userDataFolder: 'isolated-temp' } })
+saveDiagnostic('launch', { timestamp: new Date().toISOString(), node: process.version, platform: process.platform, port, startupTimeout, runtimeConfigured: Boolean(process.env.WEBVIEW2_BROWSER_EXECUTABLE_FOLDER), arguments: { channel: 'explicit-api', remoteDebuggingPort: port, enableLogging: true, logFile: 'isolated-temp', userDataFolder: 'isolated-temp' } })
 const collect = phase => {
   try {
     execFileSync('pwsh.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-File', resolve('scripts/collect-webview-diagnostics.ps1'), '-RootProcessId', String(child.pid ?? 0), '-Port', String(port), '-OutputPath', join(diagnostics, phase + '-processes.json')], { stdio: 'pipe', windowsHide: true, timeout: 30000 })
@@ -31,12 +35,12 @@ const collect = phase => {
   const startupLog = join(temporary, 'localappdata', 'NovelForge', 'logs', 'startup.log')
   const lines = existsSync(startupLog) ? readFileSync(startupLog, 'utf8').split(/\r?\n/).filter(line => /^\d{4}-\d\d-\d\dT[0-9:.+Z-]+ STARTUP_[A-Z_]+$/.test(line)) : []
   saveDiagnostic(phase + '-startup', { lines, exitCode: child.exitCode, signalCode: child.signalCode, probe: startupProbe })
-  const chromiumLog = join(temporary, 'chromium.log')
+  const chromiumLog = join(temporary, 'webview', 'chromium.log')
   // Raw Chromium output can include paths/URLs. Export only recognized facts.
   const raw = existsSync(chromiumLog) ? readFileSync(chromiumLog, 'utf8') : ''
   saveDiagnostic(phase + '-chromium', { logPresent: existsSync(chromiumLog), bytes: raw.length, facts: [...new Set(raw.match(/DevTools listening|bind\(\) failed|Address already in use|Access is denied|Permission denied|sandbox|crashpad|ERROR|FATAL|0x[0-9A-Fa-f]{8}/g) ?? [])] })
 }
-const launch = () => spawn(executable, [], { windowsHide: true, stdio: 'ignore', env: { ...process.env, APPDATA: join(temporary, 'appdata'), LOCALAPPDATA: join(temporary, 'localappdata'), WEBVIEW2_USER_DATA_FOLDER: join(temporary, 'webview'), WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: browserArguments } })
+const launch = () => spawn(executable, ['--diagnostic-webview', String(port), join(temporary, 'webview')], { windowsHide: true, stdio: 'ignore', env: launchEnvironment })
 let child = launch()
 let socket
 let started = false

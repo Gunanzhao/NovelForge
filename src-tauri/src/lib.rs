@@ -38,6 +38,14 @@ pub fn run() {
                     .first()
                     .ok_or("WINDOW_CONFIG_MISSING")?,
             )?;
+            #[cfg(windows)]
+            let window = if let Some(probe) = diagnostics::webview_probe(std::env::args_os())? {
+                window
+                    .additional_browser_args(&probe.browser_arguments)
+                    .data_directory(probe.data_directory)
+            } else {
+                window
+            };
             diagnostics::stage("STARTUP_CONFIG_READY");
             diagnostics::stage("STARTUP_WEBVIEW_BUILD_BEGIN");
             window

@@ -62,6 +62,53 @@ pub fn stage(code: &str) {
 pub fn begin() {
     stage("STARTUP_BEGIN");
 }
+// Explicit command-line opt-in only: do not promote environment overrides into
+// trusted WebView API options (WebView2 intentionally ignores them when elevated).
+#[cfg(any(windows, test))]
+pub struct WebviewProbe {
+    pub data_directory: PathBuf,
+    pub browser_arguments: String,
+}
+#[cfg(any(windows, test))]
+pub fn webview_probe(
+    args: impl IntoIterator<Item = std::ffi::OsString>,
+) -> Result<Option<WebviewProbe>, &'static str> {
+    let mut args = args.into_iter();
+    let mut probe = None;
+    while let Some(arg) = args.next() {
+        if arg != "--diagnostic-webview" {
+            continue;
+        }
+        if probe.is_some() {
+            return Err("DIAGNOSTIC_WEBVIEW_DUPLICATE");
+        }
+        let port = args
+            .next()
+            .and_then(|arg| arg.to_str().and_then(|s| s.parse::<u16>().ok()))
+            .filter(|port| *port > 0)
+            .ok_or("DIAGNOSTIC_WEBVIEW_PORT")?;
+        let data_directory = PathBuf::from(args.next().ok_or("DIAGNOSTIC_WEBVIEW_DIRECTORY")?);
+        if !data_directory.is_absolute() || !data_directory.is_dir() {
+            return Err("DIAGNOSTIC_WEBVIEW_DIRECTORY");
+        }
+        let log = data_directory.join("chromium.log");
+        let log = log.to_str().ok_or("DIAGNOSTIC_WEBVIEW_DIRECTORY")?;
+        if log.contains('"') {
+            return Err("DIAGNOSTIC_WEBVIEW_DIRECTORY");
+        }
+        // Preserve wry's existing defaults when adding explicit diagnostic flags.
+        let browser_arguments = format!(
+            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection \
+             --remote-debugging-port={port} --remote-debugging-address=127.0.0.1 \
+             --enable-logging --log-file=\"{log}\""
+        );
+        probe = Some(WebviewProbe {
+            data_directory,
+            browser_arguments,
+        });
+    }
+    Ok(probe)
+}
 pub fn fail(detail: &str, self_test: bool) {
     let written = record(
         &directory(),
@@ -108,6 +155,45 @@ fn native_notice(message: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn webview_probe_requires_explicit_valid_arguments_and_isolates_profile() {
+        use std::ffi::OsString;
+        let root = std::env::temp_dir().join(format!("nf-probe-中文 {}", uuid::Uuid::new_v4()));
+        fs::create_dir(&root).unwrap();
+        let args = |values: &[&str]| values.iter().map(OsString::from).collect::<Vec<_>>();
+        assert!(webview_probe(args(&["novelforge.exe"])).unwrap().is_none());
+        for values in [
+            vec!["--diagnostic-webview"],
+            vec!["--diagnostic-webview", "0", root.to_str().unwrap()],
+            vec!["--diagnostic-webview", "65536", root.to_str().unwrap()],
+            vec!["--diagnostic-webview", "9337", "relative"],
+            vec![
+                "--diagnostic-webview",
+                "9337",
+                root.to_str().unwrap(),
+                "--diagnostic-webview",
+            ],
+        ] {
+            assert!(webview_probe(args(&values)).is_err());
+        }
+        let probe = webview_probe(args(&[
+            "novelforge.exe",
+            "--diagnostic-webview",
+            "9337",
+            root.to_str().unwrap(),
+        ]))
+        .unwrap()
+        .unwrap();
+        assert_eq!(probe.data_directory, root);
+        assert!(probe
+            .browser_arguments
+            .contains("--remote-debugging-port=9337"));
+        assert!(probe
+            .browser_arguments
+            .contains("--remote-debugging-address=127.0.0.1"));
+        assert!(probe.browser_arguments.contains("--log-file=\""));
+        fs::remove_dir(root).unwrap();
+    }
     #[test]
     fn diagnostic_allowlist_excludes_secrets_bodies_and_paths_and_rotates() {
         let root = std::env::temp_dir().join(format!("nf-diagnostics-{}", uuid::Uuid::new_v4()));
