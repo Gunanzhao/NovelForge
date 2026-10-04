@@ -1738,3 +1738,28 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 .welcome-recovery .disclosure-body { display: grid; gap: 12px; }
 .text-input::placeholder, .text-area::placeholder { color: var(--muted); opacity: 1; }
 input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Navigation prioritizes writing; secondary tools can be pinned without moving the chapter tree. */
+.sidebar-nav-groups { max-height: 48%; min-height: 160px; overscroll-behavior: contain; }
+.primary-navigation { padding-bottom: 6px; }
+.primary-navigation .nav-item { min-height: 34px; font-size: 14px; }
+.nav-entry { display: flex; align-items: center; min-width: 0; }
+.nav-entry .nav-item { flex: 1; min-width: 0; }
+.nav-entry .nav-item > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-pin { flex: none; width: 28px; height: 28px; opacity: .5; }
+.nav-entry:hover .nav-pin, .nav-pin:focus-visible { opacity: 1; }
+.pinned-navigation { padding-block: 6px; border-block: 1px solid var(--line); }
+.nav-group > summary > small { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); }
+.main-layout > .inspector-drawer { position: absolute; z-index: 12; inset: 0 0 0 auto; grid-column: auto; width: min(360px, 100%); background: var(--surface); border-left: 1px solid var(--line-strong); box-shadow: -12px 0 32px #0002; opacity: 1; visibility: visible; pointer-events: auto; }
+.drawer-heading { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--line); }
+.inspector-drawer > .inspector-tabs + .inspector { height: calc(100% - 86px); }
+.inspector-drawer > .panel-resize-handle { display: none; }
+.editor-title-row > div { flex: 1; min-width: 0; }
+.editor-title-row > span { display: none; }
+.editor-title-row .eyebrow { display: none; }
+.editor-title-row { padding: 16px 24px 8px; }
+.editor-toolbar { padding: 0 16px 12px; }
+@media (max-width: 1180px) { .brand-subtitle { display: none; } .brand { min-width: 0; } .topbar { gap: 12px; } }
+
+.tree-row.current { background: var(--accent-soft); color: var(--accent); }
+.tree-row.current .tree-icon { color: var(--accent); }

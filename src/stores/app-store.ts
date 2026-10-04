@@ -146,6 +146,7 @@ interface AppState {
   trash: TrashItem[]
   sidebarOpen: boolean
   inspectorOpen: boolean
+  inspectorRequested: boolean
   inspectorTab: 'chapter' | 'ai'
   setInspectorTab: (tab: 'chapter' | 'ai') => void
   openEditorAi: (action?: AiAction) => void
@@ -221,11 +222,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   trash: [],
   sidebarOpen: DEFAULT_WORKSPACE_PREFERENCES.sidebarOpen,
   inspectorOpen: DEFAULT_WORKSPACE_PREFERENCES.inspectorOpen,
+  inspectorRequested: false,
   inspectorTab: 'chapter',
-  setInspectorTab: (inspectorTab) => set({ inspectorTab, inspectorOpen: true }),
+  setInspectorTab: (inspectorTab) => set({ inspectorTab, inspectorOpen: true, inspectorRequested: true }),
   openEditorAi: (action) => {
     const selection = get().editorSelection
-    set({ activeView: 'manuscript', inspectorOpen: true, inspectorTab: 'ai', requestedAiAction: action ?? (selection?.text.trim() ? 'polish' : 'continue') })
+    set({ activeView: 'manuscript', inspectorOpen: true, inspectorRequested: true, inspectorTab: 'ai', requestedAiAction: action ?? (selection?.text.trim() ? 'polish' : 'continue') })
   },
   focusMode: false,
   theme: 'system',
@@ -249,7 +251,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleInspector: () => set((state) => {
     const inspectorOpen = !state.inspectorOpen
     const workspacePreferences = { ...state.workspacePreferences, inspectorOpen }
-    return { inspectorOpen, workspacePreferences, preferenceError: persistPreferences(workspacePreferences, state.theme) }
+    return { inspectorOpen, inspectorRequested: inspectorOpen, workspacePreferences, preferenceError: persistPreferences(workspacePreferences, state.theme) }
   }),
   toggleFocusMode: () => set((state) => ({ focusMode: !state.focusMode })),
   setEditorMode: (editorMode) => set({ editorMode }),

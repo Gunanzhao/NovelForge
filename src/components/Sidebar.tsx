@@ -1,9 +1,10 @@
+import { readPinnedNavigation, writePinnedNavigation } from '../lib/navigation-preferences'
 import { Disclosure } from './Disclosure'
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   ArrowDown, ArrowRightLeft, ArrowUp, BarChart3, BookOpen, ChevronDown, ChevronRight, CircleUserRound, Clock3, Copy, FileDown, FilePlus2, FolderTree,
-  GalleryVerticalEnd, GitBranch, Globe2, Inbox, LayoutDashboard, MoreHorizontal, Network, Paperclip, Plus, Search,
+  GalleryVerticalEnd, GitBranch, Globe2, Inbox, LayoutDashboard, MoreHorizontal, Network, Paperclip, Pin, PinOff, Plus, Search,
   ShieldCheck, Sparkles, Trash2, WandSparkles, X,
 } from 'lucide-react'
 import { useAppStore } from '../stores/app-store'
@@ -72,13 +73,14 @@ function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectTogg
   onDragStart: () => void
   onDrop: () => void
 }) {
+  const current = useAppStore(state => state.document?.node.id === node.id)
   const isContainer = node.kind !== 'section'
   const hasChildren = isContainer
   return <div className="tree-row-wrap">
-    <div className={cn('tree-row', node.kind !== 'volume' && 'tree-document-row', selected && 'selected')} style={{ paddingLeft: 5 + level * 13 }} draggable onDragStart={onDragStart} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); onDrop() }} onDoubleClick={onRename} onContextMenu={onContextMenu}>
+    <div className={cn('tree-row', node.kind !== 'volume' && 'tree-document-row', selected && 'selected', current && 'current')} style={{ paddingLeft: 5 + level * 13 }} draggable onDragStart={onDragStart} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); onDrop() }} onDoubleClick={onRename} onContextMenu={onContextMenu}>
       {hasChildren ? <IconButton icon={open ? ChevronDown : ChevronRight} label={open ? '收起' : '展开'} onClick={onToggle} className="tree-toggle" /> : <span style={{ width: 30 }} />}
       <input type="checkbox" className="tree-checkbox" checked={selected} onChange={onSelectToggle} onClick={(event) => event.stopPropagation()} aria-label={'选择' + node.title} />
-      <button className="tree-main-button" onClick={onSelect}>
+      <button className="tree-main-button" aria-current={current ? 'page' : undefined} onClick={onSelect}>
         <span className="tree-icon">{node.kind === 'volume' ? <FolderTree size={15} /> : <BookOpen size={14} />}</span>
         <span className="tree-label">{node.title}</span>
         {node.kind === 'chapter' ? <span className={cn('tree-status-dot', node.status)} /> : null}
@@ -104,6 +106,8 @@ export function Sidebar({
 }) {
   const data = useAppStore((state) => state.data)
   const activeView = useAppStore((state) => state.activeView)
+  const currentNodeId = useAppStore(state => state.document?.node.id)
+  const [pinned, setPinned] = useState(readPinnedNavigation)
 
   const setView = useAppStore((state) => state.setView)
   const selectNode = useAppStore((state) => state.selectNode)
@@ -147,6 +151,18 @@ export function Sidebar({
     window.addEventListener('resize', updateHeight)
     return () => window.removeEventListener('resize', updateHeight)
   }, [])
+
+  const nodes = data?.nodes
+  useEffect(() => {
+    if (!currentNodeId || !nodes) return
+    const parents: string[] = []
+    let node = nodes.find(item => item.id === currentNodeId)
+    while (node?.parentId && !parents.includes(node.parentId)) {
+      parents.push(node.parentId)
+      node = nodes.find(item => item.id === node?.parentId)
+    }
+    setOpenNodes(current => new Set([...current, ...parents]))
+  }, [currentNodeId, nodes])
 
   if (!data) return null
   const currentData = data
@@ -254,15 +270,26 @@ export function Sidebar({
       void moveNode(source.id, target.id)
     }
   }
+  const primaryIds: ViewId[] = ['dashboard', 'manuscript', 'outline', 'character', 'ai']
+  function togglePin(id: ViewId) {
+    if (!pinned.includes(id) && pinned.length >= 4) return
+    const next = pinned.includes(id) ? pinned.filter(item => item !== id) : [...pinned, id].slice(-4)
+    setPinned(next); writePinnedNavigation(next)
+  }
+  function navigationItem({ id, label, icon: Icon }: typeof navItems[number], pinnable = false) {
+    return <div className="nav-entry" key={id}><button className={cn('nav-item', activeView === id && 'active')} aria-current={activeView === id ? 'page' : undefined} onClick={() => setView(id)}><Icon size={16} strokeWidth={1.8} /><span>{label}</span>{id === 'character' ? <span className="count">{currentData.entities.filter(entity => entity.kind === 'character').length}</span> : null}</button>{pinnable && <IconButton className="nav-pin" disabled={!pinned.includes(id) && pinned.length >= 4} title={!pinned.includes(id) && pinned.length >= 4 ? '最多固定 4 项，请先取消一个固定入口' : undefined} icon={pinned.includes(id) ? PinOff : Pin} label={(pinned.includes(id) ? '取消固定' : '固定') + label} onClick={() => togglePin(id)} />}</div>
+  }
   return <aside className="sidebar">
     <div className="sidebar-inner">
       <div className="sidebar-head"><div><h2>项目导航</h2><small>{data.project.title}</small></div><IconButton icon={Plus} label="新建卷" onClick={() => onAddNode('volume', null)} /></div>
-      <div className="sidebar-nav-groups">
-      <div className="nav-list">
-        {([{ title: '写作' }, { title: '资料' }, { title: '分析与辅助' }]).map(group => <Disclosure key={group.title} title={group.title} storageKey={'nav:' + group.title} defaultOpen className="nav-group">{navItems.filter(item => item.group === group.title).map(({ id, label, icon: Icon }) => <button key={id} className={cn('nav-item', activeView === id && 'active')} onClick={() => id === 'manuscript' ? setView('manuscript') : setView(id)}><Icon size={15} strokeWidth={1.8} /><span>{label}</span>{id === 'character' ? <span className="count">{data.entities.filter((entity) => entity.kind === 'character').length}</span> : null}</button>)}</Disclosure>)}
-        <button className={cn('nav-item', activeView === 'search' && 'active')} onClick={() => setView('search')}><Search size={15} strokeWidth={1.8} /><span>全文搜索</span><span className="count">⌘</span></button>
-      </div>
-      </div><div className="sidebar-section-label"><span>正文结构</span><span>{data.nodes.filter((node) => node.kind === 'chapter').length} 章</span></div>
+      <nav className="sidebar-nav-groups" aria-label="功能导航">
+        <div className="nav-list primary-navigation">{navItems.filter(item => primaryIds.includes(item.id)).map(item => navigationItem(item))}</div>
+        {pinned.length > 0 && <div className="nav-list pinned-navigation" aria-label="固定入口">{pinned.map(id => navItems.find(item => item.id === id)!).map(item => navigationItem(item, true))}</div>}
+        <div className="nav-list secondary-navigation">
+          {['写作', '资料', '分析与辅助'].map(group => <Disclosure key={group} title={group === '写作' ? '更多写作工具' : group === '资料' ? '更多资料' : group} storageKey={'compact-nav:' + group} meta={navItems.find(item => item.group === group && item.id === activeView && !primaryIds.includes(item.id) && !pinned.includes(item.id))?.label} className="nav-group">{navItems.filter(item => item.group === group && !primaryIds.includes(item.id) && !pinned.includes(item.id)).map(item => navigationItem(item, true))}</Disclosure>)}
+          <button className={cn('nav-item', activeView === 'search' && 'active')} onClick={() => setView('search')}><Search size={15} /><span>全文搜索</span><span className="count" title="Ctrl+Shift+F">Ctrl⇧F</span></button>
+        </div>
+      </nav><div className="sidebar-section-label"><span>正文结构</span><span>{data.nodes.filter((node) => node.kind === 'chapter').length} 章</span></div>
       <select className="select-input workflow-tree-filter" value={workflowFilter} onChange={(event) => { setWorkflowFilter(event.target.value as ChapterWorkflowFilter); setTreeScrollTop(0) }} aria-label="章节 Checklist 过滤"><option value="all">显示全部章节</option><option value="incomplete">仅显示未完成</option><option value="not-final">仅显示未定稿</option><option value="consistency">仅显示待人物一致性检查</option></select>
       <div className="tree" ref={treeRef} onScroll={(event) => setTreeScrollTop(event.currentTarget.scrollTop)}>
         {volumes.length === 0 ? <div className="tree-muted">还没有卷，点击右上角创建第一卷。</div> : <div className="tree-virtual-content" style={{ height: flatTree.length * treeRowHeight }}><div className="tree-virtual-rows" style={{ top: visibleStart * treeRowHeight }}>{visibleTree.map(({ node, level }) => <NodeRow key={node.id} node={node} level={level} open={openNodes.has(node.id)} selected={selectedNodeIds.has(node.id)} onToggle={() => toggle(node.id)} onSelect={() => node.kind === 'volume' ? toggle(node.id) : void selectNode(node.id)} onSelectToggle={() => toggleSelection(node.id)} onAdd={() => onAddNode(node.kind === 'volume' ? 'chapter' : 'section', node.id)} onRename={() => handleRename(node)} onMove={() => onMoveNode(node)} onCopy={() => onCopyNode(node)} onDelete={() => handleDelete(node)} onContextMenu={(event) => openNodeMenu(event, node)} onDragStart={() => setDraggedNodeId(node.id)} onDrop={() => handleDrop(node)} />)}</div></div>}
