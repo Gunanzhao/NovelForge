@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { X } from 'lucide-react'
+import { ChevronDown, X } from 'lucide-react'
 import { cn, formatDate } from '../lib/utils'
 
 export function Button({ className, variant = 'solid', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'solid' | 'ghost' | 'outline' | 'danger' }) {
@@ -58,4 +58,19 @@ export function Modal({ open, title, onClose, children, footer }: { open: boolea
 
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return <label className="field"><span className="field-label">{label}</span>{children}{hint ? <span className="field-hint">{hint}</span> : null}</label>
+}
+
+/** Native disclosure keeps actions reachable by keyboard without changing editor selection. */
+export function ActionMenu({ label, children }: { label: string; children: ReactNode }) {
+  const ref = useRef<HTMLDetailsElement>(null)
+  useEffect(() => {
+    const outside = (event: PointerEvent) => { if (ref.current && !ref.current.contains(event.target as Node)) ref.current.open = false }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && ref.current?.open) { event.preventDefault(); event.stopPropagation(); ref.current.open = false; ref.current.querySelector('summary')?.focus() }
+    }
+    document.addEventListener('pointerdown', outside)
+    document.addEventListener('keydown', escape, true)
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape, true) }
+  }, [])
+  return <details ref={ref} className="action-menu"><summary>{label}<ChevronDown size={13} /></summary><div className="action-menu-items" onClick={event => { if ((event.target as HTMLElement).closest('button:not([disabled])') && ref.current) ref.current.open = false }}>{children}</div></details>
 }

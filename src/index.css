@@ -1763,3 +1763,48 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px
 
 .tree-row.current { background: var(--accent-soft); color: var(--accent); }
 .tree-row.current .tree-icon { color: var(--accent); }
+
+/* One visual hierarchy for pages, form actions and compact menus. */
+.eyebrow { display: none; }
+.welcome .eyebrow { display: block; font-size: 14px; letter-spacing: 0; margin-top: 24px; }
+.welcome-copy { font-size: 14px; line-height: 1.9; }
+.welcome-storage { margin-top: 16px; }
+.welcome-storage p { font-size: var(--font-caption); line-height: 1.8; color: var(--muted); }
+.view-header { padding: 24px 24px 18px; }
+.view-header h1, .planning-topbar h1, .entity-editor-header h1 { font-size: 24px; }
+.dashboard-grid, .dashboard-columns { padding-inline: 24px; gap: 16px; }
+.dashboard-checklist { margin: 0 24px 16px; padding: 10px 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.dashboard-checklist .workflow-dashboard { margin: 0; border: 0; padding: 8px 0; }
+.dashboard-checklist .workflow-dashboard > .panel-title { display: none; }
+.settings-card > h2 { font-size: 16px; font-weight: 600; margin: 0 0 12px; }
+.planning-topbar { padding: 24px; }
+.planning-section-head { padding-block: 12px; margin-bottom: 12px; align-items: center; }
+.planning-section-head p { margin: 0; }
+.form-savebar { position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; margin-block: 0 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.memory-editor > h2 { margin: 0; font-size: 18px; }
+.memory-editor > [role="status"] { margin: 0; font-size: var(--font-ui); color: var(--muted); }
+.memory-editor > [role="alert"] { color: var(--danger); }
+.memory-chapters .active { background: var(--accent-soft); }
+.memory-source-picker { padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); }
+.memory-source-picker summary { cursor: pointer; font-weight: 600; }
+.action-menu { position: relative; flex: none; }
+.action-menu > summary { display: inline-flex; align-items: center; gap: 6px; min-height: var(--control-height); padding: 0 10px; list-style: none; color: var(--muted); border-radius: 6px; cursor: pointer; }
+.action-menu > summary::-webkit-details-marker { display: none; }
+.action-menu > summary:hover, .action-menu[open] > summary { color: var(--accent); background: var(--accent-soft); }
+.action-menu-items { position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; min-width: 168px; padding: 6px; display: grid; gap: 2px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); }
+.action-menu-items > .button { justify-content: flex-start; white-space: nowrap; }
+.topbar { position: relative; z-index: 15; }
+.mode-switch button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 30px; padding-inline: 8px; font-size: var(--font-caption); }
+.editor-chapter-status { flex: none; }
+.editor-chapter-status .status-select { min-height: 30px; }
+.toast-notice { left: auto; right: 20px; transform: none; bottom: 44px; max-width: min(480px, calc(100vw - 40px)); font-size: var(--font-ui); }
+@media (max-width: 900px) { .brand-name { display: none; } .brand { min-width: 0; } .topbar-title { max-width: 180px; } }
+@container workspace (max-width: 760px) { .dashboard-grid, .dashboard-columns { padding-inline: 16px; } .dashboard-checklist { margin-inline: 16px; } .form-savebar { padding: 10px; } }
+
+.planning-form > .form-savebar, .story-arc-form > .form-savebar { padding: 12px; margin: 0 0 4px; border: 1px solid var(--line); }
+.form-savebar .record-save-status { flex: 1 1 160px; }
+@container workspace (max-width: 560px) { .editor-toolbar { gap: 2px; } .editor-toolbar .icon-button { width: 30px; } .mode-switch { margin-left: 0; } }
+
+.sidebar-nav-groups { display: flex; flex-direction: column; overflow: hidden; }
+.primary-navigation { flex: none; }
+.nav-secondary-scroll { min-height: 108px; overflow-y: auto; overscroll-behavior: contain; }

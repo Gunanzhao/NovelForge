@@ -143,6 +143,16 @@ jobs:
           NOVELFORGE_SMOKE_STARTUP_MS: 120000
           NOVELFORGE_SMOKE_DIAGNOSTICS: tmp/windows-ipc-diagnostics
         run: node scripts/reliability-smoke-cdp.mjs
+      - name: Production UI layouts and draft retention
+        run: node scripts/frontend-polish-cdp.mjs
+      - name: Upload synthetic UI acceptance screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: frontend-ui-${{ github.sha }}
+          path: tmp/frontend-polish-ui/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Upload sanitized Windows IPC diagnostics
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

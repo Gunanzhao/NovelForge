@@ -1,3 +1,4 @@
+import { countWords, formatNumber } from '../lib/utils'
 import { normalizeLineBreaks, normalizedRangeFromSource, editorChangesFromSource } from '../lib/newline-offsets'
 import { annotationExtension } from '../lib/annotation-extension'
 import { useTextNavigation } from '../lib/text-navigation'
@@ -28,7 +29,7 @@ import { ENTITY_LABELS, NODE_STATUS_LABELS, type EntityRecord } from '../lib/typ
 import { isCurrentProjectSession, useAppStore } from '../stores/app-store'
 import { registerAiEditor, useAiTask } from '../stores/ai-task'
 import { aiAcceptanceEffect } from '../lib/ai-edit'
-import { Button, IconButton } from './ui'
+import { ActionMenu, Button, IconButton } from './ui'
 import { useContextMenu } from './ContextMenu'
 import { MarkdownPreview } from './MarkdownPreview'
 
@@ -86,6 +87,7 @@ export function EditorPane() {
   }, [])
   const data = useAppStore((state) => state.data)
   const editorMode = useAppStore((state) => state.editorMode)
+  const focusMode = useAppStore(state => state.focusMode)
   const saveState = useAppStore((state) => state.saveState)
   const error = useAppStore((state) => state.error)
   const updateContent = useAppStore((state) => state.updateContent)
@@ -342,10 +344,10 @@ export function EditorPane() {
 
   return <div className="manuscript-view">
     <div className="editor-header">
-      <div className="editor-title-row"><div><p className="eyebrow">MANUSCRIPT / {document.node.kind.toUpperCase()}</p><h1>{document.node.title}</h1></div><span>{document.node.filePath}</span><IconButton icon={Maximize2} label="专注模式（F11）" onClick={toggleFocusMode} /></div>
+      <div className="editor-title-row"><div><p className="eyebrow">MANUSCRIPT / {document.node.kind.toUpperCase()}</p><h1>{document.node.title}</h1></div><label className="editor-chapter-status"><span className="sr-only">章节状态</span><select aria-label="章节状态" className="status-select" value={document.node.status} onChange={(event) => void setNodeStatus(document.node.id, event.target.value)}>{Object.entries(NODE_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><IconButton icon={Maximize2} label="专注模式（F11）" onClick={toggleFocusMode} /></div>
       <div className="editor-toolbar">
-        <IconButton icon={Bold} label="粗体（Ctrl+B）" onClick={() => applyCommand('bold')} /><IconButton icon={Italic} label="斜体（Ctrl+I）" onClick={() => applyCommand('italic')} /><IconButton icon={Strikethrough} label="删除线" onClick={() => applyCommand('strikethrough')} /><IconButton icon={Heading1} label="标题" onClick={() => applyCommand('heading')} /><IconButton icon={Quote} label="引用" onClick={() => applyCommand('quote')} /><IconButton icon={List} label="无序列表" onClick={() => applyCommand('unordered-list')} /><IconButton icon={ListOrdered} label="有序列表" onClick={() => applyCommand('ordered-list')} /><IconButton icon={ListChecks} label="任务列表" onClick={() => applyCommand('task-list')} /><IconButton icon={Link} label="链接" onClick={() => applyCommand('link')} /><IconButton icon={Image} label="图片" onClick={() => applyCommand('image')} /><IconButton icon={Code2} label="代码" onClick={() => applyCommand('code')} /><IconButton icon={Minus} label="分割线" onClick={() => applyCommand('horizontal-rule')} />
-        <span className="toolbar-separator" /><Button variant="ghost" className="editor-ai-launcher" onMouseDown={event => event.preventDefault()} onClick={() => aiBusy ? useAppStore.getState().setInspectorTab('ai') : openAiAssistant()}><Sparkles size={14} />{aiBusy ? 'AI 生成中' : 'AI 辅助'}</Button><Button variant="ghost" onClick={() => void saveCurrentDocument('手动保存')}><Save size={14} />保存</Button>
+        <IconButton icon={Bold} label="粗体（Ctrl+B）" onClick={() => applyCommand('bold')} /><IconButton icon={Italic} label="斜体（Ctrl+I）" onClick={() => applyCommand('italic')} /><IconButton icon={Heading1} label="标题" onClick={() => applyCommand('heading')} /><IconButton icon={Quote} label="引用" onClick={() => applyCommand('quote')} /><IconButton icon={Link} label="链接" onClick={() => applyCommand('link')} /><ActionMenu label="更多格式">{([{ icon: Strikethrough, label: '删除线', command: 'strikethrough' }, { icon: List, label: '无序列表', command: 'unordered-list' }, { icon: ListOrdered, label: '有序列表', command: 'ordered-list' }, { icon: ListChecks, label: '任务列表', command: 'task-list' }, { icon: Image, label: '图片', command: 'image' }, { icon: Code2, label: '代码', command: 'code' }, { icon: Minus, label: '分割线', command: 'horizontal-rule' }] as const).map(({ icon: Icon, label, command }) => <Button key={command} variant="ghost" onClick={() => applyCommand(command)}><Icon size={15} />{label}</Button>)}</ActionMenu>
+        <span className="toolbar-separator" /><Button variant="ghost" className="editor-ai-launcher" onMouseDown={event => event.preventDefault()} onClick={() => aiBusy ? useAppStore.getState().setInspectorTab('ai') : openAiAssistant()}><Sparkles size={14} />{aiBusy ? 'AI 生成中' : 'AI 辅助'}</Button>{focusMode ? <Button variant="ghost" onClick={() => void saveCurrentDocument('手动保存')}><Save size={14} />保存</Button> : null}
         <span className="mode-switch"><button className={editorMode === 'markdown' ? 'active' : ''} onClick={() => setEditorMode('markdown')}><PenLine size={12} /> 编辑</button><button className={editorMode === 'split' ? 'active' : ''} onClick={() => setEditorMode('split')}><Columns3 size={12} /> 分栏</button><button className={editorMode === 'preview' ? 'active' : ''} onClick={() => setEditorMode('preview')}><Eye size={12} /> 预览</button></span>
       </div>
     </div>
@@ -359,6 +361,6 @@ export function EditorPane() {
       <div className="wiki-resolution-copy"><strong>{wikiResolution.target}</strong><span>{wikiResolution.candidates.length > 1 ? '找到多个同名条目，请选择要打开的资料。' : '没有找到对应资料，可以先去搜索项目内容。'}</span></div>
       {wikiResolution.candidates.length ? <div className="wiki-resolution-candidates">{wikiResolution.candidates.map((candidate) => <button type="button" key={candidate.id} onClick={() => { setWikiResolution(null); selectEntity(candidate.kind, candidate.id) }}><strong>{candidate.title}</strong><span>{ENTITY_LABELS[candidate.kind]} · {candidate.filePath}</span></button>)}</div> : <div className="wiki-resolution-actions"><Button variant="outline" onClick={() => openWikiSearch(wikiResolution.target)}>去搜索</Button><Button variant="ghost" onClick={() => setWikiResolution(null)}>关闭</Button></div>}
     </div> : null}
-    <div className="editor-subbar"><span className={'save-indicator ' + saveState}>{saveState === 'saving' ? '正在保存…' : saveState === 'error' ? error?.includes('恢复文件已保留') ? '保存失败，恢复数据已保留' : '保存失败，请检查错误详情' : saveState === 'saved' ? '已保存' : '有未保存修改'}</span><span>{document.content.length} 字符{locked ? ' · 正文已锁定（含父级）' : ''}</span><label>状态 <select className="status-select" value={document.node.status} onChange={(event) => void setNodeStatus(document.node.id, event.target.value)}>{Object.entries(NODE_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
+    {focusMode ? <div className="editor-subbar"><span className={'save-indicator ' + saveState}>{saveState === 'saving' ? '正在保存…' : saveState === 'error' ? error || '保存失败，请重试' : saveState === 'saved' ? '已保存' : '有未保存修改'}</span><span title="不计空格与换行">{formatNumber(countWords(document.content))} 字</span><Button variant="ghost" onClick={toggleFocusMode}>退出专注模式</Button></div> : null}
   </div>
 }

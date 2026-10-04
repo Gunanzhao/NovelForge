@@ -284,10 +284,11 @@ export function Sidebar({
       <div className="sidebar-head"><div><h2>项目导航</h2><small>{data.project.title}</small></div><IconButton icon={Plus} label="新建卷" onClick={() => onAddNode('volume', null)} /></div>
       <nav className="sidebar-nav-groups" aria-label="功能导航">
         <div className="nav-list primary-navigation">{navItems.filter(item => primaryIds.includes(item.id)).map(item => navigationItem(item))}</div>
-        {pinned.length > 0 && <div className="nav-list pinned-navigation" aria-label="固定入口">{pinned.map(id => navItems.find(item => item.id === id)!).map(item => navigationItem(item, true))}</div>}
+        <div className="nav-secondary-scroll">{pinned.length > 0 && <div className="nav-list pinned-navigation" aria-label="固定入口">{pinned.map(id => navItems.find(item => item.id === id)!).map(item => navigationItem(item, true))}</div>}
         <div className="nav-list secondary-navigation">
           {['写作', '资料', '分析与辅助'].map(group => <Disclosure key={group} title={group === '写作' ? '更多写作工具' : group === '资料' ? '更多资料' : group} storageKey={'compact-nav:' + group} meta={navItems.find(item => item.group === group && item.id === activeView && !primaryIds.includes(item.id) && !pinned.includes(item.id))?.label} className="nav-group">{navItems.filter(item => item.group === group && !primaryIds.includes(item.id) && !pinned.includes(item.id)).map(item => navigationItem(item, true))}</Disclosure>)}
           <button className={cn('nav-item', activeView === 'search' && 'active')} onClick={() => setView('search')}><Search size={15} /><span>全文搜索</span><span className="count" title="Ctrl+Shift+F">Ctrl⇧F</span></button>
+        </div>
         </div>
       </nav><div className="sidebar-section-label"><span>正文结构</span><span>{data.nodes.filter((node) => node.kind === 'chapter').length} 章</span></div>
       <select className="select-input workflow-tree-filter" value={workflowFilter} onChange={(event) => { setWorkflowFilter(event.target.value as ChapterWorkflowFilter); setTreeScrollTop(0) }} aria-label="章节 Checklist 过滤"><option value="all">显示全部章节</option><option value="incomplete">仅显示未完成</option><option value="not-final">仅显示未定稿</option><option value="consistency">仅显示待人物一致性检查</option></select>
