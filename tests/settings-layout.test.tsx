@@ -41,7 +41,7 @@ it('resets only editor preferences and accepts exact numeric input', () => {
   fireEvent.change(screen.getByLabelText('编辑字号数值'), { target: { value: '18' } }); fireEvent.blur(screen.getByLabelText('编辑字号数值'))
   expect(useAppStore.getState().workspacePreferences.editorFontSize).toBe(18)
   fireEvent.click(screen.getByRole('button', { name: '恢复本页默认' }))
-  expect(useAppStore.getState().workspacePreferences).toMatchObject({ editorFontSize: 14, dailyTargetWords: 2300, sidebarWidth: 300 })
+  expect(useAppStore.getState().workspacePreferences).toMatchObject({ editorFontSize: 16, dailyTargetWords: 2300, sidebarWidth: 300 })
 })
 it('loads logs only on expansion and refreshes on request', async () => {
   const { container } = render(<SettingsView />)
