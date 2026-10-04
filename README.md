@@ -2,18 +2,32 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.2.0-rc.2（预发布）**。
+当前版本：**1.2.0-rc.3（预发布）**。
 
-[![main CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Amain)
+[![Release branch CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=codex%2Freliability-review-20260930)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Acodex%2Freliability-review-20260930)
 
 ## 下载
 
-- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.2/NovelForge_1.2.0-rc.2_x64-setup.exe)
-- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.2/novelforge.exe)
-- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.2/SHA256SUMS.txt)
+- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.3/NovelForge_1.2.0-rc.3_x64-setup.exe)
+- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.3/novelforge.exe)
+- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.3/SHA256SUMS.txt)
 - [版本说明与历史 Release](https://github.com/Gunanzhao/NovelForge/releases)
 
 已有安装版用户运行新安装包升级；直接运行独立 EXE 不会更新旧快捷方式。桌面版需要 Windows WebView2。
+
+## 1.2.0-rc.3 相比 1.2.0-rc.2
+
+- **更统一的界面**：暖白与深色主题共享字体、按钮、恢复卡片和反馈颜色；新用户正文默认 16px，保留已有设置。
+- **导航更容易找到**：常用入口直接可见，其他功能分组折叠，最多固定四个额外入口；当前章节自动展开父卷。
+- **正文优先**：小窗口辅助栏按需展开，保留 AI 输入草稿；低频格式和项目操作收进菜单，字数及保存状态统一。
+- **表单更方便**：大纲、场景、剧情线和章节记忆的保存操作置顶；减少重复标题，首页技术说明和总览检查清单按需展开。
+- **真实桌面验证**：新增生产 EXE 界面门禁及截图 artifact，保持原有 IPC、数据生命周期和强制重启要求。
+
+本地验收：492 项前端测试、174 项 Windows Rust 测试通过（7 项原有忽略）；浏览器和生产 EXE 各通过 72 组布局检查及关键交互。独立 EXE 和安装包内 EXE 均通过真实 IPC 与强制重启。准确发布提交的 CI 结果和资产校验见 [rc.3 Release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.2.0-rc.3)。
+
+使用提示：左侧分组中的图钉可固定常用功能；小窗口通过右上角辅助栏按钮或正文的 AI 按钮打开抽屉。文件路径可在“章节信息 → 文件位置”查看。
+
+详见 [rc.3 发布说明](docs/release-1.2.0-rc.3.md)和[三阶段验收记录](docs/frontend-polish-20261004.md)。
 
 ## 1.2.0-rc.2 相比 1.2.0-rc.1
 
