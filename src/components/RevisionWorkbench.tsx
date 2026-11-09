@@ -4,7 +4,7 @@ import { isDesktop, projectApi } from '../lib/api'
 import { markDraftSaved, runGuarded, setDraftSaving } from '../lib/draft-guard'
 import { historyChanged } from '../lib/history'
 import { decodeManuscript } from '../lib/manuscript-import'
-import { sortChapterNodes } from '../lib/planning-data'
+import { sortChapterNodes, sortManuscriptNodes } from '../lib/planning-data'
 import type { RevisionChapter, RevisionRound, RevisionRoundView, RevisionTarget } from '../lib/revision-workbench'
 import { diffLines } from '../lib/text-diff'
 import type { NodeRecord } from '../lib/types'
@@ -14,11 +14,11 @@ import type { ProjectSession } from '../stores/app-store'
 import { Button, Field, Panel, TextInput } from './ui'
 import './revision-workbench.css'
 
-const MAX_CHAPTERS = 2000
+const MAX_ENTRIES = 2000
 const MAX_CANDIDATE_BYTES = 2 * 1024 * 1024
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error)
 const message = (error: unknown) => errorText(error).replace(/^(?:REVISION_CONFLICT|REVISION_CHANGED|EXTERNAL_CONFLICT):/u, '')
-const queueLabels = { missing: '待录入改稿', ready: '待确认', blocked: '需复核', confirmed: '已确认' } as const
+const queueLabels = { missing: '待录入改稿', ready: '待确认', blocked: '需复核', changed: '确认后有改动', confirmed: '已确认' } as const
 type QueueStatus = keyof typeof queueLabels
 
 function matchesChapter(title: string, order: number | undefined, query: string) {
@@ -35,53 +35,56 @@ function RoundSetup({ nodes, busy, onCreate, onCancel }: {
   const [title, setTitle] = useState('')
   const [volume, setVolume] = useState('')
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
-  const chapters = useMemo(() => sortChapterNodes(nodes), [nodes])
+  const entries = useMemo(() => sortManuscriptNodes(nodes), [nodes])
+  const byId = useMemo(() => new Map(nodes.map(node => [node.id, node])), [nodes])
   const volumes = nodes.filter(node => node.kind === 'volume').sort((a, b) => a.orderIndex - b.orderIndex)
-  const volumeTitles = new Map(volumes.map(node => [node.id, node.title]))
-  const visible = volume ? chapters.filter(chapter => chapter.parentId === volume) : chapters
-  const selectedIds = chapters.filter(chapter => selected.has(chapter.id)).map(chapter => chapter.id)
+  const visible = volume ? entries.filter(node => (node.kind === 'section' ? byId.get(node.parentId ?? '')?.parentId : node.parentId) === volume) : entries
+  const selectedEntries = entries.filter(node => selected.has(node.id))
+  const selectedIds = selectedEntries.map(node => node.id)
+  const sectionCount = selectedEntries.filter(node => node.kind === 'section').length
   return <Panel className="revision-setup">
     <h2>新建一轮修订</h2>
-    <p className="field-hint">建立时保存所选章的原文，作为本轮对比基准。可以按卷全选，也可以只勾选要修订的章。</p>
+    <p className="field-hint">所选原文将作为本轮对比基准。章和小节可分别勾选；按卷全选会同时选中该卷的章和小节。</p>
     <div className="revision-setup-fields">
       <Field label="本轮修订名称"><TextInput value={title} maxLength={100} placeholder="例如：第一卷对白复审" disabled={busy} onChange={event => setTitle(event.target.value)} /></Field>
       <Field label="按卷筛选"><select className="select-input" disabled={busy} value={volume} onChange={event => setVolume(event.target.value)}><option value="">全部卷</option>{volumes.map(node => <option key={node.id} value={node.id}>{node.title}</option>)}</select></Field>
     </div>
     <div className="revision-actions">
-      <Button variant="outline" disabled={busy || !visible.length} onClick={() => setSelected(previous => new Set([...previous, ...visible.map(chapter => chapter.id)]))}>全选当前范围</Button>
+      <Button variant="outline" disabled={busy || !visible.length} onClick={() => setSelected(previous => new Set([...previous, ...visible.map(node => node.id)]))}>全选当前范围</Button>
       <Button variant="ghost" disabled={busy || !selectedIds.length} onClick={() => setSelected(new Set())}>清空选择</Button>
-      <span className="field-hint" role="status">已选 {selectedIds.length} 章{selectedIds.length > MAX_CHAPTERS ? '（单轮最多 2000 章）' : ''}</span>
+      <span className="field-hint" role="status">已选 {selectedIds.length - sectionCount} 章 · {sectionCount} 小节{selectedIds.length > MAX_ENTRIES ? '（单轮最多 2000 项）' : ''}</span>
     </div>
     <div className="revision-picker" role="group" aria-label="选择修订章节">
-      {visible.length ? visible.map(chapter => <label key={chapter.id} className="revision-picker-row">
-        <input type="checkbox" checked={selected.has(chapter.id)} disabled={busy} onChange={event => {
+      {visible.length ? visible.map(node => <label key={node.id} className={'revision-picker-row' + (node.kind === 'section' ? ' revision-picker-section' : '')}>
+        <input type="checkbox" checked={selected.has(node.id)} disabled={busy} onChange={event => {
           const checked = event.target.checked
-          setSelected(previous => { const next = new Set(previous); if (checked) next.add(chapter.id); else next.delete(chapter.id); return next })
+          setSelected(previous => { const next = new Set(previous); if (checked) next.add(node.id); else next.delete(node.id); return next })
         }} />
-        <span>{chapter.title}</span><small>{volumeTitles.get(chapter.parentId ?? '')}</small>
-      </label>) : <p className="field-hint">当前范围内没有章节。</p>}
+        <span>{node.title}</span><small>{node.kind === 'section' ? '小节 · ' : ''}{byId.get(node.parentId ?? '')?.title}</small>
+      </label>) : <p className="field-hint">当前范围内没有正文。</p>}
     </div>
     <div className="revision-actions">
       <Button variant="outline" disabled={busy} onClick={onCancel}>取消</Button>
-      <Button disabled={busy || !title.trim() || !selectedIds.length || selectedIds.length > MAX_CHAPTERS} onClick={() => onCreate(title, selectedIds)}>建立修订轮次</Button>
+      <Button disabled={busy || !title.trim() || !selectedIds.length || selectedIds.length > MAX_ENTRIES} onClick={() => onCreate(title, selectedIds)}>建立修订轮次</Button>
     </div>
   </Panel>
 }
 
-function RevisionDiff({ original, candidate, latest }: { original: string; candidate: string | null; latest: boolean }) {
+function RevisionDiff({ original, candidate, latest = false, afterConfirmation = false }: { original: string; candidate: string | null; latest?: boolean; afterConfirmation?: boolean }) {
   const lines = useMemo(() => candidate !== null && [original, candidate].every(value => value.split(/\r\n|\r|\n/u, 801).length <= 800)
     ? diffLines(original.replace(/\r\n?/gu, '\n'), candidate.replace(/\r\n?/gu, '\n'))
     : null, [original, candidate])
-  const originalTitle = latest ? '当前磁盘正文' : '审阅基准原文'
+  const originalTitle = afterConfirmation ? '本轮确认的正文' : latest ? '当前磁盘正文' : '审阅基准原文'
+  const candidateTitle = afterConfirmation ? '当前磁盘正文' : '已保存改稿'
   return <section className="revision-compare">
-    <h3>{candidate === null ? originalTitle : `对比：${originalTitle} → 已保存改稿`}</h3>
+    <h3>{candidate === null ? originalTitle : `对比：${originalTitle} → ${candidateTitle}`}</h3>
     {candidate === null ? <pre className="revision-text" aria-label={originalTitle}>{original || '（空白正文）'}</pre>
       : lines ? <>
-        {candidate === original ? <p className="field-hint">改稿与原文相同，确认只记录审阅进度。</p> : lines.every(line => line.kind === 'same') ? <p className="field-hint">文本相同，换行格式有变化。</p> : <p className="revision-legend"><span className="removed">− 原文移除</span><span className="added">+ 改稿新增</span></p>}
-        <pre className="revision-text" aria-label="改稿差异">{lines.map((line, index) => <span className={line.kind} key={index}>{line.kind === 'added' ? '+ ' : line.kind === 'removed' ? '− ' : '  '}{line.text}{'\n'}</span>)}</pre>
+        {candidate === original ? <p className="field-hint">改稿与原文相同，确认只记录审阅进度。</p> : lines.every(line => line.kind === 'same') ? <p className="field-hint">文本相同，换行格式有变化。</p> : <p className="revision-legend"><span className="removed">− {afterConfirmation ? '后续移除' : '原文移除'}</span><span className="added">+ {afterConfirmation ? '后续新增' : '改稿新增'}</span></p>}
+        <pre className="revision-text" aria-label={afterConfirmation ? '确认后的正文差异' : '改稿差异'}>{lines.map((line, index) => <span className={line.kind} key={index}>{line.kind === 'added' ? '+ ' : line.kind === 'removed' ? '− ' : '  '}{line.text}{'\n'}</span>)}</pre>
       </> : <>
-        <p className="field-hint">本章较长，以下展示两份完整正文。</p>
-        <div className="revision-text-pair"><div><h4>{originalTitle}</h4><pre className="revision-text" aria-label={originalTitle}>{original}</pre></div><div><h4>已保存改稿</h4><pre className="revision-text" aria-label="已保存改稿">{candidate}</pre></div></div>
+        <p className="field-hint">正文较长，以下展示两份完整正文。</p>
+        <div className="revision-text-pair"><div><h4>{originalTitle}</h4><pre className="revision-text" aria-label={originalTitle}>{original}</pre></div><div><h4>{candidateTitle}</h4><pre className="revision-text" aria-label={candidateTitle}>{candidate}</pre></div></div>
       </>}
   </section>
 }
@@ -134,6 +137,8 @@ function ProjectRevisionWorkbench({ projectPath, nodes }: { projectPath: string;
   const stale = !!current && !current.confirmedAt && current.currentContent !== null
   const selectedIndex = view?.chapters.findIndex(item => item.nodeId === current?.nodeId) ?? -1
   const selected = view?.chapters[selectedIndex]
+  const entryLabel = selected?.kind === 'section' ? '本节' : '本章'
+  const changedAfterConfirmation = current?.confirmationState === 'changed'
   const chapterOrders = useMemo(() => new Map(sortChapterNodes(nodes).map((node, index) => [node.id, index + 1])), [nodes])
 
   const rememberIssue = useCallback((roundId: string, chapter: RevisionChapter) => {
@@ -147,7 +152,16 @@ function ProjectRevisionWorkbench({ projectPath, nodes }: { projectPath: string;
     })
   }, [])
   const install = useCallback((next: RevisionRoundView) => {
-    setView(next)
+    setView(previous => {
+      if (previous?.round.id !== next.round.id) return next
+      const prior = new Map(previous.chapters.map(item => [item.nodeId, item]))
+      return { ...next, chapters: next.chapters.map(item => {
+        const known = prior.get(item.nodeId)
+        return item.confirmedAt && item.confirmationState === null && known?.confirmedAt === item.confirmedAt
+          ? { ...item, confirmationState: known.confirmationState }
+          : item
+      }) }
+    })
     setRounds(previous => [next.round, ...previous.filter(round => round.id !== next.round.id)])
     setDraft(next.current.candidate ?? '')
     setDraftOpen(next.current.candidate === null)
@@ -239,7 +253,7 @@ function ProjectRevisionWorkbench({ projectPath, nodes }: { projectPath: string;
       setNotice(next.candidate === null ? '已清除本章改稿。' : '改稿已保存。请核对下方差异。')
     })
   }
-  useUnsavedDraft(draftId, '本章改稿', dirty, saveCandidate, () => setDraft(current?.candidate ?? ''))
+  useUnsavedDraft(draftId, entryLabel + '改稿', dirty, saveCandidate, () => setDraft(current?.candidate ?? ''))
 
   function openRound(roundId: string, nodeId?: string) {
     runGuarded(() => { void run(async session => {
@@ -308,17 +322,18 @@ function ProjectRevisionWorkbench({ projectPath, nodes }: { projectPath: string;
       const round = { ...view.round, confirmedCount: view.round.confirmedCount + 1 }
       install({
         round,
-        current: { ...current, confirmedAt: result.confirmedAt, version: result.version },
-        chapters: view.chapters.map(item => item.nodeId === input.nodeId ? { ...item, confirmedAt: result.confirmedAt } : item),
+        current: { ...current, confirmedAt: result.confirmedAt, version: result.version, confirmationState: 'current' },
+        chapters: view.chapters.map(item => item.nodeId === input.nodeId ? { ...item, confirmedAt: result.confirmedAt, confirmationState: 'current' } : item),
       })
-      setNotice(updated ? '本章已确认并写入正文。原文可在版本历史中查看。' : '本章已确认，正文无变化。')
+      setNotice(updated ? entryLabel + '已确认并写入正文。原文可在版本历史中查看。' : entryLabel + '已确认，正文无变化。')
     })
   }
 
   const ready = !busy && !loading
   const statuses = (view?.chapters ?? []).map(item => {
-    const status: QueueStatus = item.confirmedAt ? 'confirmed'
-      : !item.available || reviewIssues.has(view!.round.id + ':' + item.nodeId) ? 'blocked'
+    const status: QueueStatus = !item.available || item.confirmationState === 'unavailable' || reviewIssues.has(view!.round.id + ':' + item.nodeId) ? 'blocked'
+      : item.confirmationState === 'changed' ? 'changed'
+      : item.confirmedAt ? 'confirmed'
       : item.hasCandidate ? 'ready' : 'missing'
     return { ...item, status }
   })
@@ -328,15 +343,22 @@ function ProjectRevisionWorkbench({ projectPath, nodes }: { projectPath: string;
   const nextReady = upcoming.find(item => item.status === 'ready')
   const nextMissing = upcoming.find(item => item.status === 'missing')
   const readyToApply = ready && !dirty && !stale && Boolean(current?.candidate) && !current?.sourceIssue
-  const applyHint = current?.confirmedAt ? '本轮已确认本章。'
-    : current?.sourceIssue ? '请先处理本章的正文问题。'
+  const reviewedIds = new Set(statuses.map(item => item.nodeId))
+  const chapterCount = statuses.filter(item => item.kind === 'chapter').length
+  const sectionCount = statuses.filter(item => item.kind === 'section').length
+  const excludedSections = nodes.filter(node => node.kind === 'section' && node.parentId && reviewedIds.has(node.parentId) && !reviewedIds.has(node.id)).length
+  const changedCount = statuses.filter(item => item.status === 'changed').length
+  const applyHint = changedAfterConfirmation ? '本轮确认后正文有改动。'
+    : current?.confirmationState === 'unavailable' ? '本轮曾确认，当前无法读取正文。'
+    : current?.confirmedAt ? '本轮已确认' + entryLabel + '。'
+    : current?.sourceIssue ? '请先处理' + entryLabel + '的正文问题。'
     : stale ? '原文已变化，请重新对比后确认。'
-    : dirty ? '请先保存本章改稿。'
-    : !current?.candidate ? '保存改稿后可以确认本章。'
+    : dirty ? '请先保存' + entryLabel + '改稿。'
+    : !current?.candidate ? '保存改稿后可以确认' + entryLabel + '。'
     : '有变化时，应用前会保留原文版本。'
   return <div className="workspace-view revision-workbench">
     <div className="revision-scroll" ref={scrollRegion}>
-    <header className="view-header"><div><p className="eyebrow">MANUSCRIPT REVIEW</p><h1>整卷修订</h1><p>选定章节、保存改稿、对比后逐章确认。回到本页时继续上次的审阅位置。</p></div>
+    <header className="view-header"><div><p className="eyebrow">MANUSCRIPT REVIEW</p><h1>整卷修订</h1><p>选择章或小节，保存改稿并逐项确认。回到本页时继续上次的审阅位置。</p></div>
       <Button variant="outline" disabled={!ready || creating} onClick={() => runGuarded(() => { setError(''); setNotice(''); setCreating(true) })}><Plus size={15} />新建修订</Button>
     </header>
     <div className="revision-body">
@@ -351,46 +373,54 @@ function ProjectRevisionWorkbench({ projectPath, nodes }: { projectPath: string;
         setQueueFilter('all')
         setChapterQuery('')
         setCreating(false)
-        setNotice(`已建立修订轮次，共 ${next.round.chapterCount} 章。`)
+        setNotice(`已建立修订轮次，共 ${next.round.chapterCount} 项。`)
       }) }} /> : view && current && selected ? <>
         <Panel className="revision-round-bar">
           <Field label="修订轮次"><select className="select-input" value={view.round.id} disabled={!ready} onChange={event => openRound(event.target.value)}>{rounds.map(round => <option value={round.id} key={round.id}>{round.title}（{round.confirmedCount}/{round.chapterCount}）</option>)}</select></Field>
-          <div className="revision-progress"><strong>已确认 {view.round.confirmedCount} / {view.round.chapterCount} 章</strong><progress aria-label="修订进度" value={view.round.confirmedCount} max={view.round.chapterCount} /></div>
+          <div className="revision-progress">
+            <strong>已确认 {view.round.confirmedCount} / {view.round.chapterCount} 项{changedCount > 0 && <span className="revision-changed"> · {changedCount} 项确认后有改动</span>}</strong>
+            <progress aria-label="修订进度" value={view.round.confirmedCount} max={view.round.chapterCount} />
+            <span>本轮范围：{chapterCount} 章 · {sectionCount} 小节{excludedSections > 0 && `；所选章还有 ${excludedSections} 个小节未纳入`}</span>
+            <div><Button variant="ghost" disabled={!ready} onClick={() => openRound(view.round.id)}><RefreshCw size={14} />检查本轮正文</Button></div>
+          </div>
         </Panel>
         <div className="revision-grid">
           <Panel className="revision-queue">
-            <div className="revision-queue-head"><h2>审阅队列</h2><small>{visibleQueue.length} / {statuses.length} 章</small></div>
+            <div className="revision-queue-head"><h2>审阅队列</h2><small>{visibleQueue.length} / {statuses.length} 项</small></div>
             <div className="revision-queue-filters">
-              <TextInput type="search" aria-label="查找修订章节" placeholder="输入章名或章号" value={chapterQuery} onChange={event => setChapterQuery(event.target.value)} />
+              <TextInput type="search" aria-label="查找修订章节" placeholder="章号、章名或小节名" value={chapterQuery} onChange={event => setChapterQuery(event.target.value)} />
               <select className="select-input" aria-label="筛选修订队列" value={queueFilter} onChange={event => setQueueFilter(event.target.value as QueueStatus | 'all')}>
-                <option value="all">全部章节</option>
+                <option value="all">全部条目</option>
                 {Object.entries(queueLabels).map(([value, label]) => <option key={value} value={value}>{label}（{statuses.filter(item => item.status === value).length}）</option>)}
               </select>
             </div>
             <div ref={queue} className="revision-queue-list" aria-label="本轮修订章节">
               {visibleQueue.map(item => <button type="button" className="revision-queue-item" key={item.nodeId} aria-current={item.nodeId === current.nodeId ? 'step' : undefined} disabled={!ready} onClick={() => { if (item.nodeId !== current.nodeId) openRound(view.round.id, item.nodeId) }}>
-                <span>{item.title}</span><small className={'revision-queue-status ' + item.status}>{!item.available ? '章节不可用' : queueLabels[item.status]}</small>
+                <span>{item.title}</span><small className={'revision-queue-status ' + item.status}>{item.kind === 'section' ? '小节 · ' : ''}{!item.available ? '正文不可用' : queueLabels[item.status]}</small>
               </button>)}
               {!visibleQueue.length && <p className="field-hint revision-queue-empty">没有符合条件的章节。</p>}
             </div>
           </Panel>
           <Panel className="revision-detail">
-            <div className="revision-detail-head"><div><p className="eyebrow">第 {selectedIndex + 1} / {view.chapters.length} 章</p><h2>{selected.title}</h2></div>
+            <div className="revision-detail-head"><div><p className="eyebrow">第 {selectedIndex + 1} / {view.chapters.length} 项 · {selected.kind === 'section' ? '小节' : '章节'}</p><h2>{selected.title}</h2></div>
               <div className="revision-actions">
-                <Button variant="ghost" disabled={!ready || selectedIndex <= 0} onClick={() => openRound(view.round.id, view.chapters[selectedIndex - 1].nodeId)}><ArrowLeft size={14} />上一章</Button>
+                <Button variant="ghost" disabled={!ready || selectedIndex <= 0} onClick={() => openRound(view.round.id, view.chapters[selectedIndex - 1].nodeId)}><ArrowLeft size={14} />上一项</Button>
               </div>
             </div>
             {current.sourceIssue && <p className="revision-alert" role="alert">{current.sourceIssue}</p>}
+            {changedAfterConfirmation && <p className="revision-alert" role="alert">本轮确认后正文有改动。下方对比本轮确认的正文和当前正文；如需确认新内容，请建立新的修订轮次。</p>}
             {stale && <div className="revision-alert" role="alert"><span>原文已变化，已暂停应用。本页显示当前磁盘正文与保存的改稿。</span><Button variant="outline" disabled={!ready || dirty || !!current.sourceIssue} onClick={rebase}>以当前正文重新对比</Button></div>}
             <div className="revision-actions">
               <Button variant="ghost" disabled={!ready || !selected.available} onClick={() => void useAppStore.getState().selectNode(current.nodeId, true)}>打开正文</Button>
               <Button variant="ghost" disabled={!ready} onClick={() => openRound(view.round.id, current.nodeId)}><RefreshCw size={14} />刷新原文</Button>
             </div>
-            {current.candidate !== null && <RevisionDiff original={stale ? current.currentContent! : current.original} candidate={current.candidate} latest={stale} />}
+            {changedAfterConfirmation
+              ? <RevisionDiff original={current.candidate ?? current.original} candidate={current.currentContent} afterConfirmation />
+              : <RevisionDiff original={stale ? current.currentContent! : current.original} candidate={current.candidate} latest={stale} />}
             {!current.confirmedAt ? <details className="revision-draft-editor" open={draftOpen} onToggle={event => setDraftOpen(event.currentTarget.open)}>
               <summary>{current.candidate === null ? '录入改稿' : '编辑改稿'}{dirty && <small>未保存</small>}</summary>
               <div className="revision-draft-fields">
-              <Field label="本章改稿" hint={dirty ? '改稿尚未保存。保存后，下方对比会更新。' : '可粘贴改稿或载入 TXT / Markdown。保存改稿后，原正文仍可继续编辑。'}>
+              <Field label={entryLabel + '改稿'} hint={dirty ? '改稿尚未保存。保存后，差异对比会更新。' : '可粘贴改稿或载入 TXT / Markdown。保存改稿后，原正文仍可继续编辑。'}>
                 <textarea className="text-area revision-candidate" value={draft} disabled={!ready} onChange={event => setDraft(withLineEndings(event.target.value, draft || current.original))} />
               </Field>
               <div className="revision-actions">
@@ -404,7 +434,6 @@ function ProjectRevisionWorkbench({ projectPath, nodes }: { projectPath: string;
               </div>
               </div>
             </details> : null}
-            {current.candidate === null && <RevisionDiff original={stale ? current.currentContent! : current.original} candidate={null} latest={stale} />}
           </Panel>
         </div>
       </> : !loading && !error && <Panel className="revision-empty"><GitCompare size={26} /><div><h2>还没有修订轮次</h2><p className="field-hint">点击「新建修订」，选择这次要对比和确认的章节。</p></div></Panel>}
@@ -412,7 +441,7 @@ function ProjectRevisionWorkbench({ projectPath, nodes }: { projectPath: string;
     </div>
     {!creating && view && current && selected && <footer className="revision-actionbar" aria-label="审阅操作">
       <div className="revision-confirm">
-        {!current.confirmedAt && <Button disabled={!readyToApply} onClick={confirm}><FileCheck2 size={15} />{current.candidate === current.original ? '确认本章无改动' : '确认并应用本章'}</Button>}
+        {!current.confirmedAt && <Button disabled={!readyToApply} onClick={confirm}><FileCheck2 size={15} />{current.candidate === current.original ? '确认' + entryLabel + '无改动' : '确认并应用' + entryLabel}</Button>}
         <span className="field-hint">{applyHint}</span>
       </div>
       <div className="revision-actions">

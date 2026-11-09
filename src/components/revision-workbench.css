@@ -10,6 +10,7 @@
 .revision-picker { max-height: 350px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
 .revision-picker-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; min-height: 33px; font-size: 13px; border-bottom: 1px solid var(--line); }
 .revision-picker-row:last-child { border-bottom: none; }
+.revision-picker-section { padding-inline-start: 28px; background: var(--surface-2); }
 .revision-picker-row small { margin-left: auto; color: var(--muted); text-align: right; }
 .revision-picker-row span, .revision-picker-row small { overflow-wrap: anywhere; }
 .revision-picker-row input { accent-color: var(--accent); }
@@ -30,7 +31,7 @@
 .revision-queue-item > span, .revision-detail-head h2 { overflow-wrap: anywhere; }
 .revision-queue-item > small { color: var(--muted); }
 .revision-queue-item > .revision-queue-status.ready { color: var(--accent); }
-.revision-queue-item > .revision-queue-status.blocked { color: var(--danger); }
+.revision-queue-item > .revision-queue-status.blocked, .revision-queue-item > .revision-queue-status.changed, .revision-changed { color: var(--danger); }
 .revision-queue-item:hover { background: var(--surface-2); }
 .revision-queue-item[aria-current] { border-color: var(--accent); background: var(--accent-soft); }
 .revision-detail { display: grid; gap: 12px; }

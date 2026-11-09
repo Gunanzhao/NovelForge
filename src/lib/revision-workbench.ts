@@ -1,5 +1,7 @@
 import type { DocumentData } from './types'
 
+export type ConfirmationState = 'current' | 'changed' | 'unavailable'
+
 export interface RevisionRound {
   id: string
   title: string
@@ -11,9 +13,11 @@ export interface RevisionRound {
 export interface RevisionChapterSummary {
   nodeId: string
   title: string
+  kind: 'chapter' | 'section' | null
   hasCandidate: boolean
   confirmedAt: string | null
   available: boolean
+  confirmationState: ConfirmationState | null
 }
 
 export interface RevisionChapter {
@@ -24,6 +28,7 @@ export interface RevisionChapter {
   confirmedAt: string | null
   currentContent: string | null
   sourceIssue: string | null
+  confirmationState: ConfirmationState | null
 }
 
 export interface RevisionRoundView {

@@ -2,7 +2,7 @@ use super::*;
 use serde::Serialize;
 use std::io::Read;
 
-const MAX_CHAPTERS: usize = 2_000;
+const MAX_ENTRIES: usize = 2_000;
 const MAX_CHAPTER_BYTES: usize = 2 * 1024 * 1024;
 const MAX_ROUND_BYTES: usize = 64 * 1024 * 1024;
 const SOURCE_CHANGED: &str = "REVISION_CONFLICT:正文已变化，旧改稿仍保留。请重新对比。";
@@ -22,9 +22,19 @@ pub struct RevisionRound {
 pub struct ChapterSummary {
     node_id: String,
     title: String,
+    kind: Option<String>,
     has_candidate: bool,
     confirmed_at: Option<String>,
     available: bool,
+    confirmation_state: Option<ConfirmationState>,
+}
+
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum ConfirmationState {
+    Current,
+    Changed,
+    Unavailable,
 }
 
 #[derive(Serialize)]
@@ -37,6 +47,7 @@ pub struct RevisionChapter {
     confirmed_at: Option<String>,
     current_content: Option<String>,
     source_issue: Option<String>,
+    confirmation_state: Option<ConfirmationState>,
 }
 
 #[derive(Serialize)]
@@ -88,10 +99,17 @@ struct ChapterSource {
 
 fn chapter_source(root: &Path, db: &Connection, node_id: &str) -> Result<ChapterSource, String> {
     let node = storage::node_from_id(db, node_id)?
-        .filter(|node| node.kind == "chapter" && node.deleted_at.is_none())
-        .ok_or("章节已移除或不再可用。")?;
-    let path = storage::safe_relative(root, &node.file_path)?;
-    let read_error = |error| format!("无法读取「{}」的正文：{error}", node.title);
+        .filter(|node| {
+            matches!(node.kind.as_str(), "chapter" | "section") && node.deleted_at.is_none()
+        })
+        .ok_or("该章或小节已移除，正文不可用。")?;
+    let (raw, body) = read_source(root, &node.file_path, &node.title)?;
+    Ok(ChapterSource { node, raw, body })
+}
+
+fn read_source(root: &Path, file_path: &str, title: &str) -> Result<(String, String), String> {
+    let path = storage::safe_relative(root, file_path)?;
+    let read_error = |error| format!("无法读取「{title}」的正文：{error}");
     let mut raw = String::new();
     fs::File::open(path)
         .map_err(read_error)?
@@ -101,9 +119,9 @@ fn chapter_source(root: &Path, db: &Connection, node_id: &str) -> Result<Chapter
         .map_err(read_error)?;
     let body = storage::strip_markdown_frontmatter(&raw);
     if body.len() > MAX_CHAPTER_BYTES || raw.len() > MAX_CHAPTER_BYTES + 8192 {
-        return Err(format!("「{}」的正文超过 2 MiB，无法审阅。", node.title));
+        return Err(format!("「{title}」的正文超过 2 MiB，无法审阅。"));
     }
-    Ok(ChapterSource { node, raw, body })
+    Ok((raw, body))
 }
 
 fn rounds(db: &Connection) -> Result<Vec<RevisionRound>, String> {
@@ -146,6 +164,7 @@ fn stored_chapter(
                 confirmed_at: row.get(3)?,
                 current_content: None,
                 source_issue: None,
+                confirmation_state: None,
             })
         },
     )
@@ -157,12 +176,31 @@ fn stored_chapter(
 fn chapter_view(root: &Path, db: &Connection, mut chapter: RevisionChapter) -> RevisionChapter {
     match chapter_source(root, db, &chapter.node_id) {
         Ok(source) => {
-            if source.body != chapter.original {
+            let confirmed = chapter.confirmed_at.is_some();
+            let expected = if confirmed {
+                chapter.candidate.as_deref().unwrap_or(&chapter.original)
+            } else {
+                &chapter.original
+            };
+            let changed = source.body != expected;
+            if confirmed {
+                chapter.confirmation_state = Some(if changed {
+                    ConfirmationState::Changed
+                } else {
+                    ConfirmationState::Current
+                });
+            }
+            if changed {
                 chapter.current_content = Some(source.body);
             }
             chapter.source_issue = manuscript::ensure_body_unlocked(db, &chapter.node_id).err();
         }
-        Err(error) => chapter.source_issue = Some(error),
+        Err(error) => {
+            chapter.source_issue = Some(error);
+            if chapter.confirmed_at.is_some() {
+                chapter.confirmation_state = Some(ConfirmationState::Unavailable);
+            }
+        }
     }
     chapter
 }
@@ -177,21 +215,52 @@ fn open_round(
         .into_iter()
         .find(|round| round.id == round_id)
         .ok_or("修订轮次不存在。")?;
-    let current = stored_chapter(db, round_id, node_id.unwrap_or(&round.selected_node_id))?;
+    let current = chapter_view(
+        root,
+        db,
+        stored_chapter(db, round_id, node_id.unwrap_or(&round.selected_node_id))?,
+    );
+    // Check all confirmed bodies when opening the round. Queue navigation only
+    // rereads the selected body, so a long round stays quick to navigate.
     let mut query = db.prepare(
-        "SELECT c.node_id,COALESCE(n.title,c.title),c.candidate IS NOT NULL,c.confirmed_at,n.id IS NOT NULL
+        "SELECT c.node_id,COALESCE(n.title,c.title),n.kind,c.candidate IS NOT NULL,c.confirmed_at,
+                n.id IS NOT NULL AND n.deleted_at IS NULL,
+                CASE WHEN ?2 AND c.confirmed_at IS NOT NULL THEN COALESCE(c.candidate,c.original) END,
+                n.file_path
          FROM revision_round_chapters c LEFT JOIN nodes n
-           ON n.id=c.node_id AND n.kind='chapter' AND n.deleted_at IS NULL
+           ON n.id=c.node_id AND n.kind IN ('chapter','section')
          WHERE c.round_id=?1 ORDER BY c.ordinal",
     ).map_err(|e| e.to_string())?;
     let chapters = query
-        .query_map([round_id], |row| {
+        .query_map(params![round_id, node_id.is_none()], |row| {
+            let id: String = row.get(0)?;
+            let title: String = row.get(1)?;
+            let available: bool = row.get(5)?;
+            let confirmed_at: Option<String> = row.get(4)?;
+            let confirmation_state = if id == current.node_id {
+                current.confirmation_state
+            } else if confirmed_at.is_none() {
+                None
+            } else if !available {
+                Some(ConfirmationState::Unavailable)
+            } else if let Some(expected) = row.get::<_, Option<String>>(6)? {
+                let path: String = row.get(7)?;
+                Some(match read_source(root, &path, &title) {
+                    Ok((_, body)) if body == expected => ConfirmationState::Current,
+                    Ok(_) => ConfirmationState::Changed,
+                    Err(_) => ConfirmationState::Unavailable,
+                })
+            } else {
+                None
+            };
             Ok(ChapterSummary {
-                node_id: row.get(0)?,
-                title: row.get(1)?,
-                has_candidate: row.get(2)?,
-                confirmed_at: row.get(3)?,
-                available: row.get(4)?,
+                node_id: id,
+                title,
+                kind: row.get(2)?,
+                has_candidate: row.get(3)?,
+                confirmed_at,
+                available,
+                confirmation_state,
             })
         })
         .map_err(|e| e.to_string())?
@@ -206,7 +275,7 @@ fn open_round(
     Ok(RevisionRoundView {
         round,
         chapters,
-        current: chapter_view(root, db, current),
+        current,
     })
 }
 
@@ -230,8 +299,8 @@ fn create_round(input: CreateRevisionRound) -> Result<RevisionRoundView, String>
     if title.is_empty() || title.encode_utf16().count() > 100 {
         return Err("修订名称须为 1 至 100 个字符。".into());
     }
-    if input.node_ids.is_empty() || input.node_ids.len() > MAX_CHAPTERS {
-        return Err("请选择 1 至 2000 个章节。".into());
+    if input.node_ids.is_empty() || input.node_ids.len() > MAX_ENTRIES {
+        return Err("请选择 1 至 2000 个章或小节。".into());
     }
     let unique: HashSet<_> = input.node_ids.iter().collect();
     if unique.len() != input.node_ids.len() {
@@ -264,7 +333,7 @@ fn create_round(input: CreateRevisionRound) -> Result<RevisionRoundView, String>
     open_round(&root, &db, &round_id, None)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_revision_round(input: OpenRevisionRound) -> Result<RevisionRoundView, String> {
     let (root, db) = project_connection(&input.project_path)?;
     open_round(&root, &db, &input.round_id, input.node_id.as_deref())
