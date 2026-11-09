@@ -1,5 +1,6 @@
-use crate::models::{SearchInput, SearchResult};
-use rusqlite::{params, Connection, OptionalExtension};
+use crate::models::{SearchInput, SearchPage, SearchResult};
+use rusqlite::{params, Connection};
+use std::collections::HashSet;
 
 use super::project_connection;
 
@@ -91,159 +92,137 @@ mod tests {
     }
 }
 
-fn contains_search_terms(value: &str, query: &str, case_sensitive: bool) -> bool {
-    let source = if case_sensitive {
-        value.to_string()
-    } else {
-        value.to_lowercase()
-    };
-    query
-        .split_whitespace()
-        .filter(|term| !term.is_empty())
-        .all(|term| {
-            let needle = if case_sensitive {
-                term.to_string()
-            } else {
-                term.to_lowercase()
-            };
-            source.contains(&needle)
-        })
-}
+const PAGE_SIZE: usize = 100;
 
-fn search_matches_filters(
+fn read_search_page(
     connection: &Connection,
     input: &SearchInput,
-    id: &str,
-    kind: &str,
-    path: &str,
-    title: &str,
-    content: &str,
-) -> Result<bool, String> {
-    if input.scope.as_deref() == Some("current") && input.node_id.as_deref() != Some(id) {
-        return Ok(false);
+    offset: usize,
+) -> rusqlite::Result<SearchPage> {
+    let mut page = SearchPage::default();
+    let query = input.query.trim();
+    if query.is_empty() {
+        return Ok(page);
     }
-    if let Some(volume_path) = input
+    let fts_query = clean_query(query);
+    let literal = format!(
+        "%{}%",
+        query
+            .replace('!', "!!")
+            .replace('%', "!%")
+            .replace('_', "!_")
+    );
+    let current = (input.scope.as_deref() == Some("current"))
+        .then(|| input.node_id.as_deref().unwrap_or_default());
+    let volume = input
         .volume_path
         .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        let normalized = volume_path.trim_end_matches('/').replace('\\', "/");
-        if !path.replace('\\', "/").starts_with(&(normalized + "/")) {
-            return Ok(false);
-        }
-    }
-    if let Some(tag) = input
+        .filter(|path| !path.trim().is_empty())
+        .map(|path| format!("{}/", path.replace('\\', "/").trim_end_matches('/')));
+    let case_sensitive = input.case_sensitive.unwrap_or_default();
+    let tag = input
         .tag
         .as_deref()
-        .filter(|value| !value.trim().is_empty())
-    {
-        if kind == "chapter" || kind == "section" {
-            return Ok(false);
+        .map(str::trim)
+        .filter(|tag| !tag.is_empty());
+    let tag = tag.map(|tag| {
+        if case_sensitive {
+            tag.to_owned()
+        } else {
+            tag.to_lowercase()
         }
-        let tags_json: Option<String> = connection
-            .query_row(
-                "SELECT tags_json FROM entities WHERE id = ?1 AND deleted_at IS NULL",
-                params![id],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(|error| format!("读取搜索标签失败：{}", error))?;
-        let tags: Vec<String> = tags_json
-            .and_then(|value| serde_json::from_str(&value).ok())
-            .unwrap_or_default();
-        let matched = tags.iter().any(|value| {
-            if input.case_sensitive.unwrap_or(false) {
-                value.contains(tag)
-            } else {
-                value.to_lowercase().contains(&tag.to_lowercase())
+    });
+    let mut seen = HashSet::new();
+
+    // Token matches come first; literal matches also find words inside CJK text.
+    // Count only distinct, fully filtered rows towards the offset and page size.
+    for (needle, predicate, highlight) in [
+        (
+            fts_query.as_str(),
+            "search_index MATCH ?1",
+            "snippet(search_index, 3, '<mark>', '</mark>', '…', 24)",
+        ),
+        (
+            literal.as_str(),
+            "title LIKE ?1 ESCAPE '!' OR content LIKE ?1 ESCAPE '!'",
+            "NULL",
+        ),
+    ] {
+        if needle.is_empty() {
+            continue;
+        }
+        let mut statement = connection.prepare(&format!(
+            "SELECT ref_id, kind, title, path, content, {highlight},
+                    CASE WHEN ?5 THEN (SELECT tags_json FROM entities
+                        WHERE id=search_index.ref_id AND deleted_at IS NULL) END
+             FROM search_index WHERE ({predicate})
+               AND (?2 IS NULL OR kind=?2 OR (?2='manuscript' AND kind IN ('chapter','section')))
+               AND (?3 IS NULL OR ref_id=?3)
+               AND (?4 IS NULL OR substr(replace(path,char(92),'/'),1,length(?4))=?4)
+               AND (NOT ?5 OR kind NOT IN ('chapter','section'))
+             ORDER BY rowid"
+        ))?;
+        let mut rows =
+            statement.query(params![needle, input.kind, current, volume, tag.is_some()])?;
+        while let Some(row) = rows.next()? {
+            let id: String = row.get(0)?;
+            if seen.contains(&id) {
+                continue;
             }
-        });
-        if !matched {
-            return Ok(false);
+            if let Some(tag) = tag.as_ref() {
+                let tags = row
+                    .get::<_, Option<String>>(6)?
+                    .and_then(|value| serde_json::from_str::<Vec<String>>(&value).ok())
+                    .unwrap_or_default();
+                if !tags.iter().any(|value| {
+                    if case_sensitive {
+                        value.contains(tag)
+                    } else {
+                        value.to_lowercase().contains(tag)
+                    }
+                }) {
+                    continue;
+                }
+            }
+            let title: &str = row.get_ref(2)?.as_str()?;
+            let content: &str = row.get_ref(4)?.as_str()?;
+            if case_sensitive
+                && !query
+                    .split_whitespace()
+                    .all(|term| title.contains(term) || content.contains(term))
+            {
+                continue;
+            }
+            seen.insert(id.clone());
+            if seen.len() <= offset {
+                continue;
+            }
+            if page.results.len() == PAGE_SIZE {
+                page.has_more = true;
+                return Ok(page);
+            }
+            page.results.push(SearchResult {
+                id,
+                kind: row.get(1)?,
+                title: title.to_owned(),
+                path: row.get(3)?,
+                snippet: row
+                    .get::<_, Option<String>>(5)?
+                    .unwrap_or_else(|| snippet(content, query)),
+            });
         }
     }
-    if input.case_sensitive.unwrap_or(false)
-        && !contains_search_terms(&format!("{} {}", title, content), &input.query, true)
-    {
-        return Ok(false);
-    }
-    Ok(true)
+    Ok(page)
 }
 
 #[tauri::command]
 pub fn search_project(input: SearchInput) -> Result<Vec<SearchResult>, String> {
+    Ok(search_project_page(input, 0)?.results)
+}
+
+#[tauri::command]
+pub fn search_project_page(input: SearchInput, offset: u32) -> Result<SearchPage, String> {
     let (_root, connection) = project_connection(&input.project_path)?;
-    let mut results = Vec::new();
-    let fts_query = clean_query(&input.query);
-    if !fts_query.is_empty() {
-        let mut fts_rows = Vec::new();
-        if let Ok(mut statement) = connection.prepare(
-            "SELECT ref_id, kind, title, path, content, snippet(search_index, 3, '<mark>', '</mark>', '…', 24) FROM search_index WHERE search_index MATCH ?1 LIMIT 100",
-        ) {
-            if let Ok(rows) = statement.query_map(params![fts_query], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?, row.get::<_, String>(4)?, row.get::<_, String>(5)?))
-            }) {
-                fts_rows.extend(rows.flatten());
-            }
-        }
-        for (id, kind, title, path, content, highlighted) in fts_rows {
-            let matches_kind = input.kind.as_deref().is_none_or(|filter| {
-                filter == kind
-                    || (filter == "manuscript" && (kind == "chapter" || kind == "section"))
-            });
-            if matches_kind
-                && search_matches_filters(&connection, &input, &id, &kind, &path, &title, &content)?
-            {
-                results.push(SearchResult {
-                    id,
-                    kind,
-                    title,
-                    path,
-                    snippet: highlighted,
-                });
-            }
-        }
-    }
-    let like = format!("%{}%", input.query.trim());
-    let mut fallback_rows = Vec::new();
-    {
-        let mut fallback = connection.prepare(
-            "SELECT ref_id, kind, title, path, content FROM search_index WHERE title LIKE ?1 OR content LIKE ?1 LIMIT 100",
-        ).map_err(|error| format!("执行全文搜索失败：{}", error))?;
-        let rows = fallback
-            .query_map(params![like], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, String>(4)?,
-                ))
-            })
-            .map_err(|error| format!("执行全文搜索失败：{}", error))?;
-        fallback_rows.extend(rows.flatten());
-    }
-    for (id, kind, title, path, content) in fallback_rows {
-        let matches_kind = input.kind.as_deref().is_none_or(|filter| {
-            filter == kind || (filter == "manuscript" && (kind == "chapter" || kind == "section"))
-        });
-        let matches_filters =
-            search_matches_filters(&connection, &input, &id, &kind, &path, &title, &content)?;
-        if matches_kind
-            && matches_filters
-            && !results
-                .iter()
-                .any(|existing: &SearchResult| existing.id == id)
-        {
-            results.push(SearchResult {
-                id,
-                kind,
-                title,
-                path,
-                snippet: snippet(&content, &input.query),
-            });
-        }
-    }
-    results.truncate(100);
-    Ok(results)
+    read_search_page(&connection, &input, offset as usize)
+        .map_err(|error| format!("执行全文搜索失败：{}", error))
 }

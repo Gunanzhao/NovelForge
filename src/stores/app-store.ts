@@ -129,6 +129,7 @@ interface AppState {
   stats: Stats
   searchResults: SearchResult[]
   searchQuery: string
+  searchPage: { key: string; source: ProjectData | null; offset: number; hasMore: boolean; loading: boolean; error: string } | null
   recentProjects: RecentProject[]
   trash: TrashItem[]
   sidebarOpen: boolean
@@ -178,7 +179,7 @@ interface AppState {
   restoreTrash: (trashId: string) => Promise<void>
   permanentlyDelete: (trashId: string) => Promise<void>
   emptyTrash: () => Promise<void>
-  runSearch: (query: string, options?: Omit<import('../lib/types').SearchInput, 'projectPath' | 'query'>) => Promise<void>
+  runSearch: (query: string, options?: Omit<import('../lib/types').SearchInput, 'projectPath' | 'query'>, page?: { key: string; more?: boolean }) => Promise<void>
   refreshStats: () => Promise<void>
   exportProject: (format: ExportFormat, options?: Omit<ExportInput, 'projectPath' | 'format'>) => Promise<string>
   updateProject: (input: { title: string; author: string; description: string; genre: string; targetWords: number }) => Promise<void>
@@ -203,6 +204,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   stats: emptyStats,
   searchResults: [],
   searchQuery: '',
+  searchPage: null,
   recentProjects: [],
   trashLoading: false, trashError: null,
   trash: [],
@@ -281,7 +283,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await releaseForTransition(previousPath, () => request === transitionGeneration)
       if (request !== transitionGeneration) return
       ++selectionGeneration
-      set((state) => ({ projectPath: input.path, projectLease: targetLease ?? null, projectSession: state.projectSession + 1, deletingNodes: [], data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
+      set((state) => ({ projectPath: input.path, projectLease: targetLease ?? null, projectSession: state.projectSession + 1, deletingNodes: [], data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'manuscript', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', searchPage: null, trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
       adopted = true
       if (checklistError) get().setError(checklistError)
       const chapter = firstChapter(data)
@@ -315,7 +317,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await releaseForTransition(previousPath, () => request === transitionGeneration)
       if (request !== transitionGeneration) return
       ++selectionGeneration
-      set((state) => ({ projectPath: path, projectLease: targetLease ?? null, projectSession: state.projectSession + 1, deletingNodes: [], data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
+      set((state) => ({ projectPath: path, projectLease: targetLease ?? null, projectSession: state.projectSession + 1, deletingNodes: [], data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', searchPage: null, trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
       adopted = true
       const remembered = readEditorSession(path).nodeId
       const chapter = data.nodes.find(node => node.id === remembered && node.kind !== 'volume') ?? firstChapter(data)
@@ -352,6 +354,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       selectedEntityId: null,
       searchResults: [],
       searchQuery: '',
+      searchPage: null,
       trashLoading: false, trashError: null,
   trash: [],
       stats: emptyStats,
@@ -717,21 +720,38 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) { if (isCurrentProjectSession(session)) get().setError(error) }
   },
 
-  runSearch: async (query, options) => {
+  runSearch: async (query, options, page) => {
     const session = captureProjectSession()
+    const { projectPath, data, searchPage, searchResults } = get()
+    const previous = page && searchPage?.key === page.key && searchPage.source === data ? searchPage : null
+    if (previous?.loading || (previous && !previous.error && (!page?.more || !previous.hasMore))) return
     const generation = ++searchGeneration
-    const projectPath = get().projectPath
-    const projectId = get().data?.project.id
-    const isCurrent = () => isCurrentProjectSession(session) && generation === searchGeneration && get().projectPath === projectPath && get().data?.project.id === projectId && get().searchQuery === query
-    set({ searchQuery: query, searchResults: [] })
-    if (!projectPath || !query.trim()) {
-      set({ searchResults: [] })
-      return
-    }
+    const isCurrent = () => isCurrentProjectSession(session) && generation === searchGeneration && get().searchQuery === query && (!page || get().data === data)
+    const existing = previous ? searchResults : []
+    const currentPage = page && projectPath && query.trim() ? {
+      key: page.key, source: data, offset: previous?.offset ?? 0, hasMore: previous?.hasMore ?? false, loading: true, error: '',
+    } : null
+    set({ searchQuery: query, searchResults: existing, searchPage: currentPage })
+    if (!projectPath || !query.trim()) return
     try {
-      const results = await projectApi.search({ projectPath, query, ...options })
-      if (isCurrent()) set({ searchResults: results })
-    } catch (error) { if (isCurrent()) get().setError(error) }
+      const input = { projectPath, query, ...options }
+      if (!currentPage) {
+        const results = await projectApi.search(input)
+        if (isCurrent()) set({ searchResults: results })
+        return
+      }
+      const { results, hasMore } = await projectApi.searchPage(input, currentPage.offset)
+      if (!isCurrent()) return
+      const ids = new Set(existing.map(result => result.id))
+      set({
+        searchResults: [...existing, ...results.filter(result => !ids.has(result.id))],
+        searchPage: { ...currentPage, offset: currentPage.offset + results.length, hasMore, loading: false },
+      })
+    } catch (error) {
+      if (!isCurrent()) return
+      if (currentPage) set({ searchPage: { ...currentPage, loading: false, error: error instanceof Error ? error.message : String(error) } })
+      else get().setError(error)
+    }
   },
 
   refreshStats: async () => {

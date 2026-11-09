@@ -1,5 +1,5 @@
 import { Disclosure } from './Disclosure'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, type MouseEvent as ReactMouseEvent } from 'react'
 import { FileSearch, Search } from 'lucide-react'
 import type { EntityKind, SearchResult } from '../lib/types'
 import { ENTITY_LABELS } from '../lib/types'
@@ -14,7 +14,8 @@ import { Button, TextInput } from './ui'
 import { useContextMenu } from './ContextMenu'
 
 export function SearchView() {
-  const results = useAppStore((state) => state.searchResults)
+  const storedResults = useAppStore((state) => state.searchResults)
+  const searchPage = useAppStore((state) => state.searchPage)
   const runSearch = useAppStore((state) => state.runSearch)
   const selectNode = useAppStore((state) => state.selectNode)
   const selectEntity = useAppStore((state) => state.selectEntity)
@@ -25,34 +26,33 @@ export function SearchView() {
   const { openContextMenu } = useContextMenu()
   const savedFilters = useSearchWorkspace(state => state.value?.filters)
   const savedSession = useSearchWorkspace(state => state.value?.session)
-  const { query, kind, scope, nodeId, volumePath, tag, caseSensitive } =
-    savedSession && isCurrentProjectSession(savedSession) ? savedFilters ?? defaultSearchFilters : defaultSearchFilters
-  const [completedKey, setCompletedKey] = useState('')
-  const searchKey = JSON.stringify([projectPath, query, kind, scope, nodeId, volumePath, tag, caseSensitive])
-  const searching = Boolean(query.trim()) && completedKey !== searchKey
+  const current = savedSession && isCurrentProjectSession(savedSession)
+  const filters = current ? savedFilters ?? defaultSearchFilters : defaultSearchFilters
+  const { query, kind, scope, nodeId, volumePath, tag, caseSensitive } = filters
+  const searchKey = JSON.stringify(filters)
+  const response = current && searchPage?.key === searchKey && searchPage.source === data ? searchPage : null
+  const results = response ? storedResults : []
+  const searching = Boolean(query.trim()) && (!response || (response.loading && !response.offset))
   const page = useRef<HTMLDivElement>(null)
 
   const volumes = useMemo(() => (data?.nodes ?? [])
     .filter((node) => node.kind === 'volume')
     .sort((left, right) => left.orderIndex - right.orderIndex), [data?.nodes])
 
+  const options = useMemo(() => ({
+    kind: kind === 'all' ? undefined : kind, scope,
+    nodeId: nodeId ?? undefined, volumePath: volumePath || undefined, tag: tag || undefined, caseSensitive,
+  }), [caseSensitive, kind, nodeId, scope, tag, volumePath])
+
   useEffect(() => {
-    let current = true
-    const done = () => { if (current) setCompletedKey(searchKey) }
-    const timer = setTimeout(() => void runSearch(query, {
-      kind: kind === 'all' ? undefined : kind,
-      scope,
-      nodeId: nodeId ?? undefined,
-      volumePath: volumePath || undefined,
-      tag: tag || undefined,
-      caseSensitive,
-    }).then(done, done), 240)
-    return () => { current = false; clearTimeout(timer) }
-  }, [caseSensitive, kind, nodeId, query, runSearch, scope, searchKey, tag, volumePath])
+    if (!query.trim()) { void runSearch(query); return }
+    const timer = setTimeout(() => void runSearch(query, options, { key: searchKey }), 240)
+    return () => clearTimeout(timer)
+  }, [data, options, query, runSearch, searchKey])
 
   useLayoutEffect(() => {
     if (!searching && page.current) page.current.scrollTop = searchScrollPosition()
-  }, [searchKey, searching])
+  }, [filters, searching])
 
   async function openResult(result: SearchResult) {
     if (page.current) rememberSearchScroll(page.current.scrollTop)
@@ -104,11 +104,18 @@ export function SearchView() {
       {tag ? <span>标签：{tag}</span> : null}{caseSensitive ? <span>区分大小写</span> : null}
       {scope !== 'project' || volumePath || tag || caseSensitive || kind !== 'all' ? <Button variant="ghost" onClick={() => updateSearchFilters({ ...defaultSearchFilters, query })}>清除筛选</Button> : null}
     </div>
-    {query.trim() ? <div className="search-result-list" aria-busy={searching}>{searching ? <div className="empty-state" role="status">正在查找匹配内容…</div> : results.length ? results.map(result =>
+    {query.trim() ? <div className="search-result-list" aria-busy={searching || Boolean(response?.loading)}>
+      {results.length > 0 && <p className="field-hint" role="status">已显示 {results.length} 条匹配{response?.hasMore ? '，还有更多结果。' : '。'}</p>}
+      {results.map(result =>
       <button className="search-result" key={result.id} onClick={() => void openResult(result)} onContextMenu={event => openResultMenu(event, result)}>
         <div className="search-result-title"><strong>{result.title}</strong><span className="search-kind">{result.kind === 'chapter' ? '章节' : result.kind === 'section' ? '小节' : ENTITY_LABELS[result.kind as EntityKind] ?? result.kind}</span></div>
         <p>{searchSegments(result.snippet || '匹配条目', query, caseSensitive).map((segment, index) => segment.match ? <mark key={index}>{segment.text}</mark> : <span key={index}>{segment.text}</span>)}</p><small>{result.path}</small>
-      </button>) : <div className="empty-state"><FileSearch size={24} /><div><strong>没有找到匹配内容</strong><span>试试更短的关键词，或切换搜索范围。</span></div></div>}</div>
+      </button>)}
+      {searching ? <div className="empty-state" role="status">正在查找匹配内容…</div>
+        : response?.error ? <div className="search-results-actions"><p role="alert">搜索失败：{response.error}</p><Button variant="outline" onClick={() => void runSearch(query, options, { key: searchKey, more: true })}>重试搜索</Button></div>
+        : response?.hasMore ? <div className="search-results-actions"><Button variant="outline" aria-disabled={response.loading} onClick={() => void runSearch(query, options, { key: searchKey, more: true })}>{response.loading ? '加载中…' : '加载更多结果'}</Button></div>
+        : !results.length ? <div className="empty-state"><FileSearch size={24} /><div><strong>没有找到匹配内容</strong><span>试试更短的关键词，或切换搜索范围。</span></div></div> : null}
+      </div>
       : <div className="empty-state" style={{ minHeight: 330 }}><Search size={28} /><div><strong>从一个关键词开始</strong><span>搜索结果会显示匹配条目和正文片段。</span></div></div>}
   </div>
 }

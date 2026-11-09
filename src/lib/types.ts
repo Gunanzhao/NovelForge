@@ -118,6 +118,11 @@ export interface SearchResult {
   snippet: string
 }
 
+export interface SearchPage {
+  results: SearchResult[]
+  hasMore: boolean
+}
+
 export interface EntityDraft {
   title: string
   tags: string

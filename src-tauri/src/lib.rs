@@ -100,6 +100,7 @@ pub fn run() {
             commands::trash::restore_trash,
             commands::trash::permanent_delete,
             commands::search::search_project,
+            commands::search::search_project_page,
             commands::consistency::check_consistency,
             commands::ai::ai_complete,
             commands::ai::ai_cancel,

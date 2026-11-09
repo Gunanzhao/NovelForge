@@ -751,33 +751,36 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
     persist(projectPath, store)
     return store.data as T
   }
-  if (command === 'search_project') {
+  if (command === 'search_project' || command === 'search_project_page') {
     const search = args.input as SearchInput
     if (!search || typeof search.query !== 'string') throw new Error('搜索内容无效')
     const query = search.query.trim()
     const normalizedQuery = query.toLocaleLowerCase()
-    const volumeMatches = (path: string) => !search.volumePath || path.startsWith(search.volumePath.replace(/\\/gu, '/') + '/')
+    const prefix = search.volumePath?.trim() ? search.volumePath.replace(/\\/gu, '/').replace(/\/+$/u, '') + '/' : null
+    const volumeMatches = (path: string) => !prefix || path.replace(/\\/gu, '/').startsWith(prefix)
     const textMatches = (title: string, content: string) => {
-      const source = title + content
-      return search.caseSensitive ? source.includes(query) : source.toLocaleLowerCase().includes(normalizedQuery)
+      return query && [title, content].some(value => search.caseSensitive ? value.includes(query) : value.toLocaleLowerCase().includes(normalizedQuery))
     }
-    const tagMatches = (item: EntityRecord) => !search.tag || item.tags.some((tag) => search.caseSensitive ? tag.includes(search.tag ?? '') : tag.toLocaleLowerCase().includes((search.tag ?? '').toLocaleLowerCase()))
+    const tagQuery = search.tag?.trim() ?? ''
+    const tagMatches = (item: EntityRecord) => !tagQuery || item.tags.some(tag => search.caseSensitive ? tag.includes(tagQuery) : tag.toLocaleLowerCase().includes(tagQuery.toLocaleLowerCase()))
     const results: SearchResult[] = []
     for (const item of store.data.nodes.filter((candidate) => candidate.kind !== 'volume')) {
       const content = store.documents[item.id] ?? ''
       const currentOnly = search.scope === 'current' && search.nodeId !== item.id
-      if (!currentOnly && (!search.kind || search.kind === 'manuscript') && volumeMatches(item.filePath) && textMatches(item.title, content)) {
+      if (!currentOnly && !tagQuery && (!search.kind || search.kind === 'manuscript' || search.kind === item.kind) && volumeMatches(item.filePath) && textMatches(item.title, content)) {
         results.push({ id: item.id, kind: item.kind, title: item.title, path: item.filePath, snippet: content.slice(0, 160) })
       }
     }
     for (const item of store.data.entities) {
       const content = JSON.stringify(item.content)
       const currentOnly = search.scope === 'current'
-      if (!currentOnly && (!search.kind || search.kind === item.kind) && tagMatches(item) && textMatches(item.title, content)) {
+      if (!currentOnly && (!search.kind || search.kind === item.kind) && volumeMatches(item.filePath) && tagMatches(item) && textMatches(item.title, content)) {
         results.push({ id: item.id, kind: item.kind, title: item.title, path: item.filePath, snippet: content.slice(0, 160) })
       }
     }
-    return results.slice(0, 100) as T
+    if (command === 'search_project') return results.slice(0, 100) as T
+    const offset = Number(args.offset ?? 0)
+    return { results: results.slice(offset, offset + 100), hasMore: results.length > offset + 100 } as T
   }
   if (command === 'check_consistency') return analyzeConsistency(store.data, store.documents) as T
   if (command === 'open_attachment') {

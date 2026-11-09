@@ -1236,6 +1236,8 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); 
 .search-active-filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
 .search-active-filters > span { padding: 4px 8px; border-radius: 5px; color: var(--accent); background: var(--accent-soft); font-size: 11px; }
 .search-result-list .empty-state { min-height: 160px; }
+.search-results-actions { padding: 6px 0 14px; }
+.search-results-actions [role="alert"] { margin: 0 0 8px; color: var(--danger); }
 .settings-nav { position: sticky; top: 0; z-index: 3; display: flex; gap: 6px; padding-block: 8px; max-width: 720px; background: var(--bg); margin-bottom: 12px; }
 .settings-card { scroll-margin-top: 60px; }
 .settings-card .disclosure-body { padding-bottom: 4px; }

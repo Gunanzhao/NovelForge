@@ -178,6 +178,13 @@ pub struct SearchResult {
     pub snippet: String,
 }
 
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchPage {
+    pub results: Vec<SearchResult>,
+    pub has_more: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectInput {

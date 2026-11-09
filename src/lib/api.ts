@@ -5,7 +5,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
   EntityState, EntityVersion, AiCompletionInput, AiCompletionResult, ConsistencyReport, CopyNodeInput, DocumentData, EntityInput, EntityRecord, ExportInput, HistoryItem, MoveNodeInput, NodeInput, ProjectData,
-  ProjectInput, RecoveryItem, SaveDocumentInput, SearchInput, SearchResult, Stats, TrashItem,
+  ProjectInput, RecoveryItem, SaveDocumentInput, SearchInput, SearchPage, SearchResult, Stats, TrashItem,
 } from './types'
 import { fallbackInvoke } from './fallback'
 
@@ -100,6 +100,7 @@ export const projectApi = {
   restoreTrash: (input: { projectPath: string; nodeId: string }) => command<ProjectData>('restore_trash', { input }),
   permanentDelete: (input: { projectPath: string; nodeId: string }) => command<ProjectData>('permanent_delete', { input }),
   search: (input: SearchInput) => command<SearchResult[]>('search_project', { input }),
+  searchPage: (input: SearchInput, offset: number) => command<SearchPage>('search_project_page', { input, offset }),
   consistency: (path: string) => command<ConsistencyReport>('check_consistency', { path }),
   aiComplete: (input: AiCompletionInput, requestId?: string) => command<AiCompletionResult>('ai_complete', { input, requestId: requestId ?? crypto.randomUUID() }),
   aiCancel: (requestId: string) => isDesktop ? command<void>('ai_cancel', { requestId }, false) : Promise.resolve(),
