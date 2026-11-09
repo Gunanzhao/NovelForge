@@ -284,15 +284,8 @@ fn all_text_exports_preserve_internal_headings_and_fenced_hash_lines() {
         let output = export_project(ExportInput {
             project_path: f.path.clone(),
             format: format.into(),
-            scope: None,
-            volume_path: None,
-            node_ids: None,
-            title: None,
-            author: None,
             include_toc: Some(false),
-            include_volume_titles: None,
-            include_chapter_titles: None,
-            cover_path: None,
+            ..Default::default()
         })
         .unwrap();
         let text = if format == "docx" || format == "epub" {
