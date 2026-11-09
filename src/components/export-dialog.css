@@ -1,0 +1,15 @@
+.export-dialog { display: flex; flex-direction: column; width: min(690px, 100%); overflow: hidden; }
+.export-dialog .modal-header, .export-dialog .modal-footer { flex: none; }
+.export-dialog .modal-body { min-height: 0; overflow: auto; }
+.export-dialog .modal-footer { flex-wrap: wrap; }
+.export-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.export-dialog .export-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.export-format-note, .export-error { margin: 0 0 12px; padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.export-format-note { background: var(--surface-2); color: var(--text); }
+.export-error { color: var(--danger); background: var(--danger-soft); }
+.export-output { position: fixed; z-index: 15; right: 18px; bottom: 44px; display: grid; gap: 8px; width: min(440px, calc(100% - 36px)); padding: 13px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); }
+.export-output-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.export-output p { margin: 0; color: var(--muted); font-size: 13px; }
+.export-output code { padding: 10px; border-radius: 6px; background: var(--surface-2); overflow-wrap: anywhere; }
+.export-output-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+@media (max-width: 560px) { .export-dialog .export-options { grid-template-columns: minmax(0, 1fr); } }

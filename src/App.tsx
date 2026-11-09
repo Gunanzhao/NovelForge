@@ -13,7 +13,7 @@ import {
   Settings, Sun, Undo2, X,
 } from 'lucide-react'
 import { fitWorkspaceColumns } from './lib/workspace-preferences'
-import { isDesktop, projectApi } from './lib/api'
+import { projectApi } from './lib/api'
 import type { ExportFormat, ExportInput, NodeKind, NodeRecord } from './lib/types'
 import type { ContextMenuItem, ContextMenuLocation, ContextMenuPayload } from './lib/context-menu'
 import { dispatchCommand } from './lib/command-registry'
@@ -183,13 +183,8 @@ export default function App() {
     return () => window.removeEventListener('novelforge:open-consistency', openConsistency)
   }, [])
 
-  async function exportProject(format: ExportFormat, options: Omit<ExportInput, 'projectPath' | 'format'> = {}) {
-    try {
-      const path = await useAppStore.getState().exportProject(format, options)
-      window.alert('导出完成：\n' + path + (isDesktop ? '' : '\n\n当前为浏览器开发模式。'))
-    } catch (error) {
-      useAppStore.getState().setError(error)
-    }
+  function exportProject(format: ExportFormat, options: Omit<ExportInput, 'projectPath' | 'format'>) {
+    return useAppStore.getState().exportProject(format, options)
   }
 
   function viewContent() {

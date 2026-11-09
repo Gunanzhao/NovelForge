@@ -24,7 +24,7 @@ export function RecordSaveStatus({ updatedAt, busy }: { updatedAt?: string; busy
   return <span className="record-save-status" role="status">{busy ? '正在保存…' : updatedAt ? '上次保存 ' + formatDate(updatedAt) : '新条目，保存后加入项目'}</span>
 }
 
-export function Modal({ open, title, onClose, children, footer }: { open: boolean; title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
+export function Modal({ open, title, onClose, children, footer, className }: { open: boolean; title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; className?: string }) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const closeRef = useRef(onClose)
   useEffect(() => { closeRef.current = onClose })
@@ -48,7 +48,7 @@ export function Modal({ open, title, onClose, children, footer }: { open: boolea
   }, [open])
   if (!open) return null
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-    <div ref={dialogRef} className="modal-card" role="dialog" aria-modal="true" aria-label={title}>
+    <div ref={dialogRef} className={cn('modal-card', className)} role="dialog" aria-modal="true" aria-label={title}>
       <div className="modal-header"><div><p className="eyebrow">NOVELFORGE</p><h2>{title}</h2></div><IconButton icon={X} label="关闭" onClick={onClose} /></div>
       <div className="modal-body">{children}</div>
       {footer ? <div className="modal-footer">{footer}</div> : null}

@@ -1693,7 +1693,11 @@ pub fn export_project(input: ExportInput) -> Result<String, String> {
         include_volume_titles: input.include_volume_titles.unwrap_or(true),
         include_chapter_titles: input.include_chapter_titles.unwrap_or(true),
     };
-    let cover = export_cover(&root, input.cover_path.as_deref())?;
+    let cover = if matches!(format, "html" | "docx" | "epub" | "pdf") {
+        export_cover(&root, input.cover_path.as_deref())?
+    } else {
+        None
+    };
     let mut markdown = String::new();
     export_nodes(&root, &nodes, None, 1, "markdown", &mut markdown, &options)?;
     let toc = if input.include_toc.unwrap_or(true) {
@@ -1760,6 +1764,67 @@ pub fn export_project(input: ExportInput) -> Result<String, String> {
     storage::atomic_write(&target, &bytes)?;
     let _ = storage::append_log(&root, "INFO", "export_created");
     Ok(target.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn open_export_output(
+    project_path: String,
+    output_path: String,
+    folder: bool,
+) -> Result<(), String> {
+    let root = storage::existing_project_root(&project_path)?;
+    let requested = Path::new(&output_path);
+    let name = requested
+        .file_name()
+        .and_then(|part| part.to_str())
+        .ok_or("导出文件路径无效")?;
+    let expected = storage::safe_relative(&root, &format!(".novelforge/exports/{name}"))?;
+    if requested != expected.as_path() || !expected.is_file() {
+        return Err("只能打开当前项目中仍存在的导出文件。".into());
+    }
+    let directory = storage::safe_relative(&root, ".novelforge/exports")?
+        .canonicalize()
+        .map_err(|e| format!("无法读取导出文件夹：{e}"))?;
+    let output = expected
+        .canonicalize()
+        .map_err(|e| format!("无法读取导出文件：{e}"))?;
+    if output.parent() != Some(directory.as_path())
+        || !matches!(
+            output.extension().and_then(|extension| extension.to_str()),
+            Some("markdown" | "txt" | "html" | "docx" | "epub" | "pdf")
+        )
+    {
+        return Err("只能打开本项目的导出文件或所在文件夹。".into());
+    }
+    let target = if folder { directory } else { output };
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let path = target.to_string_lossy();
+        let shell_path = if let Some(unc) = path.strip_prefix(r"\\?\UNC\") {
+            format!(r"\\{unc}")
+        } else {
+            path.strip_prefix(r"\\?\").unwrap_or(&path).to_string()
+        };
+        let mut command = std::process::Command::new("explorer.exe");
+        command.arg(shell_path);
+        command
+    };
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut command = std::process::Command::new("open");
+        command.arg(&target);
+        command
+    };
+    #[cfg(target_os = "linux")]
+    let mut command = {
+        let mut command = std::process::Command::new("xdg-open");
+        command.arg(&target);
+        command
+    };
+    command
+        .spawn()
+        .map_err(|e| format!("无法打开导出结果：{e}"))?;
+    Ok(())
 }
 
 #[cfg(test)]

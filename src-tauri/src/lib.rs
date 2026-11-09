@@ -105,6 +105,7 @@ pub fn run() {
             commands::codex::codex_check_cancel,
             commands::statistics::get_statistics,
             commands::export::export_project,
+            commands::export::open_export_output,
             commands::project::read_logs,
             commands::project::update_project
         ]);
