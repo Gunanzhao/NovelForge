@@ -46,7 +46,7 @@ export function PromptPresetManager({ busy, onRun, presentation = 'panel', defau
   const [draft, setDraft] = useState<Draft>(BLANK)
   const [baseline, setBaseline] = useState(() => JSON.stringify(BLANK))
   const draftId = 'prompt-preset:' + projectPath
-  useUnsavedDraft(draftId, 'AI 模板', JSON.stringify(draft) !== baseline, () => save(), () => setDraft(JSON.parse(baseline) as Draft))
+  useUnsavedDraft(draftId, 'AI 模板', JSON.stringify(draft) !== baseline, () => save(), () => setDraft(JSON.parse(baseline) as Draft), { targetId: draftId, payload: draft })
   const [saving, setSaving] = useState(false)
   const [systemOpen, setSystemOpen] = useState(false)
   const promptRef = useRef<HTMLTextAreaElement>(null)

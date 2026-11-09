@@ -252,12 +252,12 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
   return <div className={'workspace-view ai-view ai-workbench' + (compact ? ' ai-inline-workbench' : '')}>
     <div className="view-header ai-workbench-header"><div><p className="eyebrow">WRITING ASSISTANT</p><h1>AI 辅助</h1></div><span className="ai-workbench-subtitle">选择资料与任务，预览后应用结果</span>{compact ? <div className="ai-inline-nav"><Button variant="ghost" onClick={onExpand}>完整工作台</Button><Button variant="ghost" onClick={onDismiss}>收起</Button></div> : null}</div>
     <div className="ai-connection-bar" aria-label="AI 连接">
-      <Field label="AI 模式"><select aria-label="AI 模式" className="select-input" value={mode} disabled={connectionLocked} onChange={(e) => { setMode(e.target.value as NonNullable<AiPreferences['mode']>); setCodexReady(false); task.clear(); setConnectionOpen(false) }}><option value="offline">本地离线</option><option value="provider">兼容 Provider</option><option value="codex">Codex 订阅（实验性）</option></select></Field>
+      <Field label="AI 模式"><select aria-label="AI 模式" className="select-input" value={mode} disabled={connectionLocked} onChange={(e) => { setMode(e.target.value as NonNullable<AiPreferences['mode']>); setCodexReady(false); task.clear(); setConnectionOpen(false) }}><option value="offline">本地离线</option><option value="provider">兼容服务</option><option value="codex">Codex 订阅（实验性）</option></select></Field>
       {mode === 'codex' ? <CodexSettings compact path={codexPath} model={codexModel} effort={codexEffort} busy={busy} onPath={setCodexPath} onModel={setCodexModel} onEffort={setCodexEffort} onReady={setCodexReady} /> : mode === 'provider' ? <>
         <Field label="模型"><TextInput value={model} disabled={busy} onChange={(event) => setModel(event.target.value)} placeholder="模型名称" /></Field>
-        <span className="ai-connection-state">{endpoint.trim() ? providerName || '已配置 Provider' : '待配置连接'}</span>
+        <span className="ai-connection-state">{endpoint.trim() ? providerName || '已配置服务' : '待配置连接'}</span>
         <Button variant="outline" onClick={() => setConnectionOpen(true)}>连接设置</Button>
-      </> : <><span className="ai-connection-state">本地草稿 · 无需连接</span><Button variant="outline" onClick={() => { setMode('provider'); setConnectionOpen(true) }}>配置 Provider</Button></>}
+      </> : <><span className="ai-connection-state">本地草稿 · 无需连接</span><Button variant="outline" onClick={() => { setMode('provider'); setConnectionOpen(true) }}>配置服务</Button></>}
       {mode === 'provider' && insecureHttpProvider ? <div className="ai-provider-warning"><TriangleAlert size={14} /><span>该地址使用非加密 HTTP。发送时，小说内容和 API Key 可能被网络中的其他人读取或篡改。</span></div> : null}
     </div>
     <div className="ai-workbench-grid">

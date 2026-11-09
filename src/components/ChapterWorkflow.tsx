@@ -19,7 +19,7 @@ export function ChecklistTemplateSettings() {
   const savedText = parseChecklistTemplate(templateEntity).items.map(item => item.label).join('\n')
   const [text, setText] = useState(savedText)
   const draftId = 'checklist-template:' + projectPath
-  useUnsavedDraft(draftId, '章节完成模板', text !== savedText, save, () => setText(savedText))
+  useUnsavedDraft(draftId, '章节完成模板', text !== savedText, save, () => setText(savedText), { targetId: draftId, payload: { text } })
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     setText(parseChecklistTemplate(templateEntity).items.map((item) => item.label).join('\n'))

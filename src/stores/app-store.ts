@@ -78,7 +78,20 @@ async function releaseForTransition(path: string | null, isCurrent: () => boolea
 function readRecent(): RecentProject[] {
   try {
     const value = localStorage.getItem(RECENT_KEY)
-    return value ? JSON.parse(value) as RecentProject[] : []
+    if (!value || value.length > 128_000) return []
+    const parsed: unknown = JSON.parse(value)
+    if (!Array.isArray(parsed)) return []
+    const seen = new Set<string>()
+    return parsed.filter((item): item is RecentProject => {
+      if (!item || typeof item !== 'object') return false
+      const entry = item as Record<string, unknown>
+      if (typeof entry.path !== 'string' || !entry.path.trim() || entry.path.length > 4096
+        || typeof entry.title !== 'string' || !entry.title.trim() || entry.title.length > 1000
+        || typeof entry.updatedAt !== 'string' || !Number.isFinite(Date.parse(entry.updatedAt))
+        || seen.has(entry.path)) return false
+      seen.add(entry.path)
+      return true
+    }).slice(0, 8).map(({ path, title, updatedAt }) => ({ path, title, updatedAt }))
   } catch {
     return []
   }
@@ -134,6 +147,7 @@ interface AppState {
   trash: TrashItem[]
   sidebarOpen: boolean
   inspectorOpen: boolean
+  inspectorRequested: boolean
   inspectorTab: 'chapter' | 'ai'
   setInspectorTab: (tab: 'chapter' | 'ai') => void
   openEditorAi: (action?: AiAction) => void
@@ -210,11 +224,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   trash: [],
   sidebarOpen: DEFAULT_WORKSPACE_PREFERENCES.sidebarOpen,
   inspectorOpen: DEFAULT_WORKSPACE_PREFERENCES.inspectorOpen,
+  inspectorRequested: false,
   inspectorTab: 'chapter',
-  setInspectorTab: (inspectorTab) => set({ inspectorTab, inspectorOpen: true }),
+  setInspectorTab: (inspectorTab) => set({ inspectorTab, inspectorOpen: true, inspectorRequested: true }),
   openEditorAi: (action) => {
     const selection = get().editorSelection
-    set({ activeView: 'manuscript', inspectorOpen: true, inspectorTab: 'ai', requestedAiAction: action ?? (selection?.text.trim() ? 'polish' : 'continue') })
+    set({ activeView: 'manuscript', inspectorOpen: true, inspectorRequested: true, inspectorTab: 'ai', requestedAiAction: action ?? (selection?.text.trim() ? 'polish' : 'continue') })
   },
   focusMode: false,
   theme: 'system',
@@ -238,7 +253,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleInspector: () => set((state) => {
     const inspectorOpen = !state.inspectorOpen
     const workspacePreferences = { ...state.workspacePreferences, inspectorOpen }
-    return { inspectorOpen, workspacePreferences, preferenceError: persistPreferences(workspacePreferences, state.theme) }
+    return { inspectorOpen, inspectorRequested: inspectorOpen, workspacePreferences, preferenceError: persistPreferences(workspacePreferences, state.theme) }
   }),
   toggleFocusMode: () => set((state) => ({ focusMode: !state.focusMode })),
   setEditorMode: (editorMode) => set({ editorMode }),

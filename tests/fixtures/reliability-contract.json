@@ -1,0 +1,6 @@
+{
+  "project": { "path": "__TEMP__", "title": "中文契约🖋️", "author": "作者", "description": "合成夹具", "genre": "奇幻", "targetWords": 10000 },
+  "node": { "projectPath": "__TEMP__", "kind": "chapter", "title": "验收章节", "parentId": null },
+  "body": "# 验收章节\n\n中文正文🖋️，保留 Unicode 与换行。\n第二段全文。\n",
+  "conflictCode": "EXTERNAL_CONFLICT:"
+}

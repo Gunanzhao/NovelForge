@@ -1,4 +1,6 @@
 mod commands;
+mod diagnostics;
+mod drafts;
 mod models;
 
 #[path = "storage/mod.rs"]
@@ -18,12 +20,44 @@ async fn confirm_window_close(window: tauri::WebviewWindow) -> Result<(), String
 }
 
 pub fn run() {
+    diagnostics::begin();
+    // Explicit offline acceptance switch; does not open or change a project.
+    if std::env::args().any(|arg| arg == "--diagnostic-startup-failure-test") {
+        diagnostics::fail("synthetic failure", true);
+        return;
+    }
     let builder = tauri::Builder::default()
         .manage(commands::codex::CodexState::default())
         .setup(|app| {
-            tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
+            diagnostics::stage("STARTUP_SETUP_ENTER");
+            let window = tauri::WebviewWindowBuilder::from_config(
+                app,
+                app.config()
+                    .app
+                    .windows
+                    .first()
+                    .ok_or("WINDOW_CONFIG_MISSING")?,
+            )?;
+            #[cfg(windows)]
+            let window = if let Some(probe) = diagnostics::webview_probe(std::env::args_os())? {
+                window
+                    .additional_browser_args(&probe.browser_arguments)
+                    .data_directory(probe.data_directory)
+            } else {
+                window
+            };
+            diagnostics::stage("STARTUP_CONFIG_READY");
+            diagnostics::stage("STARTUP_WEBVIEW_BUILD_BEGIN");
+            window
                 .on_navigation(commands::navigation::workspace_navigation_allowed)
+                .on_page_load(|_, payload| {
+                    diagnostics::stage(match payload.event() {
+                        tauri::webview::PageLoadEvent::Started => "STARTUP_PAGE_LOAD_STARTED",
+                        tauri::webview::PageLoadEvent::Finished => "STARTUP_PAGE_LOAD_FINISHED",
+                    });
+                })
                 .build()?;
+            diagnostics::stage("STARTUP_WEBVIEW_BUILD_DONE");
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -39,6 +73,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             confirm_window_close,
+            drafts::put_draft_snapshot,
+            drafts::list_draft_snapshots,
+            drafts::acknowledge_draft_snapshot,
             commands::updates::check_updates,
             commands::guard::save_document_checked,
             commands::guard::save_document_annotated,
@@ -57,6 +94,10 @@ pub fn run() {
             commands::navigation::open_external_url,
             commands::project::create_project,
             commands::project::open_project,
+            commands::rescue::inspect_project_rescue,
+            commands::rescue::verify_project_recovery,
+            commands::history_cleanup::preview_history_cleanup,
+            commands::history_cleanup::apply_history_cleanup,
             commands::project::list_documents,
             commands::manuscript::create_node,
             commands::manuscript::set_node_status,
@@ -117,10 +158,14 @@ pub fn run() {
             commands::project::read_logs,
             commands::project::update_project
         ]);
+    diagnostics::stage("STARTUP_RUN_ENTER");
     if let Err(error) = builder.run(tauri::generate_context!()) {
-        eprintln!("NovelForge 启动失败：{error}");
+        diagnostics::fail(&error.to_string(), false);
     }
 }
 
 #[cfg(test)]
 mod rust_tests;
+
+#[cfg(test)]
+mod reliability_contract_tests;

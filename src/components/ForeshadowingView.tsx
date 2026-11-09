@@ -81,7 +81,7 @@ export function ForeshadowingView() {
   const [busy, setBusy] = useState(false)
   const [baseline, setBaseline] = useState(() => JSON.stringify(blankDraft()))
   const draftId = 'ForeshadowingView:' + projectPath
-  useUnsavedDraft(draftId, '伏笔', JSON.stringify(draft) !== baseline, save, () => setDraft(JSON.parse(baseline) as ForeshadowingDraft))
+  useUnsavedDraft(draftId, '伏笔', JSON.stringify(draft) !== baseline, save, () => setDraft(JSON.parse(baseline) as ForeshadowingDraft), { targetId: draftId, payload: draft })
 
   const entries = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'foreshadowing'), [data?.entities])
   const visibleEntries = useMemo(() => {

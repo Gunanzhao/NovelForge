@@ -24,7 +24,7 @@ function ImportWorkspace() {
   const draftId = 'manuscript-import:' + projectPath
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   function clear() { setBytes(null); setFilename(''); setText(''); setBoundaries([]); setChosen([]); setChapters(null); setConfirmed(false); setError(''); setManualLine(''); retry.current = { signature: '', id: '' }; if (fileInput.current) fileInput.current.value = ''; markDraftSaved(draftId) }
-  useUnsavedDraft(draftId, '稿件导入预览', Boolean(bytes), async () => { setError('请返回稿件导入页核对预览，勾选确认后创建章节。'); return false }, clear)
+  useUnsavedDraft(draftId, '稿件导入预览', Boolean(bytes), async () => { setError('请返回稿件导入页核对预览，勾选确认后创建章节。'); return false }, clear, { targetId: draftId, payload: { filename, text, boundaries, chosen, chapters, parentId } })
   function decode(value: Uint8Array, selectedEncoding: ImportEncoding) {
     setText(''); setBoundaries([]); setChosen([]); setChapters(null); setConfirmed(false); setError(''); setNotice('')
     try { const result = decodeManuscript(value, selectedEncoding); const found = detectImportBoundaries(result.text); setText(result.text); setDecodedAs(result.encoding); setBoundaries(found); setChosen(found.map(item => item.offset)) }

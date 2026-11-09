@@ -2,18 +2,44 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.2.0-rc.1（预发布）**。
+当前版本：**1.2.0-rc.3（预发布）**。
 
-[![main CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Amain)
+[![Release branch CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=codex%2Freliability-review-20260930)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Acodex%2Freliability-review-20260930)
 
 ## 下载
 
-- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.1/NovelForge_1.2.0-rc.1_x64-setup.exe)
-- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.1/novelforge.exe)
-- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.1/SHA256SUMS.txt)
+- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.3/NovelForge_1.2.0-rc.3_x64-setup.exe)
+- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.3/novelforge.exe)
+- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.3/SHA256SUMS.txt)
 - [版本说明与历史 Release](https://github.com/Gunanzhao/NovelForge/releases)
 
 已有安装版用户运行新安装包升级；直接运行独立 EXE 不会更新旧快捷方式。桌面版需要 Windows WebView2。
+
+## 1.2.0-rc.3 相比 1.2.0-rc.2
+
+- **更统一的界面**：暖白与深色主题共享字体、按钮、恢复卡片和反馈颜色；新用户正文默认 16px，保留已有设置。
+- **导航更容易找到**：常用入口直接可见，其他功能分组折叠，最多固定四个额外入口；当前章节自动展开父卷。
+- **正文优先**：小窗口辅助栏按需展开，保留 AI 输入草稿；低频格式和项目操作收进菜单，字数及保存状态统一。
+- **表单更方便**：大纲、场景、剧情线和章节记忆的保存操作置顶；减少重复标题，首页技术说明和总览检查清单按需展开。
+- **真实桌面验证**：新增生产 EXE 界面门禁及截图 artifact，保持原有 IPC、数据生命周期和强制重启要求。
+
+本地验收：492 项前端测试、174 项 Windows Rust 测试通过（7 项原有忽略）；浏览器和生产 EXE 各通过 72 组布局检查及关键交互。独立 EXE 和安装包内 EXE 均通过真实 IPC 与强制重启。准确发布提交的 CI 结果和资产校验见 [rc.3 Release](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.2.0-rc.3)。
+
+使用提示：左侧分组中的图钉可固定常用功能；小窗口通过右上角辅助栏按钮或正文的 AI 按钮打开抽屉。文件路径可在“章节信息 → 文件位置”查看。
+
+详见 [rc.3 发布说明](docs/release-1.2.0-rc.3.md)和[三阶段验收记录](docs/frontend-polish-20261004.md)。
+
+## 1.2.0-rc.2 相比 1.2.0-rc.1
+
+- **独立草稿恢复**：每 10 秒尝试保存正文与已注册资料表单的独立快照；持续输入不推迟保存。异常退出后可查看、对照、复制或导出，旧版本确认不会删除新草稿。
+- **更保守的数据恢复**：区分数据库锁定、权限、磁盘满与真正损坏；损坏日志保留原证据并阻止写入，救援入口可导出安全可读正文。未知新版项目格式与数据库结构在写入前拒绝打开。
+- **可预览的历史清理**：查看占用、预览并确认后清理符合条件的旧自动历史，保留最新、命名和保护版本；清理中断可恢复，不自动清理旧稿。
+- **异常界面与启动保护**：损坏的最近项目缓存不再阻止启动；界面渲染失败时保留可复制、导出的编辑内容。Windows 启动失败显示原生提示，启动日志只记录脱敏阶段码与时间。
+- **Windows 真实 IPC 验收**：修复高权限环境中 WebView2 调试参数未生效的问题，保留生产 EXE、数据生命周期和强制重启断言；CI 成功与失败均上传脱敏诊断。
+
+可靠性代码基线 `4c0fc02` 的 [CI #172](https://github.com/Gunanzhao/NovelForge/actions/runs/36802439384) 三项检查全部通过；前端 491 项、Windows Rust 174 项通过（7 项原有忽略），生产 EXE 的真实 IPC、备份恢复、导出与强制重启验收通过。草稿保护到最后一次成功写入，不保证零丢失；容量和恢复限制见下方“草稿恢复与启动诊断”。
+
+详见 [1.2.0-rc.2 发布说明](docs/release-1.2.0-rc.2.md)和[可靠性验收报告](docs/reliability-review-20260930.md)。
 
 ## 1.2.0-rc.1 相比 1.1.1-rc.8
 
@@ -167,7 +193,7 @@ Codex 结果可以流式查看和停止生成；未完成文本只供查看与�
 
 在章节信息的“版本历史”中点击“保存版本”，输入名称即可保存当前正文的命名里程碑；新名称可建立独立版本，同名同内容的连续保存去重。AI 修改、全部替换及批量整理正文前先保存保护快照；同一 AI 结果逐项接受共用一份保护记录。恢复前的正文也会保留；已有相同内容的最近版本可以作为保护副本复用。
 
-列表显示到秒，支持全部、命名、自动、操作保护筛选，以及加载更早版本。本阶段所有旧历史、命名版本和保护版本都保留，不自动清理；分层清理与空间回收预览留待后续版本。
+列表显示到秒，支持全部、命名、自动、操作保护筛选，以及加载更早版本。默认不自动清理。在数据设置中可查看占用与清理预览，确认后仅清理符合条件的旧自动历史；最新、命名和保护版本保留。清理中断会按日志恢复，缺失历史文件仍会阻止备份。SQLite 空闲页可复用，不保证数据库文件立即缩小。
 
 ## 数据安全
 
@@ -194,6 +220,7 @@ pnpm tauri:dev
 
 ```powershell
 pnpm typecheck
+pnpm typecheck:config
 pnpm lint
 pnpm test
 cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
@@ -214,6 +241,24 @@ node scripts/editor-selection-ui-cdp.mjs
 node scripts/provider-responsive-ui-cdp.mjs
 ```
 
-这些检查使用独立合成项目和 WebView2 配置，截图与结果写入忽略的 `tmp/`。正文 AI 测试使用本机模拟 Provider，验证选区范围、共享任务、差异审阅、撤销重做、自动保存及浅／深色和窄窗口布局；Codex 测试只检查登录、兼容性和连接保持，不默认执行真实订阅生成。CI 包含前端、Rust 检查和 Windows CLI 兼容矩阵，实时结果见 [GitHub Actions](https://github.com/Gunanzhao/NovelForge/actions)。
+这些检查使用独立合成项目和 WebView2 配置，截图与结果写入忽略的 `tmp/`。正文 AI 测试使用本机模拟 Provider，验证选区范围、共享任务、差异审阅、撤销重做、自动保存及浅／深色和窄窗口布局；Codex 测试只检查登录、兼容性和连接保持，不默认执行真实订阅生成。CI 包含前端、Rust 和 Windows 真实 IPC 检查，另按相关文件变更运行 Windows CLI 兼容矩阵，实时结果见 [GitHub Actions](https://github.com/Gunanzhao/NovelForge/actions)。
 
 插件扩展目前采用源码内显式注册的进程内 Registry，不从磁盘动态执行任意外部 JavaScript。
+
+## 草稿恢复与启动诊断
+
+桌面版另在应用数据目录的 `draft-snapshots-v1` 保存独立草稿，每 10 秒尝试写入正文及已注册的资料表单；持续输入不会重置这个时钟。欢迎页和数据设置提供恢复入口，可查看、对照、复制或导出，恢复内容不会静默覆盖现有正文。最多 100 个目标、单份 2 MiB、合计 50 MiB（包含替换写入空间）；达到限额或写入失败会显示提示，不自动淘汰其他待恢复草稿。浏览器演示仅使用内存，不具备桌面持久化保障。
+
+快照保护到最后一次成功写入，不能保证零丢失，也不能保证挂起、磁盘满或断电期间的写入。超限草稿请手动导出。项目日志损坏或外部修改时保留原证据并阻止正常写入，可使用救援入口读取、导出安全可读的 Markdown；缺少原始一致性证据时不能直接解锁。未知新版项目格式或数据库 schema 会拒绝写入并提示使用兼容版本。
+
+Windows 无终端启动失败时显示原生提示，日志位于 `%LOCALAPPDATA%\NovelForge\logs\startup.log`，达到 256 KiB 后保留一份轮转文件。默认只记录允许的诊断码和时间，不记录原始错误中的路径、正文或密钥。Linux 日志位于 `$XDG_STATE_HOME/NovelForge/logs`（默认 `~/.local/state/NovelForge/logs`），启动失败原生提示尚未在 Linux 实现。
+
+Windows 生产构建后可运行独立门禁：
+
+```powershell
+./scripts/ensure-webview2-runtime.ps1 -ProbeOnly
+node scripts/reliability-smoke-cdp.mjs
+./scripts/startup-diagnostics-test.ps1 -Executable ./src-tauri/target/release/novelforge.exe
+```
+
+这些测试只创建临时合成数据；原生窗口检查需要可用桌面会话。CI 保留 `Frontend checks`、`Rust checks`，包含 `Windows reliability`；新增检查是否设为分支保护必需项需管理员另行决定。IPC 脚本通过生产 EXE 的显式 `--diagnostic-webview <端口> <隔离目录>` 参数配置 WebView API，正常启动默认不开启 CDP。诊断记录实际子进程、会话、调试参数与监听状态；CI 上传 `windows-ipc-diagnostics-<SHA>`，不包含原始命令行、环境变量或正文。详细实现、延期项和证据见 [可靠性验收报告](docs/reliability-review-20260930.md)。

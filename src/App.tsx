@@ -1,3 +1,7 @@
+import { Disclosure } from './components/Disclosure'
+import { ProjectRescue } from './components/ProjectRescue'
+import { DraftSnapshotRecovery, DraftSnapshotNotice } from './components/DraftSnapshotRecovery'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { ManuscriptImportView } from './components/ManuscriptImportView'
 import { RevisionWorkbench } from './components/RevisionWorkbench'
 import { ChapterMemoryView } from './components/ChapterMemoryView'
@@ -45,15 +49,15 @@ import { InboxView, QuickInboxCapture } from './components/InboxView'
 import { Sidebar } from './components/Sidebar'
 import { TrashView } from './components/TrashView'
 import { QuickOpen } from './components/QuickOpen'
-import { Button, IconButton } from './components/ui'
-import { formatNumber } from './lib/utils'
+import { ActionMenu, Button, IconButton } from './components/ui'
+import { countWords, formatNumber } from './lib/utils'
 import { ContextMenuProvider } from './components/ContextMenu'
 
 function Welcome({ onProject }: { onProject: (mode: 'new' | 'open') => void }) {
   const recentProjects = useAppStore((state) => state.recentProjects)
   const openProject = useAppStore((state) => state.openProject)
   const setError = useAppStore((state) => state.setError)
-  return <div className="welcome"><div className="welcome-card"><div className="welcome-title"><span className="brand-mark">N</span><div><h1>NovelForge</h1><p>本地优先的中文长篇小说创作工作台</p></div></div><p className="welcome-copy">把正文、人物、地点和世界观放在一个安静的工作台里。正文始终是普通 Markdown 文件，SQLite 只负责资料与搜索索引；没有账号、没有 API Key，也可以完整写作。</p><div className="welcome-actions"><Button onClick={() => onProject('new')}><Plus size={15} />新建小说</Button><Button variant="outline" onClick={() => onProject('open')}><FolderOpen size={15} />打开项目</Button></div>{recentProjects.length ? <><p className="eyebrow">RECENT PROJECTS</p><div className="recent-projects">{recentProjects.map((project) => <button className="recent-project" key={project.path} onClick={() => void openProject(project.path).catch(setError)}><BookOpen size={16} /><span><strong>{project.title}</strong><small>{project.path}</small></span></button>)}</div></> : <div className="panel empty-state"><BookOpen size={25} /><div><strong>从一部小说开始</strong><span>选择一个空文件夹，NovelForge 会创建 project.json、Markdown 正文和 .novelforge 数据目录。</span></div></div>}<ProjectBackup restoreOnly /></div></div>
+  return <div className="welcome"><div className="welcome-card"><div className="welcome-title"><span className="brand-mark">N</span><div><h1>NovelForge</h1><p>本地优先的中文长篇小说创作工作台</p></div></div><p className="welcome-copy">专注写下你的故事，把正文、人物和世界观放在同一个工作台。无需账号，也能完整写作。</p><div className="welcome-actions"><Button onClick={() => onProject('new')}><Plus size={15} />新建小说</Button><Button variant="outline" onClick={() => onProject('open')}><FolderOpen size={15} />打开项目</Button></div>{recentProjects.length ? <><p className="eyebrow">最近打开</p><div className="recent-projects">{recentProjects.map((project) => <button className="recent-project" key={project.path} onClick={() => void openProject(project.path).catch(setError)}><BookOpen size={16} /><span><strong>{project.title}</strong><small>{project.path}</small></span></button>)}</div></> : <div className="panel empty-state"><BookOpen size={25} /><div><strong>从一部小说开始</strong><span>新建一部小说，或打开已有项目继续写作。</span></div></div>}<Disclosure title="了解数据存储" className="welcome-storage"><p>正文保存在普通 Markdown 文件中，项目资料保存在本地。新建项目会创建 project.json 和 .novelforge 数据目录；备份时请保留整个项目文件夹。</p></Disclosure><ProjectBackup restoreOnly /><Disclosure title="恢复与救援" className="welcome-recovery"><DraftSnapshotRecovery /><ProjectRescue /></Disclosure></div></div>
 }
 
 function ResizeHandle({ side, width, onResize }: { side: 'sidebar' | 'inspector'; width: number; onResize: (width: number) => void }) {
@@ -81,20 +85,18 @@ function ResizeHandle({ side, width, onResize }: { side: 'sidebar' | 'inspector'
   return <div className={'panel-resize-handle ' + side} role="separator" aria-orientation="vertical" aria-label={side === 'sidebar' ? '调整左栏宽度' : '调整辅助栏宽度'} tabIndex={0} onPointerDown={startResize} onKeyDown={nudge} />
 }
 
-function TopBar({ onProject, onExport, onCloseProject }: { onProject: (mode: 'new' | 'open') => void; onExport: () => void; onCloseProject: () => void }) {
+function TopBar({ onProject, onExport, onCloseProject, inspectorVisible, onInspectorToggle }: { onProject: (mode: 'new' | 'open') => void; onExport: () => void; onCloseProject: () => void; inspectorVisible: boolean; onInspectorToggle: () => void }) {
   const data = useAppStore((state) => state.data)
   const projectPath = useAppStore((state) => state.projectPath)
   const saveState = useAppStore((state) => state.saveState)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const activeView = useAppStore(state => state.activeView)
-  const inspectorOpen = useAppStore((state) => state.inspectorOpen)
   const toggleSidebar = useAppStore((state) => state.toggleSidebar)
-  const toggleInspector = useAppStore((state) => state.toggleInspector)
   const setView = useAppStore((state) => state.setView)
   const theme = useAppStore((state) => state.theme)
   const setTheme = useAppStore((state) => state.setTheme)
 
-  return <header className="topbar"><IconButton icon={Menu} label={sidebarOpen ? '收起左栏' : '展开左栏'} onClick={toggleSidebar} /><div className="brand"><span className="brand-mark">N</span><span className="brand-name">NovelForge</span><span className="brand-subtitle">写作工作台</span></div><div className="topbar-title"><strong>{data?.project.title ?? '未打开项目'}</strong><span>{projectPath ?? '本地优先 · Markdown first'}</span></div><div className="topbar-actions"><Button variant="ghost" onClick={() => onProject('new')}><Plus size={14} />新建</Button><Button variant="ghost" onClick={() => onProject('open')}><FolderOpen size={14} />打开</Button>{data ? <><span className="topbar-divider" /><Button variant="ghost" onClick={() => void saveWorkspace('手动保存')}><Check size={14} color={saveState === 'saved' ? 'var(--green)' : undefined} />保存</Button><Button variant="ghost" onClick={() => setView('search')}><Search size={14} />搜索</Button><Button variant="ghost" onClick={onExport}><FileDown size={14} />导出</Button><Button variant="ghost" onClick={onCloseProject}><X size={14} />关闭</Button><span className="topbar-divider" /><IconButton icon={theme === 'dark' ? Sun : Moon} label="切换主题" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} /><IconButton icon={Settings} label="项目设置" onClick={() => setView('settings')} /><IconButton icon={PanelRight} disabled={activeView !== 'manuscript'} label={activeView !== 'manuscript' ? '章节辅助栏在正文页可用' : inspectorOpen ? '收起辅助栏' : '展开辅助栏'} onClick={toggleInspector} className={inspectorOpen ? 'active' : ''} /></> : null}</div></header>
+  return <header className="topbar"><IconButton icon={Menu} label={sidebarOpen ? '收起左栏' : '展开左栏'} onClick={toggleSidebar} /><div className="brand"><span className="brand-mark">N</span><span className="brand-name">NovelForge</span></div><div className="topbar-title"><strong title={data?.project.title}>{data?.project.title ?? '未打开项目'}</strong><span title={projectPath ?? undefined}>{projectPath ?? '本地写作工作台'}</span></div><div className="topbar-actions"><ActionMenu label="项目"><Button variant="ghost" onClick={() => onProject('new')}><Plus size={14} />新建小说</Button><Button variant="ghost" onClick={() => onProject('open')}><FolderOpen size={14} />打开项目</Button>{data ? <Button variant="ghost" onClick={onCloseProject}><X size={14} />关闭项目</Button> : null}</ActionMenu>{data ? <><span className="topbar-divider" /><Button variant="ghost" onClick={() => void saveWorkspace('手动保存')}><Check size={14} color={saveState === 'saved' ? 'var(--green)' : undefined} />保存</Button><Button variant="ghost" onClick={() => setView('search')}><Search size={14} />搜索</Button><Button variant="ghost" onClick={onExport}><FileDown size={14} />导出</Button><span className="topbar-divider" /><IconButton icon={theme === 'dark' ? Sun : Moon} label="切换主题" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} /><IconButton icon={Settings} label="项目设置" onClick={() => setView('settings')} /><IconButton icon={PanelRight} disabled={activeView !== 'manuscript'} label={activeView !== 'manuscript' ? '章节辅助栏在正文页可用' : inspectorVisible ? '收起辅助栏' : '展开辅助栏'} onClick={onInspectorToggle} className={inspectorVisible ? 'active' : ''} /></> : null}</div></header>
 }
 
 function StatusBar({ onBackupSettings }: { onBackupSettings: () => void }) {
@@ -104,7 +106,7 @@ function StatusBar({ onBackupSettings }: { onBackupSettings: () => void }) {
   const stats = useAppStore((state) => state.stats)
   const saveState = useAppStore((state) => state.saveState)
   const toggleFocusMode = useAppStore((state) => state.toggleFocusMode)
-  return <footer className="statusbar"><span>{document ? <><BookOpen size={12} />{document.node.title}</> : '未选择章节'}</span><span>{document ? formatNumber([...document.content].filter((character) => !/\s/u.test(character)).length) + ' 字' : '0 字'}</span><span>今日 +{formatNumber(stats.todayWords)}</span><span className="status-spacer" /><BackupStatusIndicator onSettings={onBackupSettings} /><span className={'save-indicator ' + saveState}>{pendingDrafts.length ? pendingDrafts.map(draft => draft.label).join('、') + ' · 未保存' : saveState === 'saving' ? '正文正在保存…' : saveState === 'error' ? '正文保存失败' : saveState === 'saved' ? '正文已保存' : document ? '有未保存修改' : '就绪'}</span><button className="status-focus" onClick={toggleFocusMode}>F11 专注模式</button></footer>
+  return <footer className="statusbar"><span>{document ? <><BookOpen size={12} />{document.node.title}</> : '未选择章节'}</span><span title="按非空白字符计数，含标点；不计空格与换行">{document ? formatNumber(countWords(document.content)) + ' 字' : '0 字'}</span><span>今日 +{formatNumber(stats.todayWords)}</span><span className="status-spacer" /><BackupStatusIndicator onSettings={onBackupSettings} /><span className={'save-indicator ' + saveState}>{pendingDrafts.length ? pendingDrafts.map(draft => draft.label).join('、') + ' · 未保存' : saveState === 'saving' ? '正文正在保存…' : saveState === 'error' ? '正文保存失败' : saveState === 'saved' ? '正文已保存' : document ? '有未保存修改' : '就绪'}</span><button className="status-focus" onClick={toggleFocusMode}>F11 专注模式</button></footer>
 }
 
 export default function App() {
@@ -137,6 +139,7 @@ export default function App() {
   const inspectorOpen = useAppStore((state) => state.inspectorOpen)
   const theme = useAppStore((state) => state.theme)
   const workspacePreferences = useAppStore((state) => state.workspacePreferences)
+  const inspectorRequested = useAppStore(state => state.inspectorRequested)
   const inspectorTab = useAppStore(state => state.inspectorTab)
   const setInspectorTab = useAppStore(state => state.setInspectorTab)
   const error = useAppStore((state) => state.error)
@@ -194,6 +197,16 @@ export default function App() {
     window.addEventListener('novelforge:open-consistency', openConsistency)
     return () => window.removeEventListener('novelforge:open-consistency', openConsistency)
   }, [])
+
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && (viewportWidth < 1180 || focusMode) && useAppStore.getState().inspectorTab === 'chapter' && !globalThis.document.querySelector('[role="dialog"]')) {
+        useAppStore.setState({ inspectorRequested: false })
+      }
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [viewportWidth, focusMode])
 
   function exportProject(format: ExportFormat, options: Omit<ExportInput, 'projectPath' | 'format'>) {
     return useAppStore.getState().exportProject(format, options)
@@ -270,10 +283,14 @@ export default function App() {
   }, [])
 
   if (!data) return <ContextMenuProvider fallbackItems={fallbackItems} pluginItems={pluginItems}><><Welcome onProject={setProjectDialog} /><CommandPalette onNewProject={() => setProjectDialog('new')} onCloseProject={() => void closeProject()} onQuickOpen={() => undefined} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} />{error && !error.startsWith('EXTERNAL_CONFLICT:') ? <div className="toast-error" role="alert"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</></ContextMenuProvider>
-  const inspectorVisible = inspectorOpen && activeView === 'manuscript'
+  const compactInspector = viewportWidth < 1180 || focusMode
+  const inspectorVisible = inspectorOpen && activeView === 'manuscript' && (!compactInspector || inspectorRequested)
+  const dismissInspector = () => useAppStore.setState({ inspectorRequested: false, ...(compactInspector ? {} : { inspectorOpen: false }) })
+  const toggleInspector = () => compactInspector ? useAppStore.setState({ inspectorOpen: true, inspectorRequested: !inspectorVisible }) : useAppStore.getState().toggleInspector()
+  const chapterDrawer = inspectorVisible && compactInspector && inspectorTab === 'chapter'
   const inlineAi = inspectorVisible && inspectorTab === 'ai'
   const aiDrawer = inlineAi && (focusMode || viewportWidth < 1180)
-  const columns = fitWorkspaceColumns(workspacePreferences, viewportWidth, sidebarOpen && !focusMode, inspectorVisible && !focusMode && !aiDrawer)
+  const columns = fitWorkspaceColumns(workspacePreferences, viewportWidth, sidebarOpen && !focusMode, inspectorVisible && !compactInspector)
   const inspectorTabs = <div className="inspector-tabs" role="tablist" aria-label="正文辅助面板"><button role="tab" aria-selected={inspectorTab === 'chapter'} onClick={() => setInspectorTab('chapter')}>章节信息</button><button role="tab" aria-selected={inspectorTab === 'ai'} onClick={() => useAiTask.getState().id ? setInspectorTab('ai') : useAppStore.getState().openEditorAi()}>AI 辅助</button></div>
   const layoutStyle = {
     '--sidebar-width': String(columns.sidebar) + 'px',
@@ -285,5 +302,5 @@ export default function App() {
     '--paragraph-spacing': String(workspacePreferences.paragraphSpacing) + 'px',
   } as CSSProperties
   const transferNode = transferDialog ? data.nodes.find((node) => node.id === transferDialog.nodeId) ?? null : null
-  return <ContextMenuProvider fallbackItems={fallbackItems} pluginItems={pluginItems}><div className={'app-shell' + (focusMode ? ' focus-mode' : '')}><OperationNotice /><QuickInboxCapture /><DocumentConflictDialog />{focusMode ? null : <TopBar onProject={setProjectDialog} onExport={() => setExportPreset({ scope: 'project' })} onCloseProject={() => void closeProject()} />}<BackupWorkspaceNotice key={annotationSession} hidden={focusMode || activeView === 'settings'} onSettings={openBackupSettings} /><div className={'main-layout' + (focusMode ? ' sidebar-closed inspector-closed' : '') + (sidebarOpen ? '' : ' sidebar-closed') + (inspectorVisible && !aiDrawer ? '' : ' inspector-closed')} style={layoutStyle}><div className="sidebar-region" inert={!sidebarOpen || focusMode}><Sidebar onAddNode={(kind, parentId) => setNodeDialog({ kind, parentId })} onMoveNode={(node) => node.kind !== 'volume' && setTransferDialog({ mode: 'move', nodeId: node.id })} onCopyNode={(node) => setTransferDialog({ mode: 'copy', nodeId: node.id })} onExportNode={openExportForNode} /><ResizeHandle side="sidebar" width={columns.sidebar} onResize={(width) => setWorkspacePreferences({ sidebarWidth: width })} /></div><main className="workspace" hidden={activeView === 'ai'}>{viewContent()}</main><div className="inspector-region" hidden={inlineAi} inert={!inspectorVisible || focusMode}>{inspectorTabs}<Inspector /><ResizeHandle side="inspector" width={columns.inspector} onResize={(width) => setWorkspacePreferences({ inspectorWidth: width })} /></div><div className={'ai-host ' + (activeView === 'ai' ? 'ai-host-full' : aiDrawer ? 'ai-host-drawer' : 'ai-host-inline')} hidden={activeView !== 'ai' && !inlineAi} inert={activeView !== 'ai' && !inlineAi}>{activeView !== 'ai' ? inspectorTabs : null}<AiAssistantView compact={activeView !== 'ai'} visible={activeView === 'ai' || inlineAi} onExpand={() => useAppStore.getState().setView('ai')} onDismiss={() => useAppStore.setState({ inspectorOpen: false })} />{inlineAi && !aiDrawer ? <ResizeHandle side="inspector" width={columns.inspector} onResize={(width) => setWorkspacePreferences({ inspectorWidth: width })} /> : null}</div></div>{focusMode ? null : <StatusBar onBackupSettings={openBackupSettings} />}<CommandPalette onNewProject={() => setProjectDialog('new')} onCloseProject={() => void closeProject()} onQuickOpen={openQuickOpen} /><QuickOpen /><ExportDialog open={Boolean(exportPreset)} preset={exportPreset ?? undefined} onClose={() => setExportPreset(null)} data={data} currentNodeId={document?.node.id} onExport={exportProject} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} /><NodeDialog kind={nodeDialog?.kind ?? null} parentId={nodeDialog?.parentId ?? null} onClose={() => setNodeDialog(null)} /><NodeTransferDialog mode={transferDialog?.mode ?? null} node={transferNode} data={data} onClose={() => setTransferDialog(null)} onSubmit={async (targetParentId, title) => { if (!transferDialog) return; if (transferDialog.mode === 'move') await useAppStore.getState().moveNode(transferDialog.nodeId, targetParentId); else await useAppStore.getState().copyNode(transferDialog.nodeId, targetParentId, title) }} />{error && !error.startsWith('EXTERNAL_CONFLICT:') ? <div className="toast-error" role="alert"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</div></ContextMenuProvider>
+  return <ContextMenuProvider fallbackItems={fallbackItems} pluginItems={pluginItems}><div className={'app-shell' + (focusMode ? ' focus-mode' : '')}><OperationNotice /><DraftSnapshotNotice /><QuickInboxCapture /><DocumentConflictDialog />{focusMode ? null : <TopBar inspectorVisible={inspectorVisible} onInspectorToggle={toggleInspector} onProject={setProjectDialog} onExport={() => setExportPreset({ scope: 'project' })} onCloseProject={() => void closeProject()} />}<BackupWorkspaceNotice key={annotationSession} hidden={focusMode || activeView === 'settings'} onSettings={openBackupSettings} /><div className={'main-layout' + (focusMode ? ' sidebar-closed inspector-closed' : '') + (sidebarOpen ? '' : ' sidebar-closed') + (inspectorVisible && !compactInspector ? '' : ' inspector-closed')} style={layoutStyle}><div className="sidebar-region" inert={!sidebarOpen || focusMode}><Sidebar onAddNode={(kind, parentId) => setNodeDialog({ kind, parentId })} onMoveNode={(node) => node.kind !== 'volume' && setTransferDialog({ mode: 'move', nodeId: node.id })} onCopyNode={(node) => setTransferDialog({ mode: 'copy', nodeId: node.id })} onExportNode={openExportForNode} /><ResizeHandle side="sidebar" width={columns.sidebar} onResize={(width) => setWorkspacePreferences({ sidebarWidth: width })} /></div><main className="workspace" hidden={activeView === 'ai'}><ErrorBoundary key={activeView} label="当前视图">{viewContent()}</ErrorBoundary></main><div className={"inspector-region" + (chapterDrawer ? " inspector-drawer" : "")} hidden={inlineAi || !inspectorVisible} inert={!inspectorVisible}>{chapterDrawer ? <div className="drawer-heading"><strong>章节辅助</strong><IconButton icon={X} label="关闭章节辅助" onClick={dismissInspector} /></div> : null}{inspectorTabs}<ErrorBoundary label="章节辅助栏"><Inspector /></ErrorBoundary><ResizeHandle side="inspector" width={columns.inspector} onResize={(width) => setWorkspacePreferences({ inspectorWidth: width })} /></div><div className={'ai-host ' + (activeView === 'ai' ? 'ai-host-full' : aiDrawer ? 'ai-host-drawer' : 'ai-host-inline')} hidden={activeView !== 'ai' && !inlineAi} inert={activeView !== 'ai' && !inlineAi}>{activeView !== 'ai' ? inspectorTabs : null}<ErrorBoundary label="AI 辅助"><AiAssistantView compact={activeView !== 'ai'} visible={activeView === 'ai' || inlineAi} onExpand={() => useAppStore.getState().setView('ai')} onDismiss={dismissInspector} /></ErrorBoundary>{inlineAi && !aiDrawer ? <ResizeHandle side="inspector" width={columns.inspector} onResize={(width) => setWorkspacePreferences({ inspectorWidth: width })} /> : null}</div></div>{focusMode ? null : <StatusBar onBackupSettings={openBackupSettings} />}<CommandPalette onNewProject={() => setProjectDialog('new')} onCloseProject={() => void closeProject()} onQuickOpen={openQuickOpen} /><QuickOpen /><ExportDialog open={Boolean(exportPreset)} preset={exportPreset ?? undefined} onClose={() => setExportPreset(null)} data={data} currentNodeId={document?.node.id} onExport={exportProject} /><ProjectDialog mode={projectDialog} onClose={() => setProjectDialog(null)} /><NodeDialog kind={nodeDialog?.kind ?? null} parentId={nodeDialog?.parentId ?? null} onClose={() => setNodeDialog(null)} /><NodeTransferDialog mode={transferDialog?.mode ?? null} node={transferNode} data={data} onClose={() => setTransferDialog(null)} onSubmit={async (targetParentId, title) => { if (!transferDialog) return; if (transferDialog.mode === 'move') await useAppStore.getState().moveNode(transferDialog.nodeId, targetParentId); else await useAppStore.getState().copyNode(transferDialog.nodeId, targetParentId, title) }} />{error && !error.startsWith('EXTERNAL_CONFLICT:') ? <div className="toast-error" role="alert"><Undo2 size={15} />{error}<button onClick={clearError}>×</button></div> : null}</div></ContextMenuProvider>
 }

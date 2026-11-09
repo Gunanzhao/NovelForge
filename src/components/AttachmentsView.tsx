@@ -53,7 +53,7 @@ export function AttachmentsView() {
   const [baseline, setBaseline] = useState(() => JSON.stringify({ description: '', chapterId: '' }))
   const dirty = JSON.stringify({ description, chapterId }) !== baseline
   const draftId = 'attachment:' + projectPath
-  useUnsavedDraft(draftId, '附件说明', JSON.stringify({ description, chapterId }) !== baseline, saveDescription, () => { const saved = JSON.parse(baseline); setDescription(saved.description); setChapterId(saved.chapterId) })
+  useUnsavedDraft(draftId, '附件说明', JSON.stringify({ description, chapterId }) !== baseline, saveDescription, () => { const saved = JSON.parse(baseline); setDescription(saved.description); setChapterId(saved.chapterId) }, { targetId: 'attachment:' + (selectedId ?? 'new'), payload: { description, chapterId } })
   const [busy, setBusy] = useState(false)
 
   const attachments = useMemo(() => (data?.entities ?? []).filter((entity) => entity.kind === 'attachment').sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)), [data?.entities])

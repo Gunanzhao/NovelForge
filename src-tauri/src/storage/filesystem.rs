@@ -160,6 +160,13 @@ pub fn existing_project_root(input: &str) -> Result<PathBuf, String> {
         }
         return Err("这里没有找到 project.json，不是有效的 NovelForge 项目".to_string());
     }
+    // Confirmed corruption is handled by the explicit open recovery path; all
+    // other preflight failures (including future formats) must precede writes.
+    if let Err(error) = errors::check_compatibility(&root) {
+        if !error.corrupt() {
+            return Err(error.to_string());
+        }
+    }
     Ok(root)
 }
 
@@ -290,12 +297,12 @@ fn replace_file(source: &Path, target: &Path) -> Result<(), String> {
 }
 
 pub fn remove_file_if_exists(path: &Path) -> Result<(), String> {
-    if path.exists() {
-        fs::remove_file(path).map_err(|error| format!("删除临时文件失败：{}", error))?;
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("删除临时文件失败：{error}")),
     }
-    Ok(())
 }
-
 pub fn move_to_trash(root: &Path, original: &Path, ref_id: &str) -> Result<String, String> {
     ensure_within_root(root, original)?;
     if !original.exists() {
@@ -381,9 +388,17 @@ mod atomic_tests {
         fs::create_dir(&root).unwrap();
         let copy = root.join(".project.json.backup-interrupted");
         fs::write(&copy, b"preserved").unwrap();
-        let error = existing_project_root(root.to_str().unwrap()).unwrap_err();
-        assert!(error.contains("旧版写入中断"));
-        assert!(error.contains(copy.to_str().unwrap()));
+        // The diagnostic reports canonical paths. Windows runner TEMP may use
+        // a DOS 8.3 alias, and callers may also supply parent path components.
+        let canonical_copy = fs::canonicalize(&copy).unwrap();
+        for input in [
+            root.clone(),
+            root.join("..").join(root.file_name().unwrap()),
+        ] {
+            let error = existing_project_root(input.to_str().unwrap()).unwrap_err();
+            assert!(error.contains("旧版写入中断"));
+            assert!(error.contains(canonical_copy.to_str().unwrap()), "{error}");
+        }
         assert_eq!(fs::read(copy).unwrap(), b"preserved");
         fs::remove_dir_all(root).unwrap();
     }

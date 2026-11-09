@@ -8,6 +8,7 @@ import { Button, Modal, Panel } from './ui'
 import { ChecklistDashboard } from './ChapterWorkflow'
 
 export function Dashboard() {
+  const dailyTarget = useAppStore(state => state.workspacePreferences.dailyTargetWords)
   const data = useAppStore((state) => state.data)
   const stats = useAppStore((state) => state.stats)
   const projectPath = useAppStore((state) => state.projectPath)
@@ -20,6 +21,7 @@ export function Dashboard() {
 
   if (!data || !projectPath) return null
   const chapters = data.nodes.filter((node) => node.kind === 'chapter').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5)
+  const dailyProgress = dailyTarget > 0 ? Math.min(100, Math.round(stats.todayWords / dailyTarget * 100)) : 0
   const progress = stats.targetWords > 0 ? Math.min(100, Math.round((stats.totalWords / stats.targetWords) * 100)) : 0
   const recovery = data.recovery.find((item) => item.id !== ignoredRecoveryId)
   const currentProjectPath = projectPath
@@ -78,7 +80,7 @@ export function Dashboard() {
     <div className="view-header"><div><p className="eyebrow">PROJECT DASHBOARD</p><h1>{data.project.title}</h1><p>{data.project.description || '把设定、结构和每一次落笔，收拢在同一个安静的工作台。'}</p></div><div className="view-actions"><Button disabled={!chapters.length} onClick={() => void selectNode(chapters[0]?.id ?? '')}><BookOpen size={15} />继续写作</Button></div></div>
     <div className="dashboard-grid">
       <Panel className="metric-card"><span className="metric-label">总字数</span><div className="metric-value">{formatNumber(stats.totalWords)}</div><span className="metric-sub">跨 {formatNumber(stats.chapterCount)} 个章节</span></Panel>
-      <Panel className="metric-card"><span className="metric-label">今日新增</span><div className="metric-value">{formatNumber(stats.todayWords)}</div><span className="metric-sub">昨日 {formatNumber(stats.yesterdayWords)}</span></Panel>
+      <Panel className="metric-card"><span className="metric-label">今日新增</span><div className="metric-value">{formatNumber(stats.todayWords)}</div><span className="metric-sub">{dailyTarget > 0 ? '今日目标 ' + formatNumber(dailyTarget) + ' 字 · ' + dailyProgress + '%' : '未设置每日目标'}</span></Panel>
       <Panel className="metric-card"><span className="metric-label">连续写作</span><div className="metric-value">{formatNumber(stats.writingStreak)}<small style={{ fontSize: 12 }}> 天</small></div><span className="metric-sub"><Flame size={11} style={{ verticalAlign: 'middle' }} /> 保持节奏</span></Panel>
       <Panel className="metric-card"><span className="metric-label">项目目标</span><div className="metric-value">{progress}<small style={{ fontSize: 12 }}>%</small></div><span className="metric-sub">{formatNumber(stats.targetWords)} 字目标</span></Panel>
     </div>
@@ -89,7 +91,7 @@ export function Dashboard() {
 
       </div>
     </div>
-    <ChecklistDashboard /><div className="dashboard-columns" style={{ paddingTop: 0 }}>
+    <Disclosure title="章节检查清单" storageKey="dashboard:checklist" className="dashboard-checklist"><ChecklistDashboard /></Disclosure><div className="dashboard-columns" style={{ paddingTop: 0 }}>
       <Panel className="dashboard-panel"><div className="panel-title"><h3>下一步</h3><Sparkles size={15} color="var(--accent)" /></div><div className="inspector-actions"><Button variant="outline" onClick={() => useAppStore.getState().setView('character')}>建立人物</Button><Button variant="outline" onClick={() => useAppStore.getState().setView('world')}>补充世界观</Button><Button variant="outline" onClick={() => useAppStore.getState().setView('search')}>搜索全文</Button></div></Panel>
       <Disclosure title="保存与备份" className="dashboard-note"><p>正文保存在项目内的 Markdown 文件中，并有自动保存、恢复文件与历史快照。删除内容先移入回收站；备份时请保留完整项目目录。</p></Disclosure>
     </div>

@@ -50,7 +50,7 @@ pub fn rollback(root: &Path, journal: &Journal) -> Result<(), String> {
     }
     Ok(())
 }
-pub fn recover(root: &Path, connection: &mut Connection) -> Result<(), String> {
+fn recover_inner(root: &Path, connection: &mut Connection) -> Result<(), errors::StorageError> {
     let directory = safe_relative(root, ".novelforge/batch-journal")?;
     if !directory.exists() {
         return Ok(());
@@ -59,17 +59,18 @@ pub fn recover(root: &Path, connection: &mut Connection) -> Result<(), String> {
     // it distinguishes a crashed transaction from an operation still in progress.
     let tx = connection
         .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-        .map_err(|e| e.to_string())?;
-    for entry in fs::read_dir(&directory).map_err(|e| e.to_string())? {
-        let path = entry.map_err(|e| e.to_string())?.path();
+        .map_err(errors::StorageError::from)?;
+    for entry in fs::read_dir(&directory).map_err(errors::StorageError::from)? {
+        let path = entry.map_err(errors::StorageError::from)?.path();
         ensure_within_root(root, &path)?;
         if path.extension().and_then(|v| v.to_str()) != Some("json") {
             continue;
         }
-        let journal: Journal = serde_json::from_slice(&fs::read(&path).map_err(|e| e.to_string())?)
-            .map_err(|e| format!("批量日志损坏：{e}"))?;
+        let journal: Journal =
+            serde_json::from_slice(&fs::read(&path).map_err(errors::StorageError::from)?)
+                .map_err(|_| errors::StorageError::Journal("批量日志损坏，原文件保留".into()))?;
         if path != journal_path(root, &journal.id)? {
-            return Err("批量日志标识不匹配".into());
+            return Err(errors::StorageError::Journal("批量日志标识不匹配".into()));
         }
         let committed: bool = tx
             .query_row(
@@ -77,11 +78,38 @@ pub fn recover(root: &Path, connection: &mut Connection) -> Result<(), String> {
                 [&journal.id],
                 |row| row.get(0),
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(errors::StorageError::from)?;
+        if committed {
+            for change in &journal.files {
+                let file = safe_relative(root, &change.path)?;
+                let current = fs::read_to_string(file).map_err(errors::StorageError::from)?;
+                if current != change.after {
+                    return Err(errors::StorageError::Journal(
+                        "已提交日志的文件被外部修改，保留证据等待处理".into(),
+                    ));
+                }
+            }
+        }
         if !committed {
-            rollback(root, &journal)?;
+            rollback(root, &journal).map_err(errors::StorageError::Journal)?;
         }
         remove_file_if_exists(&path)?;
     }
-    tx.commit().map_err(|e| e.to_string())
+    tx.commit().map_err(errors::StorageError::from)
+}
+
+pub fn recover(root: &Path, connection: &mut Connection) -> Result<(), errors::StorageError> {
+    let result = recover_inner(root, connection);
+    if matches!(
+        &result,
+        Err(errors::StorageError::Journal(_)) | Err(errors::StorageError::Policy(_))
+    ) {
+        // This is a separate durable unresolved-state marker, not a renamed journal.
+        let path = safe_relative(root, ".novelforge/recovery-state.json")?;
+        atomic_write(
+            &path,
+            b"{\"version\":1,\"state\":\"unresolved\",\"code\":\"BATCH_RECOVERY\"}",
+        )?;
+    }
+    result
 }

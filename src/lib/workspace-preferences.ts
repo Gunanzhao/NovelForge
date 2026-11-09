@@ -21,7 +21,7 @@ export const DEFAULT_WORKSPACE_PREFERENCES: WorkspacePreferences = {
   sidebarOpen: true,
   inspectorOpen: true,
   editorFontFamily: 'serif',
-  editorFontSize: 14,
+  editorFontSize: 16,
   editorLineHeight: 1.95,
   contentWidth: 920,
   paragraphSpacing: 15,

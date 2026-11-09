@@ -323,7 +323,7 @@ fn unreadable_manuscript_and_history_abort_recovery_without_rewriting_sources() 
 }
 
 #[test]
-fn failure_after_quarantine_restores_original_database_and_all_sidecars() {
+fn ambiguous_hot_sidecars_are_refused_before_quarantine_and_preserved() {
     let fixture = Fixture::new();
     fixture.project();
     let bad_mirror = fixture.0.join("characters/bad.md");
@@ -340,7 +340,10 @@ fn failure_after_quarantine_restores_original_database_and_all_sidecars() {
         originals.push((path, bytes));
     }
     let error = recovered_project_connection(&fs::canonicalize(&fixture.0).unwrap()).unwrap_err();
-    assert!(error.contains("原数据库已恢复"), "{error}");
+    assert!(
+        error.starts_with("STORAGE_READ_ONLY:") || error.contains("原数据库已恢复"),
+        "{error}"
+    );
     for (path, bytes) in originals {
         assert_eq!(fs::read(path).unwrap(), bytes);
     }

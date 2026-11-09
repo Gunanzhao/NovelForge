@@ -32,6 +32,8 @@ jobs:
         run: pnpm audit --audit-level high
       - name: Typecheck
         run: pnpm typecheck
+      - name: Typecheck configuration
+        run: pnpm typecheck:config
       - name: Lint
         run: pnpm lint
       - name: Test
@@ -95,3 +97,67 @@ jobs:
         run: cargo audit --file Cargo.lock
       - name: Regression for the GTK GLib security backport (optimized)
         run: cargo test --manifest-path ../scripts/glib-regression/Cargo.toml --release --locked
+
+  windows-reliability:
+    name: Windows reliability
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: windows-reliability-${{ hashFiles('src-tauri/Cargo.lock') }}
+      - name: Ensure genuine WebView2 Runtime
+        shell: pwsh
+        run: ./scripts/ensure-webview2-runtime.ps1
+      - run: pnpm install --frozen-lockfile
+      - name: Complete Windows Rust suite
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+      - name: Build production desktop
+        run: pnpm tauri build --no-bundle
+      - name: Cache successful Windows build before desktop checks
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: windows-reliability-${{ hashFiles('src-tauri/Cargo.lock') }}
+      - name: Native startup failure notice without a terminal
+        shell: pwsh
+        run: ./scripts/startup-diagnostics-test.ps1 -Executable ./src-tauri/target/release/novelforge.exe
+      - name: Real WebView2 IPC and data lifecycle smoke
+        env:
+          NOVELFORGE_SMOKE_STARTUP_MS: 120000
+          NOVELFORGE_SMOKE_DIAGNOSTICS: tmp/windows-ipc-diagnostics
+        run: node scripts/reliability-smoke-cdp.mjs
+      - name: Production UI layouts and draft retention
+        run: node scripts/frontend-polish-cdp.mjs
+      - name: Upload synthetic UI acceptance screenshots
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: frontend-ui-${{ github.sha }}
+          path: tmp/frontend-polish-ui/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Upload sanitized Windows IPC diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-ipc-diagnostics-${{ github.sha }}
+          path: tmp/windows-ipc-diagnostics/*.json
+          if-no-files-found: warn
+          retention-days: 7
