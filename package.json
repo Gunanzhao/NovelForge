@@ -1,6 +1,6 @@
 {
   "name": "novelforge",
-  "version": "1.2.0-rc.3",
+  "version": "1.2.0-rc.4",
   "description": "NovelForge - 本地优先的中文长篇小说创作工作台",
   "private": true,
   "type": "module",
@@ -52,7 +52,7 @@
     "tailwindcss": "^4.0.0",
     "typescript": "~5.7.2",
     "typescript-eslint": "^8.18.0",
-    "vite": "^6.0.5",
+    "vite": "^6.4.4",
     "vitest": "^4.1.11"
   }
 }

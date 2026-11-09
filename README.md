@@ -2,18 +2,27 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.2.0-rc.3（预发布）**。
+当前版本：**1.2.0-rc.4（预发布）**。
 
-[![Release branch CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=codex%2Freliability-review-20260930)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Acodex%2Freliability-review-20260930)
+[![Release branch CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=codex%2Frelease-1.2.0-rc.4)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Acodex%2Frelease-1.2.0-rc.4)
 
 ## 下载
 
-- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.3/NovelForge_1.2.0-rc.3_x64-setup.exe)
-- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.3/novelforge.exe)
-- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.3/SHA256SUMS.txt)
+- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.4/NovelForge_1.2.0-rc.4_x64-setup.exe)
+- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.4/novelforge.exe)
+- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.4/SHA256SUMS.txt)
 - [版本说明与历史 Release](https://github.com/Gunanzhao/NovelForge/releases)
 
 已有安装版用户运行新安装包升级；直接运行独立 EXE 不会更新旧快捷方式。桌面版需要 Windows WebView2。
+
+## 1.2.0-rc.4 相比 1.2.0-rc.3
+
+- **整卷修订**：可选择章和小节，保存改稿并逐项对比确认，重新打开项目后继续审阅。正文变化会阻止旧改稿覆盖；已确认后又修改的正文可与确认版对照。
+- **全文搜索**：先按范围、卷、类型、标签和大小写筛选，再分页；打开正文命中可定位，返回时保留筛选、已加载结果和滚动位置。
+- **交稿预检**：标出未定稿、空正文、疑似示例和无法读取的条目；支持仅导出定稿章及单独控制小节。导出成功后可打开文件或所在文件夹。
+- **备份与导航**：独立备份失败在工作区可见，可直接重试或打开设置；恢复入口筛选 `.nfbackup` 文件。快速打开和命令面板会跟随方向键滚动。
+
+[rc.4 发布说明与下载](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.2.0-rc.4)
 
 ## 1.2.0-rc.3 相比 1.2.0-rc.2
 

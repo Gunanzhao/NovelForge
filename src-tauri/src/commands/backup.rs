@@ -154,8 +154,10 @@ fn manifest<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<Manifest, Str
     let mut total = 0u64;
     for i in 0..archive.len() {
         let file = archive.by_index(i).map_err(|e| e.to_string())?;
-        let name = file.name();
-        if !safe_name(name)
+        let name = file
+            .name()
+            .map_err(|error| format!("备份文件名无效：{error}"))?;
+        if !safe_name(&name)
             || !seen.insert(name.to_lowercase())
             || file.is_dir()
             || file
@@ -167,7 +169,7 @@ fn manifest<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<Manifest, Str
         if name == MANIFEST {
             continue;
         }
-        let entry = value.files.get(name).ok_or("备份包含未登记文件")?;
+        let entry = value.files.get(name.as_ref()).ok_or("备份包含未登记文件")?;
         if entry.size != file.size() {
             return Err(format!("备份大小不匹配：{name}"));
         }

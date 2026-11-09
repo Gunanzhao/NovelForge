@@ -294,7 +294,11 @@ fn all_text_exports_preserve_internal_headings_and_fenced_hash_lines() {
             let mut text = String::new();
             for index in 0..zip.len() {
                 let mut entry = zip.by_index(index).unwrap();
-                if entry.name().ends_with(".xml") || entry.name().ends_with(".xhtml") {
+                let is_text = {
+                    let name = entry.name().expect("valid export entry name");
+                    name.ends_with(".xml") || name.ends_with(".xhtml")
+                };
+                if is_text {
                     let mut body = String::new();
                     entry.read_to_string(&mut body).unwrap();
                     // Word may split a visible word across runs; compare rendered text.
