@@ -5,6 +5,7 @@ import { linkedAttachments } from '../lib/attachment-data'
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { ChevronDown, ChevronUp, Clipboard, GitCompare, History, Lightbulb, RotateCcw } from 'lucide-react'
 import { projectApi } from '../lib/api'
+import { openScopedSearch } from '../lib/search-workspace'
 import { cleanWritingWhitespace, convertFullwidth, convertHalfwidth, convertPunctuation, indentParagraphs, wikiTargets, writingHints } from '../lib/markdown'
 import { diffLines } from '../lib/text-diff'
 import { NODE_STATUS_LABELS } from '../lib/types'
@@ -86,8 +87,7 @@ function InspectorContent() {
       selectEntity(matches[0].kind, matches[0].id)
       return
     }
-    setView('search')
-    window.setTimeout(() => window.dispatchEvent(new CustomEvent('novelforge:search-query', { detail: target })), 0)
+    openScopedSearch('project', target)
   }
 
   function punctuation(direction: 'full' | 'half') {

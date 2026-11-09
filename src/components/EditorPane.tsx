@@ -1,6 +1,7 @@
 import { normalizeLineBreaks, normalizedRangeFromSource, editorChangesFromSource } from '../lib/newline-offsets'
 import { annotationExtension } from '../lib/annotation-extension'
 import { useTextNavigation } from '../lib/text-navigation'
+import { openScopedSearch, useSearchWorkspace } from '../lib/search-workspace'
 import { chapterAnnotations } from '../lib/annotations'
 import { protectBeforeChange } from '../lib/history'
 import { autoNameExtension } from '../lib/auto-name-extension'
@@ -95,6 +96,7 @@ export function EditorPane() {
   const toggleFocusMode = useAppStore((state) => state.toggleFocusMode)
   const selectEntity = useAppStore((state) => state.selectEntity)
   const setView = useAppStore((state) => state.setView)
+  const searchOrigin = useSearchWorkspace(({ value }) => value && isCurrentProjectSession(value.session) ? value.openedNodeId : undefined)
   const setEditorSelection = useAppStore((state) => state.setEditorSelection)
   const setError = useAppStore((state) => state.setError)
   const openAiAssistant = useAppStore((state) => state.openEditorAi)
@@ -102,11 +104,16 @@ export function EditorPane() {
   useEffect(() => { setNameCard(null) }, [projectPath, document?.node.id, data?.entities, autoNames])
   const { openContextMenu } = useContextMenu()
   const editorViewRef = useRef<EditorView | null>(null)
+  const restoreScrollFrame = useRef<number | null>(null)
   const textJump=useTextNavigation(state=>state.request)
   function applyTextJump(view:EditorView){
     const request=useTextNavigation.getState().request
     if(!request||!isCurrentProjectSession(request.session)||useAppStore.getState().document?.node.id!==request.nodeId||useAppStore.getState().document?.content!==request.content||view.state.doc.toString()!==normalizeLineBreaks(request.content))return
     const range=normalizedRangeFromSource(request.content,request.from,request.to)
+    if (restoreScrollFrame.current !== null) {
+      window.cancelAnimationFrame(restoreScrollFrame.current)
+      restoreScrollFrame.current = null
+    }
     view.dispatch({selection:{anchor:range.from,head:range.to},effects:EditorView.scrollIntoView(range.from,{y:'center'})});view.focus();useTextNavigation.setState({request:null})
   }
   useEffect(()=>{if(textJump&&editorViewRef.current)applyTextJump(editorViewRef.current)},[textJump,document?.node.id,editorMode])
@@ -140,7 +147,12 @@ export function EditorPane() {
       rememberEditor(path, nodeId)
       const position = clampEditorPosition(readEditorSession(path).positions[nodeId], view.state.doc.length)
       view.dispatch({ selection: { anchor: position.anchor, head: position.head } })
-      const frame = window.requestAnimationFrame(() => { view.scrollDOM.scrollTop = position.scrollTop; view.scrollDOM.scrollLeft = position.scrollLeft })
+      const frame = window.requestAnimationFrame(() => {
+        restoreScrollFrame.current = null
+        view.scrollDOM.scrollTop = position.scrollTop
+        view.scrollDOM.scrollLeft = position.scrollLeft
+      })
+      restoreScrollFrame.current = frame
       let timer: number | undefined
       const persist = () => {
         if (!view.dom.isConnected) return
@@ -153,7 +165,7 @@ export function EditorPane() {
       view.scrollDOM.addEventListener('scroll', onScroll)
       view.dom.addEventListener('keyup', schedule)
       view.dom.addEventListener('mouseup', schedule)
-      positionCleanup.current = () => { window.cancelAnimationFrame(frame); window.clearTimeout(timer); persist(); view.scrollDOM.removeEventListener('scroll', onScroll); view.dom.removeEventListener('keyup', schedule); view.dom.removeEventListener('mouseup', schedule) }
+      positionCleanup.current = () => { window.cancelAnimationFrame(frame); if (restoreScrollFrame.current === frame) restoreScrollFrame.current = null; window.clearTimeout(timer); persist(); view.scrollDOM.removeEventListener('scroll', onScroll); view.dom.removeEventListener('keyup', schedule); view.dom.removeEventListener('mouseup', schedule) }
     }
     applyTextJump(view)
     reportEditorSelection({ state: view.state } as ViewUpdate)
@@ -175,9 +187,8 @@ export function EditorPane() {
 
   const openWikiSearch = useCallback((target: string) => {
     setWikiResolution(null)
-    setView('search')
-    window.setTimeout(() => window.dispatchEvent(new CustomEvent('novelforge:search-query', { detail: target })), 0)
-  }, [setView])
+    openScopedSearch('project', target)
+  }, [])
 
   const reportEditorSelection = useCallback((update: ViewUpdate) => {
     const nodeId = document?.node.id
@@ -269,13 +280,7 @@ export function EditorPane() {
       view.dispatch({ changes: { from: selection.from, to: selection.to, insert: result.text }, selection: { anchor: selection.from + result.text.length }, userEvent: 'input.paste' })
       view.focus()
     }
-    const search = (query: string, scope: 'current' | 'project') => {
-      setView('search')
-      window.setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('novelforge:search-scope', { detail: scope }))
-        window.dispatchEvent(new CustomEvent('novelforge:search-query', { detail: query }))
-      }, 0)
-    }
+    const search = (query: string, scope: 'current' | 'project') => openScopedSearch(scope, query)
     const formatCommands: Array<[MarkdownCommand, string]> = [
       ['bold', '粗体'], ['italic', '斜体'], ['strikethrough', '删除线'], ['code', '行内代码'],
       ['heading', '标题'], ['quote', '引用'], ['unordered-list', '无序列表'], ['ordered-list', '有序列表'],
@@ -304,7 +309,7 @@ export function EditorPane() {
     ]
     const location = hasSelection ? 'editor.selection' : 'editor.cursor'
     openContextMenu(event, { title: document.node.title, location, payload: { location, projectPath: projectPath ?? undefined, nodeIds: [document.node.id], nodeKind: document.node.kind, selectionText: selectionText || undefined }, items, trigger: view.dom })
-  }, [applyCommand, document, openAiAssistant, openContextMenu, projectPath, setEditorSelection, setError, setView])
+  }, [applyCommand, document, openAiAssistant, openContextMenu, projectPath, setEditorSelection, setError])
 
   const handlePreviewContextMenu = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null
@@ -344,6 +349,7 @@ export function EditorPane() {
     <div className="editor-header">
       <div className="editor-title-row"><div><p className="eyebrow">MANUSCRIPT / {document.node.kind.toUpperCase()}</p><h1>{document.node.title}</h1></div><span>{document.node.filePath}</span><IconButton icon={Maximize2} label="专注模式（F11）" onClick={toggleFocusMode} /></div>
       <div className="editor-toolbar">
+        {searchOrigin === document.node.id && <Button variant="outline" onClick={() => setView('search')}><Search size={13} />返回搜索</Button>}
         <IconButton icon={Bold} label="粗体（Ctrl+B）" onClick={() => applyCommand('bold')} /><IconButton icon={Italic} label="斜体（Ctrl+I）" onClick={() => applyCommand('italic')} /><IconButton icon={Strikethrough} label="删除线" onClick={() => applyCommand('strikethrough')} /><IconButton icon={Heading1} label="标题" onClick={() => applyCommand('heading')} /><IconButton icon={Quote} label="引用" onClick={() => applyCommand('quote')} /><IconButton icon={List} label="无序列表" onClick={() => applyCommand('unordered-list')} /><IconButton icon={ListOrdered} label="有序列表" onClick={() => applyCommand('ordered-list')} /><IconButton icon={ListChecks} label="任务列表" onClick={() => applyCommand('task-list')} /><IconButton icon={Link} label="链接" onClick={() => applyCommand('link')} /><IconButton icon={Image} label="图片" onClick={() => applyCommand('image')} /><IconButton icon={Code2} label="代码" onClick={() => applyCommand('code')} /><IconButton icon={Minus} label="分割线" onClick={() => applyCommand('horizontal-rule')} />
         <span className="toolbar-separator" /><Button variant="ghost" className="editor-ai-launcher" onMouseDown={event => event.preventDefault()} onClick={() => aiBusy ? useAppStore.getState().setInspectorTab('ai') : openAiAssistant()}><Sparkles size={14} />{aiBusy ? 'AI 生成中' : 'AI 辅助'}</Button><Button variant="ghost" onClick={() => void saveCurrentDocument('手动保存')}><Save size={14} />保存</Button>
         <span className="mode-switch"><button className={editorMode === 'markdown' ? 'active' : ''} onClick={() => setEditorMode('markdown')}><PenLine size={12} /> 编辑</button><button className={editorMode === 'split' ? 'active' : ''} onClick={() => setEditorMode('split')}><Columns3 size={12} /> 分栏</button><button className={editorMode === 'preview' ? 'active' : ''} onClick={() => setEditorMode('preview')}><Eye size={12} /> 预览</button></span>

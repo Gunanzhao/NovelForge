@@ -1,4 +1,5 @@
 import { saveWorkspace } from '../lib/draft-guard'
+import { openScopedSearch } from '../lib/search-workspace'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Command, Keyboard, RotateCcw, Search, X } from 'lucide-react'
 import {
@@ -41,11 +42,10 @@ export function CommandPalette({ onNewProject, onCloseProject, onQuickOpen }: Co
       setOpen(false); return
     }
     const view = commandView(id)
-    if (view) {
+    if (id === 'open-search' || id === 'open-full-search') {
+      openScopedSearch(id === 'open-search' ? 'current' : 'project')
+    } else if (view) {
       setView(view)
-      if (id === 'open-search' || id === 'open-full-search') {
-        window.dispatchEvent(new CustomEvent('novelforge:search-scope', { detail: id === 'open-search' ? 'current' : 'project' }))
-      }
       if (id === 'open-prompt-presets' || id === 'run-prompt-preset') {
         window.setTimeout(() => window.dispatchEvent(new Event(id === 'open-prompt-presets' ? 'novelforge:open-prompt-presets' : 'novelforge:run-prompt-preset')), 0)
       }
