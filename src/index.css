@@ -69,6 +69,15 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 
 .app-shell { display: grid; grid-template-rows: 54px minmax(0, 1fr) 28px; height: 100%; min-width: 0; background: var(--bg); }
 .app-shell.focus-mode { grid-template-rows: 1fr; min-width: 0; }
+.app-shell:has(> .backup-workspace-notice) { grid-template-rows: 54px auto minmax(0, 1fr) 28px; }
+.backup-workspace-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 5px 14px; border-bottom: 1px solid var(--line); background: var(--yellow-soft); color: var(--text); font-size: 12px; }
+.backup-workspace-notice > svg { flex: none; color: var(--yellow); }
+.backup-workspace-message { display: flex; flex: 1 1 300px; align-items: baseline; flex-wrap: wrap; gap: 3px 10px; min-width: 0; overflow-wrap: anywhere; }
+.backup-workspace-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-inline-start: auto; }
+.backup-workspace-actions .button { min-height: 28px; }
+.backup-status-indicator { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; padding: 2px 4px; border: 0; background: transparent; color: var(--muted); font-size: inherit; }
+.backup-status-indicator.has-error { color: var(--danger); }
+.backup-status-indicator:hover { text-decoration: underline; }
 .topbar { display: flex; min-width: 0; align-items: center; gap: 18px; padding: 0 17px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .brand { display: flex; align-items: center; gap: 10px; min-width: 185px; }
 .brand-mark { display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid var(--accent); border-radius: 7px; color: var(--accent); font-family: Georgia, serif; font-size: 17px; font-weight: 700; }

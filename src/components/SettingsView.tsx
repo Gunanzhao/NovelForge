@@ -5,7 +5,7 @@ import { VersionInfo } from './VersionInfo'
 import { ProjectBackup } from './ProjectBackup'
 import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
 import { markDraftSaved, setDraftSaving } from '../lib/draft-guard'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Check, Copy, FileText, HardDrive, Monitor, Moon, RefreshCw, Save, ShieldCheck, Sun } from 'lucide-react'
 import { DEFAULT_WORKSPACE_PREFERENCES } from '../lib/workspace-preferences'
 import { isDesktop, projectApi } from '../lib/api'
@@ -54,14 +54,16 @@ function ProjectLogs({ projectPath }: { projectPath: string }) {
   return <div className="settings-log-body"><div className="settings-section-heading"><p>查看项目打开、保存和导出等操作记录。</p><Button variant="outline" disabled={busy} onClick={() => setRevision(value => value + 1)}><RefreshCw size={13} className={busy ? 'spin' : ''} />刷新日志</Button></div>{error ? <p role="alert" className="settings-inline-error">{error}</p> : null}<pre className="settings-log" aria-busy={busy}>{busy ? '正在读取日志…' : logs || '暂无日志记录。'}</pre></div>
 }
 
-export function SettingsView() {
+type BackupTarget = { openBackup?: boolean; onBackupOpened?: () => void }
+
+export function SettingsView({ openBackup, onBackupOpened }: BackupTarget) {
   const projectPath = useAppStore(state => state.projectPath)
   const project = useAppStore(state => state.data?.project)
   if (!project || !projectPath) return null
-  return <ProjectSettings key={projectPath} projectPath={projectPath} initialProject={project} />
+  return <ProjectSettings key={projectPath} projectPath={projectPath} initialProject={project} openBackup={openBackup} onBackupOpened={onBackupOpened} />
 }
 
-function ProjectSettings({ projectPath, initialProject }: { projectPath: string; initialProject: ProjectData['project'] }) {
+function ProjectSettings({ projectPath, initialProject, openBackup, onBackupOpened }: { projectPath: string; initialProject: ProjectData['project'] } & BackupTarget) {
   const preferenceError = useAppStore(state => state.preferenceError)
   const theme = useAppStore(state => state.theme)
   const setTheme = useAppStore(state => state.setTheme)
@@ -76,6 +78,14 @@ function ProjectSettings({ projectPath, initialProject }: { projectPath: string;
   const [copyStatus, setCopyStatus] = useState('')
   const [logsOpen, setLogsOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (!openBackup) return
+    if (section !== 'data') { setSection('data'); return }
+    const backup = scrollRef.current?.querySelector<HTMLElement>('#automatic-backup-settings')
+    backup?.focus({ preventScroll: true })
+    backup?.scrollIntoView?.({ block: 'start' })
+    onBackupOpened?.()
+  }, [onBackupOpened, openBackup, section])
   const dirty = JSON.stringify(draft) !== JSON.stringify(baseline)
   const draftId = 'settings:' + projectPath
   useUnsavedDraft(draftId, '作品信息', dirty, submit, () => { setDraft(baseline); setSaveError('') })

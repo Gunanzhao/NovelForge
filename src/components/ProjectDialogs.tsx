@@ -15,8 +15,11 @@ export function ProjectDialog({ mode, onClose }: { mode: 'new' | 'open' | null; 
   const [genre, setGenre] = useState('现代')
   const [targetWords, setTargetWords] = useState('300000')
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const inFlight = useRef(false)
 
   useEffect(() => {
+    setError('')
     if (mode === 'new') {
       setPath(isDesktop ? '' : 'browser-demo')
       setTitle('')
@@ -28,35 +31,47 @@ export function ProjectDialog({ mode, onClose }: { mode: 'new' | 'open' | null; 
   }, [mode])
 
   async function pickPath() {
-    const selected = await chooseDirectory()
-    if (selected) setPath(selected)
+    try {
+      const selected = await chooseDirectory(mode === 'new' ? '选择新项目的空文件夹' : '选择已有项目的文件夹')
+      if (selected) { setPath(selected); setError('') }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)) }
   }
 
   async function submit() {
-    if (!path.trim()) return
+    if (!mode || !path.trim() || inFlight.current) return
+    const generation = useAppStore.getState().projectSession
+    inFlight.current = true
+    setError('')
     setBusy(true)
     try {
       if (mode === 'new') {
         const input: ProjectInput = {
-          path, title, author, description, genre,
+          path: path.trim(), title, author, description, genre,
           targetWords: Number.parseInt(targetWords, 10) || 300000,
         }
         await createProject(input)
       } else {
-        await openProject(path)
+        await openProject(path.trim())
       }
-      onClose()
+      if (useAppStore.getState().projectSession !== generation) onClose()
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : String(reason)
+      setError(mode === 'open' && message.startsWith('这里没有找到 project.json')
+        ? '这个文件夹没有找到 project.json。请选择 NovelForge 项目所在的文件夹。' : message)
+      if (!message.startsWith('EXTERNAL_CONFLICT:') && useAppStore.getState().error === message) useAppStore.setState({ error: null })
     } finally {
+      inFlight.current = false
       setBusy(false)
     }
   }
 
-  return <Modal open={mode !== null} title={mode === 'new' ? '创建小说项目' : '打开小说项目'} onClose={onClose}
-    footer={<><Button variant="ghost" onClick={onClose}>取消</Button><Button onClick={() => void submit()} disabled={busy || !path.trim()}><Save size={15} />{busy ? '处理中…' : mode === 'new' ? '创建并开始写作' : '打开项目'}</Button></>}>
+  return <Modal open={mode !== null} title={mode === 'new' ? '创建小说项目' : '打开小说项目'} onClose={() => { if (!inFlight.current) onClose() }}
+    footer={<><Button variant="ghost" disabled={busy} onClick={onClose}>取消</Button><Button onClick={() => void submit()} disabled={busy || !path.trim()}><Save size={15} />{busy ? '处理中…' : mode === 'new' ? '创建并开始写作' : '打开项目'}</Button></>}>
     <div className="dialog-stack">
-      <Field label="项目文件夹" hint={isDesktop ? '正文和资料会保存在这个文件夹内。' : '浏览器开发模式使用 localStorage；桌面版可选择真实文件夹。'}>
-        <div className="input-with-action"><TextInput value={path} onChange={(event) => setPath(event.target.value)} placeholder={isDesktop ? '选择项目文件夹' : 'browser-demo'} /><Button variant="outline" onClick={() => void pickPath()}><FolderOpen size={15} />选择</Button></div>
+      <Field label="项目文件夹" hint={isDesktop ? mode === 'new' ? '请选择一个空文件夹保存正文和资料。' : '选择包含 project.json 的项目文件夹。备份文件请使用「从备份恢复」。' : '浏览器开发模式使用 localStorage；桌面版可选择真实文件夹。'}>
+        <div className="input-with-action"><TextInput value={path} disabled={busy} aria-invalid={mode === 'open' && Boolean(error)} onChange={(event) => { setPath(event.target.value); setError('') }} placeholder={isDesktop ? '选择项目文件夹' : 'browser-demo'} /><Button variant="outline" disabled={busy} onClick={() => void pickPath()}><FolderOpen size={15} />选择</Button></div>
       </Field>
+      {error && <p role="alert" className="settings-inline-error">{error}</p>}
       {mode === 'new' ? <><Field label="作品名"><TextInput autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：雾港来信" /></Field>
         <div className="field-grid"><Field label="作者"><TextInput value={author} onChange={(event) => setAuthor(event.target.value)} placeholder="署名" /></Field><Field label="类型"><TextInput value={genre} onChange={(event) => setGenre(event.target.value)} placeholder="现代 / 仙侠 / 科幻" /></Field></div>
         <Field label="目标字数"><TextInput type="number" min="0" value={targetWords} onChange={(event) => setTargetWords(event.target.value)} /></Field>

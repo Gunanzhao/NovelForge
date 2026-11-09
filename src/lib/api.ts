@@ -17,14 +17,14 @@ async function command<T>(name: string, args: Record<string, unknown>, fallback 
   throw new Error('当前不是 Tauri 桌面运行环境。')
 }
 
-export function chooseDirectory() {
+export function chooseDirectory(title = '选择项目文件夹') {
   if (!isDesktop) return Promise.resolve<string | null>(null)
-  return open({ directory: true, multiple: false, title: '选择项目文件夹' }) as Promise<string | null>
+  return open({ directory: true, multiple: false, title }) as Promise<string | null>
 }
 
-export function chooseFile() {
+export function chooseFile({ title = '选择要导入的附件', filters }: { title?: string; filters?: { name: string; extensions: string[] }[] } = {}) {
   if (!isDesktop) return Promise.resolve<string | null>(null)
-  return open({ directory: false, multiple: false, title: '选择要导入的附件' }) as Promise<string | null>
+  return open({ directory: false, multiple: false, title, filters }) as Promise<string | null>
 }
 
 export interface BackupReport { path: string; fileCount: number; totalBytes: number }

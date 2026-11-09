@@ -16,13 +16,13 @@ export function ProjectBackup({ restoreOnly = false }: { restoreOnly?: boolean }
     try {
       if (mode === 'backup') {
         if (!projectPath || !await saveActiveDrafts() || !await useAppStore.getState().saveCurrentDocument('整项目备份前保存')) throw new Error('当前修改未能保存，请先处理保存提示。')
-        const directory = await chooseDirectory(); if (!directory) return
+        const directory = await chooseDirectory('选择完整备份的保存目录'); if (!directory) return
         setMessage('正在创建并校验完整备份…')
         const report = await projectApi.backup(projectPath, directory); setResult({ ...report, restored: false }); setMessage(`完整备份已创建并通过校验，共 ${report.fileCount} 个文件。`)
       } else {
-        const path = await chooseFile(); if (!path) return
+        const path = await chooseFile({ title: '选择 NovelForge 项目备份', filters: [{ name: 'NovelForge 项目备份', extensions: ['nfbackup'] }] }); if (!path) return
         if (mode === 'validate') { setMessage('正在校验备份…'); const report = await projectApi.validateBackup(path); setResult({ ...report, restored: false }); setMessage(`校验通过，共 ${report.fileCount} 个文件。`) }
-        else { const directory = await chooseDirectory(); if (!directory) return; setMessage('正在校验并恢复到新目录…'); const report = await projectApi.restoreBackup(path, directory); setResult({ ...report, restored: true }); setMessage('已恢复到新目录，原项目保持不变。') }
+        else { const directory = await chooseDirectory('选择恢复项目的保存位置'); if (!directory) return; setMessage('正在校验并恢复到新目录…'); const report = await projectApi.restoreBackup(path, directory); setResult({ ...report, restored: true }); setMessage('已恢复到新目录，原项目保持不变。') }
       }
     } catch (error) { setError(String(error)); setMessage('') } finally { setBusy(false) }
   }
