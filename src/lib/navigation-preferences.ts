@@ -1,6 +1,6 @@
 import type { ViewId } from './types'
 export const PINNED_NAVIGATION_KEY = 'novelforge:pinned-navigation:v1'
-const allowed: ViewId[] = ['manuscript-import', 'location', 'world', 'timeline', 'foreshadowing', 'story-arc', 'inbox', 'relationship', 'attachment', 'chapter-memory', 'annotation', 'consistency', 'statistics']
+const allowed: ViewId[] = ['revision-workbench', 'manuscript-import', 'location', 'world', 'timeline', 'foreshadowing', 'story-arc', 'inbox', 'relationship', 'attachment', 'chapter-memory', 'annotation', 'consistency', 'statistics']
 export function readPinnedNavigation(): ViewId[] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(PINNED_NAVIGATION_KEY) ?? '[]')
