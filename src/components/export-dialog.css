@@ -7,6 +7,19 @@
 .export-format-note, .export-error { margin: 0 0 12px; padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .export-format-note { background: var(--surface-2); color: var(--text); }
 .export-error { color: var(--danger); background: var(--danger-soft); }
+.export-preflight { display: grid; gap: 7px; margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); }
+.export-preflight h3, .export-preflight p { margin: 0; font-size: 12px; }
+.export-preflight .export-checks { margin: 0; }
+.export-preflight-save { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; font-size: 12px; }
+.export-preflight-save [role="alert"] { color: var(--danger); }
+.export-preflight-issues { min-width: 0; font-size: 12px; }
+.export-preflight-issues summary { padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: 5px; background: var(--surface); cursor: pointer; }
+.export-preflight-issues summary small { margin-left: 8px; color: var(--muted); }
+.export-preflight-issues ul { max-height: 160px; overflow: auto; margin: 5px 0 0; padding: 0 4px; list-style: none; }
+.export-preflight-issues li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.export-preflight-issues li .button { justify-self: start; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.export-preflight-issues li span { color: var(--muted); }
+.export-preflight-issues li small { grid-column: 1 / -1; color: var(--danger); overflow-wrap: anywhere; }
 .export-output { position: fixed; z-index: 15; right: 18px; bottom: 44px; display: grid; gap: 8px; width: min(440px, calc(100% - 36px)); padding: 13px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); }
 .export-output-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .export-output p { margin: 0; color: var(--muted); font-size: 13px; }

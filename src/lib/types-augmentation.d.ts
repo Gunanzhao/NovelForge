@@ -69,6 +69,8 @@ declare module './types' {
     includeToc?: boolean
     includeVolumeTitles?: boolean
     includeChapterTitles?: boolean
+    onlyFinal?: boolean
+    includeSections?: boolean
     coverPath?: string
   }
 }

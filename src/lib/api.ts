@@ -4,7 +4,7 @@ import type { ConfirmedRevision, RevisionChapter, RevisionRound, RevisionRoundVi
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
-  EntityState, EntityVersion, AiCompletionInput, AiCompletionResult, ConsistencyReport, CopyNodeInput, DocumentData, EntityInput, EntityRecord, ExportInput, HistoryItem, MoveNodeInput, NodeInput, ProjectData,
+  EntityState, EntityVersion, AiCompletionInput, AiCompletionResult, ConsistencyReport, CopyNodeInput, DocumentData, EntityInput, EntityRecord, ExportInput, ExportPreflight, HistoryItem, MoveNodeInput, NodeInput, ProjectData,
   ProjectInput, RecoveryItem, SaveDocumentInput, SearchInput, SearchPage, SearchResult, Stats, TrashItem,
 } from './types'
 import { fallbackInvoke } from './fallback'
@@ -108,6 +108,8 @@ export const projectApi = {
   openAttachment: (input: { projectPath: string; nodeId: string }) => command<string>('open_attachment', { input }),
   stats: (path: string, nodeId?: string) => command<Stats>('get_statistics', { input: { projectPath: path, currentNodeId: nodeId } }),
   exportProject: (input: ExportInput) => command<string>('export_project', { input }),
+  exportPreflight: (input: Pick<ExportInput, 'projectPath' | 'scope' | 'volumePath' | 'nodeIds' | 'onlyFinal' | 'includeSections'>) =>
+    command<ExportPreflight>('export_preflight', { input: { ...input, format: 'markdown' } }),
   openExportOutput: (projectPath: string, outputPath: string, folder: boolean) => command<void>('open_export_output', { projectPath, outputPath, folder }, false),
   readLogs: (path: string) => command<string>('read_logs', { path }),
   updateProject: (input: { projectPath: string; title: string; author: string; description: string; genre: string; targetWords: number }) => command<ProjectData>('update_project', { input }),

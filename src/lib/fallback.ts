@@ -1,13 +1,13 @@
 import { validateImportChapters, type ImportManuscriptInput } from './manuscript-import'
 import type { RenameChanges, WikiRenameOperation } from './wiki-rename'
 import type {
-  EntityState, EntityVersion, EntityInput, EntityRecord, ExportInput, HistoryItem, NodeRecord, ProjectData,
+  EntityState, EntityVersion, EntityInput, EntityRecord, ExportInput, ExportIssueReason, ExportPreflight, HistoryItem, NodeRecord, ProjectData,
   ProjectInput, SearchInput, SearchResult, TrashItem,
 } from './types'
 import { analyzeConsistency } from './consistency-data'
 import { isNodeLocked } from './node-lock'
 import { countWords } from './utils'
-import { parseChecklistTemplate } from './chapter-workflow'
+import { checklistForChapter, parseChecklistTemplate } from './chapter-workflow'
 
 interface StoredHistory extends HistoryItem {
   content: string
@@ -93,6 +93,8 @@ function readStore(path: string) {
   return undefined
 }
 
+const starterBody = '# 第一章\n\n从这里开始你的故事。\n'
+
 function makeProject(input: ProjectInput): FallbackStore {
   const createdAt = new Date().toISOString()
   const projectId = uid()
@@ -102,7 +104,7 @@ function makeProject(input: ProjectInput): FallbackStore {
     id: chapterId, kind: 'chapter', parentId: volumeId, title: '第一章', orderIndex: 0,
     status: 'draft', filePath: 'manuscript/volume_001/chapter_001.md', createdAt, updatedAt: createdAt,
   }
-  const content = '# 第一章\n\n从这里开始你的故事。\n'
+  const content = starterBody
   return {
     data: {
       project: {
@@ -245,14 +247,14 @@ function fallbackHtml(markdown: string) {
   return body + (footnotes ? '<section class="footnotes"><h2>脚注</h2><ol>' + footnotes + '</ol></section>' : '')
 }
 
-export function exportText(store: FallbackStore, format: 'markdown' | 'txt' | 'html', input: ExportInput) {
-  const title = input.title?.trim() || store.data.project.title
-  const author = input.author?.trim() || store.data.project.author
-  const includeVolumeTitles = input.includeVolumeTitles !== false
-  const includeChapterTitles = input.includeChapterTitles !== false
+function fallbackExportSelection(store: FallbackStore, input: ExportInput) {
   const selectedIds = new Set<string>()
-  if (input.scope === 'volume' && !input.volumePath) throw new Error('指定卷导出需要卷路径')
-  if (input.scope === 'chapters') {
+  if (input.scope === 'volume') {
+    if (!input.volumePath) throw new Error('指定卷导出需要卷路径')
+    const volume = store.data.nodes.find(node => node.kind === 'volume' && node.filePath === input.volumePath)
+    if (!volume) throw new Error('指定导出卷不存在')
+    nodeDescendants(store, volume.id).forEach(node => selectedIds.add(node.id))
+  } else if (input.scope === 'chapters') {
     if (!input.nodeIds?.length) throw new Error('指定章节导出需要章节 ID')
     for (const id of input.nodeIds) {
       const descendants = nodeDescendants(store, id)
@@ -260,11 +262,58 @@ export function exportText(store: FallbackStore, format: 'markdown' | 'txt' | 'h
       descendants.forEach((item) => selectedIds.add(item.id))
     }
   }
-  const active = store.data.nodes.filter((item) => {
-    if (input.scope === 'volume') return item.filePath === input.volumePath || Boolean(input.volumePath && item.filePath.startsWith(input.volumePath + '/'))
-    if (input.scope === 'chapters') return selectedIds.has(item.id)
+  const finalIds = new Set(store.data.nodes.filter(node => node.kind === 'chapter' && checklistForChapter(store.data.entities, node.id)?.workflowStatus === 'final').map(node => node.id))
+  const report: ExportPreflight = { chapters: 0, sections: 0, excludedChapters: 0, excludedSections: 0, issues: [] }
+  let active = store.data.nodes.filter(node => {
+    if (input.scope && input.scope !== 'project' && !selectedIds.has(node.id)) return false
+    if (node.kind === 'chapter') {
+      if (input.onlyFinal && !finalIds.has(node.id)) { report.excludedChapters += 1; return false }
+      report.chapters += 1
+    }
+    if (node.kind === 'section') {
+      if (input.includeSections === false || (input.onlyFinal && !finalIds.has(node.parentId ?? ''))) { report.excludedSections += 1; return false }
+      report.sections += 1
+    }
     return true
   })
+  if (input.onlyFinal) {
+    const usedVolumes = new Set(active.filter(node => node.kind === 'chapter').map(node => node.parentId))
+    active = active.filter(node => node.kind !== 'volume' || usedVolumes.has(node.id))
+  }
+  return { active, finalIds, report }
+}
+
+function withoutFallbackHeading(content: string, title: string) {
+  const trimmed = content.replace(/^[\r\n]+/u, '')
+  const firstLine = trimmed.split('\n', 1)[0]
+  return firstLine.trimEnd() === '# ' + title.trim() ? trimmed.slice(firstLine.length) : content
+}
+
+function fallbackExportPreflight(store: FallbackStore, input: ExportInput) {
+  const { active, finalIds, report } = fallbackExportSelection(store, input)
+  for (const node of active) {
+    if (node.kind === 'volume') continue
+    const reasons: ExportIssueReason[] = []
+    if (node.kind === 'chapter' && !finalIds.has(node.id)) reasons.push('notFinal')
+    const body = store.documents[node.id]
+    if (body === undefined) reasons.push('unreadable')
+    else {
+      const content = withoutFallbackHeading(body, node.title).trim()
+      if (content.split(/\r?\n/u).every(line => !line.trim() || /^#{1,6}\s/u.test(line.trim()))) reasons.push('empty')
+      else if (content === withoutFallbackHeading(starterBody, '第一章').trim()) reasons.push('sample')
+    }
+    if (reasons.length) report.issues.push({ nodeId: node.id, title: node.title, kind: node.kind, reasons, detail: null })
+  }
+  return report
+}
+
+export function exportText(store: FallbackStore, format: 'markdown' | 'txt' | 'html', input: ExportInput) {
+  const title = input.title?.trim() || store.data.project.title
+  const author = input.author?.trim() || store.data.project.author
+  const includeVolumeTitles = input.includeVolumeTitles !== false
+  const includeChapterTitles = input.includeChapterTitles !== false
+  const { active, report } = fallbackExportSelection(store, input)
+  if (input.onlyFinal && !report.chapters && !report.sections) throw new Error('所选范围没有定稿正文。请扩大范围、标记定稿或取消仅导出定稿章。')
   const roots = active
     .filter((item) => !active.some((candidate) => candidate.id === item.parentId))
     .sort((left, right) => nodeVolumeOrder(store, left) - nodeVolumeOrder(store, right) || left.orderIndex - right.orderIndex || left.id.localeCompare(right.id))
@@ -273,10 +322,7 @@ export function exportText(store: FallbackStore, format: 'markdown' | 'txt' | 'h
     const heading = includeTitle
       ? format === 'markdown' ? '\n' + '#'.repeat(Math.max(1, level)) + ' ' + current.title + '\n' : '\n' + current.title + '\n'
       : ''
-    let content = store.documents[current.id] ?? ''
-    const trimmed = content.replace(/^[\r\n]+/u, '')
-    const firstLine = trimmed.split('\n', 1)[0]
-    if (firstLine.trimEnd() === '# ' + current.title.trim()) content = trimmed.slice(firstLine.length).replace(/^[\r\n]+/u, '')
+    const content = withoutFallbackHeading(store.documents[current.id] ?? '', current.title)
     const body = current.kind === 'volume' ? '' : '\n' + content.trim() + '\n'
     const children = active.filter((item) => item.parentId === current.id).sort((a, b) => a.orderIndex - b.orderIndex).map((item) => renderNode(item, level + 1)).join('')
     return heading + body + children
@@ -866,6 +912,7 @@ export async function fallbackInvoke<T>(command: string, args: Record<string, un
       targetWords: store.data.project.targetWords, writingStreak, averageDailyWords, longestWritingStreak, daily, chapterStats,
     } as T
   }
+  if (command === 'export_preflight') return fallbackExportPreflight(store, args.input as ExportInput) as T
   if (command === 'export_project') {
     const exportInput = args.input as ExportInput
     if (exportInput.format !== 'markdown' && exportInput.format !== 'txt' && exportInput.format !== 'html') {

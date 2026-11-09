@@ -316,6 +316,10 @@ pub struct ExportInput {
     #[serde(default)]
     pub include_chapter_titles: Option<bool>,
     #[serde(default)]
+    pub only_final: Option<bool>,
+    #[serde(default)]
+    pub include_sections: Option<bool>,
+    #[serde(default)]
     pub cover_path: Option<String>,
 }
 

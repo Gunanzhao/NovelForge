@@ -123,6 +123,16 @@ export interface SearchPage {
   hasMore: boolean
 }
 
+export type ExportIssueReason = 'notFinal' | 'empty' | 'sample' | 'unreadable'
+
+export interface ExportPreflight {
+  chapters: number
+  sections: number
+  excludedChapters: number
+  excludedSections: number
+  issues: Array<{ nodeId: string; title: string; kind: 'chapter' | 'section'; reasons: ExportIssueReason[]; detail: string | null }>
+}
+
 export interface EntityDraft {
   title: string
   tags: string

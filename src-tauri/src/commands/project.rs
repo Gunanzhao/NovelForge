@@ -1,5 +1,7 @@
 use super::*;
 
+pub(super) const STARTER_BODY: &str = "# 第一章\n\n从这里开始你的故事。\n";
+
 #[tauri::command]
 pub fn create_project(input: ProjectInput) -> Result<ProjectData, String> {
     if input.title.trim().is_empty() {
@@ -108,7 +110,6 @@ fn initialize_project(root: PathBuf, input: ProjectInput) -> Result<ProjectData,
         deleted_at: None,
         deleted_path: None,
     };
-    let starter_body = "# 第一章\n\n从这里开始你的故事。\n";
     let starter = storage::markdown_node(
         &chapter.id,
         &chapter.kind,
@@ -116,7 +117,7 @@ fn initialize_project(root: PathBuf, input: ProjectInput) -> Result<ProjectData,
         &chapter.status,
         &chapter.created_at,
         &chapter.updated_at,
-        starter_body,
+        STARTER_BODY,
     );
     storage::atomic_write(
         &storage::safe_relative(&root, &chapter_path)?,
@@ -128,7 +129,7 @@ fn initialize_project(root: PathBuf, input: ProjectInput) -> Result<ProjectData,
         &chapter.id,
         &chapter.kind,
         &chapter.title,
-        starter_body,
+        STARTER_BODY,
         &chapter.file_path,
     )?;
     let _ = storage::append_log(&root, "INFO", "project_created");

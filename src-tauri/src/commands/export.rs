@@ -1,5 +1,26 @@
 use super::*;
 
+fn read_export_body(root: &Path, node: &NodeRecord) -> Result<String, String> {
+    let kind = if node.kind == "section" {
+        "小节"
+    } else {
+        "章节"
+    };
+    let path = storage::safe_relative(root, &node.file_path).map_err(|error| {
+        format!(
+            "导出{kind}「{}」路径无效（{}）：{error}",
+            node.title, node.file_path
+        )
+    })?;
+    let content = fs::read_to_string(path).map_err(|error| {
+        format!(
+            "读取导出{kind}「{}」失败（{}）：{error}",
+            node.title, node.file_path
+        )
+    })?;
+    Ok(storage::strip_markdown_frontmatter(&content))
+}
+
 fn without_duplicate_chapter_heading<'a>(content: &'a str, title: &str) -> &'a str {
     let first = content.trim_start_matches(['\r', '\n']);
     let (line, rest) = first.split_once('\n').unwrap_or((first, ""));
@@ -45,19 +66,7 @@ fn export_nodes(
             }
         }
         if node.kind != "volume" {
-            let path = storage::safe_relative(root, &node.file_path).map_err(|error| {
-                format!(
-                    "导出章节“{}”路径无效（{}）：{}",
-                    node.title, node.file_path, error
-                )
-            })?;
-            let content = fs::read_to_string(path).map_err(|error| {
-                format!(
-                    "读取导出章节“{}”失败（{}）：{}",
-                    node.title, node.file_path, error
-                )
-            })?;
-            let content = storage::strip_markdown_frontmatter(&content);
+            let content = read_export_body(root, node)?;
             let clean = if format == "txt" {
                 export_plain_text(&parse_export_document(&content))
             } else {
@@ -626,22 +635,172 @@ fn export_scope_nodes(
         }
         _ => return Err(format!("不支持的导出范围：{}", scope)),
     }
-    let mut filtered: Vec<NodeRecord> = nodes
+    Ok(nodes
         .iter()
         .filter(|node| selected_ids.contains(&node.id))
         .cloned()
-        .collect();
-    for node in &mut filtered {
+        .collect())
+}
+
+fn final_chapter_ids(db: &Connection) -> Result<HashSet<String>, String> {
+    let err = |error| format!("读取章节定稿状态失败：{error}");
+    let mut statement = db.prepare(
+        "SELECT content_json FROM entities WHERE kind='chapter-checklist' AND deleted_at IS NULL ORDER BY title COLLATE NOCASE",
+    ).map_err(err)?;
+    let mut rows = statement.query([]).map_err(err)?;
+    let mut status = HashMap::new();
+    while let Some(row) = rows.next().map_err(err)? {
+        let raw: String = row.get(0).map_err(err)?;
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) {
+            if let Some(id) = value["chapterId"].as_str() {
+                status
+                    .entry(id.to_owned())
+                    .or_insert_with(|| value["workflowStatus"] == "final");
+            }
+        }
+    }
+    Ok(status
+        .into_iter()
+        .filter_map(|(id, final_)| final_.then_some(id))
+        .collect())
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+enum ExportIssueReason {
+    NotFinal,
+    Empty,
+    Sample,
+    Unreadable,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExportIssue {
+    node_id: String,
+    title: String,
+    kind: String,
+    reasons: Vec<ExportIssueReason>,
+    detail: Option<String>,
+}
+
+#[derive(Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportPreflight {
+    chapters: usize,
+    sections: usize,
+    excluded_chapters: usize,
+    excluded_sections: usize,
+    issues: Vec<ExportIssue>,
+}
+
+fn export_selection(
+    mut scoped: Vec<NodeRecord>,
+    input: &ExportInput,
+    final_ids: &HashSet<String>,
+) -> (Vec<NodeRecord>, ExportPreflight) {
+    let mut report = ExportPreflight::default();
+    let only_final = input.only_final.unwrap_or(false);
+    let include_sections = input.include_sections.unwrap_or(true);
+    scoped.retain(|node| match node.kind.as_str() {
+        "chapter" if only_final && !final_ids.contains(&node.id) => {
+            report.excluded_chapters += 1;
+            false
+        }
+        "section"
+            if !include_sections
+                || (only_final
+                    && !node
+                        .parent_id
+                        .as_ref()
+                        .is_some_and(|id| final_ids.contains(id))) =>
+        {
+            report.excluded_sections += 1;
+            false
+        }
+        "chapter" => {
+            report.chapters += 1;
+            true
+        }
+        "section" => {
+            report.sections += 1;
+            true
+        }
+        _ => true,
+    });
+    if only_final {
+        let used_volumes: HashSet<_> = scoped
+            .iter()
+            .filter(|node| node.kind == "chapter")
+            .filter_map(|node| node.parent_id.clone())
+            .collect();
+        scoped.retain(|node| node.kind != "volume" || used_volumes.contains(&node.id));
+    }
+    let retained_ids: HashSet<_> = scoped.iter().map(|node| node.id.clone()).collect();
+    for node in &mut scoped {
         if node
             .parent_id
             .as_ref()
-            .map(|id| !selected_ids.contains(id))
-            .unwrap_or(false)
+            .is_some_and(|id| !retained_ids.contains(id))
         {
             node.parent_id = None;
         }
     }
-    Ok(filtered)
+    (scoped, report)
+}
+
+fn empty_export_body(content: &str) -> bool {
+    content.lines().all(|line| {
+        let line = line.trim();
+        let heading = line.bytes().take_while(|byte| *byte == b'#').count();
+        line.is_empty()
+            || ((1..=6).contains(&heading)
+                && line
+                    .as_bytes()
+                    .get(heading)
+                    .is_some_and(u8::is_ascii_whitespace))
+    })
+}
+
+#[tauri::command(async)]
+pub fn export_preflight(input: ExportInput) -> Result<ExportPreflight, String> {
+    let (root, db) = project_connection(&input.project_path)?;
+    let all_nodes = storage::all_nodes(&db, false)?;
+    let final_ids = final_chapter_ids(&db)?;
+    let (nodes, mut report) =
+        export_selection(export_scope_nodes(&all_nodes, &input)?, &input, &final_ids);
+    let starter = without_duplicate_chapter_heading(project::STARTER_BODY, "第一章").trim();
+    for node in nodes.into_iter().filter(|node| node.kind != "volume") {
+        let mut reasons = Vec::new();
+        let mut detail = None;
+        if node.kind == "chapter" && !final_ids.contains(&node.id) {
+            reasons.push(ExportIssueReason::NotFinal);
+        }
+        match read_export_body(&root, &node) {
+            Ok(content) => {
+                let content = without_duplicate_chapter_heading(&content, &node.title).trim();
+                if empty_export_body(content) {
+                    reasons.push(ExportIssueReason::Empty);
+                } else if content == starter {
+                    reasons.push(ExportIssueReason::Sample);
+                }
+            }
+            Err(error) => {
+                reasons.push(ExportIssueReason::Unreadable);
+                detail = Some(error);
+            }
+        }
+        if !reasons.is_empty() {
+            report.issues.push(ExportIssue {
+                node_id: node.id,
+                title: node.title,
+                kind: node.kind,
+                reasons,
+                detail,
+            });
+        }
+    }
+    Ok(report)
 }
 
 fn xml_escape(value: &str) -> String {
@@ -1674,7 +1833,16 @@ pub fn export_project(input: ExportInput) -> Result<String, String> {
     };
     let metadata = storage::read_project_json(&root)?;
     let nodes = storage::all_nodes(&connection, false)?;
-    let nodes = export_scope_nodes(&nodes, &input)?;
+    let final_ids = if input.only_final == Some(true) {
+        final_chapter_ids(&connection)?
+    } else {
+        HashSet::new()
+    };
+    let (nodes, selection) =
+        export_selection(export_scope_nodes(&nodes, &input)?, &input, &final_ids);
+    if input.only_final == Some(true) && selection.chapters + selection.sections == 0 {
+        return Err("所选范围没有定稿正文。请扩大范围、标记定稿或取消仅导出定稿章。".into());
+    }
     let title = input
         .title
         .as_deref()
