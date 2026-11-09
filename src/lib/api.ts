@@ -1,5 +1,6 @@
 import type { AutoBackupStatus } from './auto-backup-types'
 import type { RenameChanges, WikiRenameOperation } from './wiki-rename'
+import type { ConfirmedRevision, RevisionChapter, RevisionRound, RevisionRoundView, RevisionTarget } from './revision-workbench'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import type {
@@ -35,6 +36,12 @@ async function openProjectWithLease(path: string): Promise<ProjectData> {
 }
 export const projectApi = {
   importManuscript: (input: import('./manuscript-import').ImportManuscriptInput) => command<ProjectData>('import_manuscript', { input }),
+  revisionRounds: (path: string) => command<RevisionRound[]>('list_revision_rounds', { path }, false),
+  createRevisionRound: (input: { projectPath: string; title: string; nodeIds: string[] }) => command<RevisionRoundView>('create_revision_round', { input }, false),
+  openRevisionRound: (input: { projectPath: string; roundId: string; nodeId?: string }) => command<RevisionRoundView>('open_revision_round', { input }, false),
+  saveRevisionCandidate: (input: RevisionTarget, candidate: string) => command<RevisionChapter>('save_revision_candidate', { input, candidate }, false),
+  rebaseRevisionChapter: (input: RevisionTarget, seenContent: string) => command<RevisionChapter>('rebase_revision_chapter', { input, seenContent }, false),
+  confirmRevisionChapter: (input: RevisionTarget) => command<ConfirmedRevision>('confirm_revision_chapter', { input }, false),
   confirmChapterMemory: (input:{projectPath:string;entityId:string;expected:EntityState}) => command<ProjectData>('confirm_chapter_memory',{input}),
   autoBackupStatus: (path:string) => command<AutoBackupStatus>('auto_backup_status',{path},false),
   configureAutoBackup: (input:{projectPath:string;enabled:boolean;directory:string;trigger:'daily'|'session';keep:number}) => command<AutoBackupStatus>('configure_auto_backup',{input},false),

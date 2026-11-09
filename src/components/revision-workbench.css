@@ -1,0 +1,70 @@
+.revision-workbench { display: grid; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; }
+.revision-scroll { min-width: 0; min-height: 0; overflow: auto; }
+.revision-workbench .view-header { flex-wrap: wrap; }
+.revision-body { display: grid; gap: 14px; max-width: 1250px; padding: 0 30px 28px; margin: auto; }
+.revision-body h2 { margin: 0; font-size: 16px; }
+.revision-setup, .revision-round-bar, .revision-detail, .revision-queue, .revision-empty { min-width: 0; padding: 16px; }
+.revision-setup { display: grid; gap: 12px; }
+.revision-setup p, .revision-empty p, .revision-compare p { margin: 0; }
+.revision-setup-fields, .revision-round-bar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: 14px; }
+.revision-picker { max-height: 350px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+.revision-picker-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; min-height: 33px; font-size: 13px; border-bottom: 1px solid var(--line); }
+.revision-picker-row:last-child { border-bottom: none; }
+.revision-picker-row small { margin-left: auto; color: var(--muted); text-align: right; }
+.revision-picker-row span, .revision-picker-row small { overflow-wrap: anywhere; }
+.revision-picker-row input { accent-color: var(--accent); }
+.revision-progress { display: grid; gap: 8px; color: var(--muted); font-size: 12px; }
+.revision-progress progress { width: 100%; height: 10px; appearance: none; border: 0; border-radius: 6px; overflow: hidden; }
+.revision-progress progress::-webkit-progress-bar { background: var(--surface-3); }
+.revision-progress progress::-webkit-progress-value { background: var(--accent); }
+.revision-grid { display: grid; grid-template-columns: minmax(145px, 218px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.revision-queue { padding: 10px; }
+.revision-queue-head, .revision-detail-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.revision-queue-head { padding: 3px 3px 10px; }
+.revision-queue-head small { font-size: 12px; color: var(--muted); }
+.revision-queue-filters { display: grid; gap: 6px; padding-bottom: 10px; }
+.revision-queue-filters input, .revision-queue-filters select { width: 100%; min-width: 0; }
+.revision-queue-list { display: grid; gap: 4px; max-height: clamp(150px, calc(100vh - 425px), 540px); overflow: auto; }
+.revision-queue-empty { margin: 6px; }
+.revision-queue-item { display: grid; gap: 3px; text-align: left; padding: 7px 8px; border-radius: 6px; border: 1px solid transparent; color: var(--text); font-size: 13px; }
+.revision-queue-item > span, .revision-detail-head h2 { overflow-wrap: anywhere; }
+.revision-queue-item > small { color: var(--muted); }
+.revision-queue-item > .revision-queue-status.ready { color: var(--accent); }
+.revision-queue-item > .revision-queue-status.blocked { color: var(--danger); }
+.revision-queue-item:hover { background: var(--surface-2); }
+.revision-queue-item[aria-current] { border-color: var(--accent); background: var(--accent-soft); }
+.revision-detail { display: grid; gap: 12px; }
+.revision-detail-head > div:first-child { flex: 1 1 200px; min-width: 0; }
+.revision-detail-head .eyebrow { margin: 0 0 4px; }
+.revision-actions, .revision-confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.revision-actions .button, .revision-confirm .button { white-space: normal; }
+.revision-draft-editor { min-width: 0; border: 1px solid var(--line); border-radius: 6px; }
+.revision-draft-editor summary { padding: 9px 10px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.revision-draft-editor summary small { margin-left: 8px; color: var(--muted); font-weight: 400; }
+.revision-draft-fields { display: grid; gap: 8px; padding: 0 10px 10px; }
+.revision-candidate { width: 100%; min-height: 112px; resize: vertical; }
+.revision-file { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; font-size: 12px; color: var(--muted); }
+.revision-file input { max-width: 100%; font: inherit; color: var(--muted); }
+.revision-file input::file-selector-button { margin-right: 6px; padding: 4px 7px; border-radius: 5px; border: 1px solid var(--line-strong); color: var(--text); background: var(--surface-2); font: inherit; cursor: pointer; }
+.revision-file input:disabled { opacity: .5; }
+.revision-compare { display: grid; gap: 6px; min-width: 0; }
+.revision-compare h3, .revision-compare h4 { margin: 0; font-size: 13px; font-weight: 600; }
+.revision-legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; }
+.revision-legend span { padding: 2px 6px; border-radius: 4px; }
+.revision-text { margin: 0; min-width: 0; max-height: 350px; overflow: auto; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 13px; line-height: 1.7; }
+.revision-text > span { display: block; }
+.revision-compare .added { background: color-mix(in srgb, #4d9962 22%, var(--surface)); color: var(--text); }
+.revision-compare .removed { background: color-mix(in srgb, #bd5454 20%, var(--surface)); color: var(--text); }
+.revision-text-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.revision-actionbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 14px; padding: 9px 30px; border-top: 1px solid var(--line); background: var(--surface); }
+.revision-confirm { flex: 1 1 280px; min-width: 0; }
+.revision-alert, .revision-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 9px 11px; border-radius: 6px; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.revision-alert { background: var(--danger-soft); color: var(--danger); }
+.revision-notice { background: var(--accent-soft); color: var(--text); }
+.revision-empty { display: flex; align-items: center; gap: 12px; }
+@container workspace (max-width: 640px) {
+  .revision-body { padding-inline: 16px; }
+  .revision-actionbar { padding-inline: 16px; }
+  .revision-grid, .revision-setup-fields, .revision-round-bar, .revision-text-pair { grid-template-columns: minmax(0, 1fr); }
+  .revision-queue-list { max-height: 195px; }
+}

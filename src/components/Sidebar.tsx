@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEven
 import type { LucideIcon } from 'lucide-react'
 import {
   ArrowDown, ArrowRightLeft, ArrowUp, BarChart3, BookOpen, ChevronDown, ChevronRight, CircleUserRound, Clock3, Copy, FileDown, FilePlus2, FolderTree,
-  GalleryVerticalEnd, GitBranch, Globe2, Inbox, LayoutDashboard, MoreHorizontal, Network, Paperclip, Plus, Search,
+  GalleryVerticalEnd, GitBranch, GitCompare, Globe2, Inbox, LayoutDashboard, MoreHorizontal, Network, Paperclip, Plus, Search,
   ShieldCheck, Sparkles, Trash2, WandSparkles, X,
 } from 'lucide-react'
 import { useAppStore } from '../stores/app-store'
@@ -23,6 +23,7 @@ import type { ChapterWorkflowFilter } from '../lib/chapter-workflow'
 const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon; group: '写作' | '资料' | '分析与辅助' }> = [
   { id: 'dashboard', label: '总览', icon: LayoutDashboard, group: '写作' },
   { id: 'manuscript', label: '正文', icon: BookOpen, group: '写作' },
+  { id: 'revision-workbench', label: '整卷修订', icon: GitCompare, group: '写作' },
   { id: 'manuscript-import', label: '稿件导入', icon: FilePlus2, group: '写作' },
   { id: 'outline', label: '写作规划', icon: BookOpen, group: '写作' },
   { id: 'character', label: '人物', icon: CircleUserRound, group: '资料' },

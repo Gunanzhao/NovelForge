@@ -887,30 +887,14 @@ pub(crate) fn save_document_annotated_internal(
             )
             .map_err(|error| format!("记录历史快照失败：{}", error))?;
         }
-        let delta = storage::word_count(content) as i64 - storage::word_count(&old_content) as i64;
-        transaction
-            .execute(
-                "INSERT INTO activity (id, node_id, created_at, delta_words, word_count) VALUES (?1, ?2, ?3, ?4, ?5)",
-                params![storage::new_id(), node.id, storage::now(), delta, storage::word_count(content) as i64],
-            )
-            .map_err(|error| format!("记录写作统计失败：{}", error))?;
-        transaction
-            .execute(
-                "UPDATE nodes SET updated_at = ?1 WHERE id = ?2",
-                params![persisted_timestamp, node.id],
-            )
-            .map_err(|error| format!("更新章节时间失败：{}", error))?;
-        storage::index_record(
+        record_document_change(
             &transaction,
-            &node.id,
-            &node.kind,
-            &node.title,
+            &node,
+            &old_content,
             content,
-            &node.file_path,
+            &persisted_timestamp,
+            anchors,
         )?;
-        if let Some(anchors) = anchors {
-            storage::database::write_annotation_tracking(&transaction, node_id, content, anchors)?;
-        }
         transaction
             .commit()
             .map_err(|error| format!("提交保存事务失败：{}", error))
@@ -950,6 +934,40 @@ pub(crate) fn save_document_annotated_internal(
         node: updated,
         content: content.to_string(),
     })
+}
+
+pub(crate) fn record_document_change(
+    db: &Connection,
+    node: &NodeRecord,
+    previous: &str,
+    content: &str,
+    updated_at: &str,
+    anchors: Option<&[crate::models::AnnotationAnchor]>,
+) -> Result<(), String> {
+    let count = storage::word_count(content) as i64;
+    let delta = count - storage::word_count(previous) as i64;
+    db.execute(
+        "INSERT INTO activity (id, node_id, created_at, delta_words, word_count) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![storage::new_id(), node.id, updated_at, delta, count],
+    )
+    .map_err(|error| format!("记录写作统计失败：{}", error))?;
+    db.execute(
+        "UPDATE nodes SET updated_at = ?1 WHERE id = ?2",
+        params![updated_at, node.id],
+    )
+    .map_err(|error| format!("更新章节时间失败：{}", error))?;
+    storage::index_record(
+        db,
+        &node.id,
+        &node.kind,
+        &node.title,
+        content,
+        &node.file_path,
+    )?;
+    if let Some(anchors) = anchors {
+        storage::database::write_annotation_tracking(db, &node.id, content, anchors)?;
+    }
+    Ok(())
 }
 
 pub(crate) fn preserve_current_revision(

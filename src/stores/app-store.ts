@@ -1,7 +1,7 @@
 import { savedAnnotationAnchors } from '../lib/annotations'
 import { notify } from '../lib/notifications'
 import { readEditorSession, rememberEditor } from '../lib/editor-session'
-import { confirmDraftNavigation, dirtyDrafts, runGuarded } from '../lib/draft-guard'
+import { busyDrafts, confirmDraftNavigation, dirtyDrafts, runGuarded } from '../lib/draft-guard'
 import { create } from 'zustand'
 import { isNodeLocked } from '../lib/node-lock'
 import { projectApi } from '../lib/api'
@@ -362,7 +362,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   selectNode: async (nodeId, reload = false) => {
-    if (get().deletingNodes.includes(nodeId)) return
+    if (busyDrafts() || get().deletingNodes.includes(nodeId)) return
     if (dirtyDrafts().length && !await confirmDraftNavigation()) return
     const request = ++selectionGeneration
     const session = captureProjectSession()

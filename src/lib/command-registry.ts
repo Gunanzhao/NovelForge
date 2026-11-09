@@ -11,6 +11,7 @@ export type CommandId =
   | 'toggle-focus'
   | 'open-dashboard'
   | 'open-manuscript'
+  | 'open-revision-workbench'
   | 'open-outline'
   | 'open-timeline'
   | 'open-foreshadowing'
@@ -49,6 +50,7 @@ export const COMMANDS: CommandDescriptor[] = [
   { id: 'toggle-focus', label: '切换专注模式', description: '隐藏侧栏，专心编辑正文', keywords: ['专注', 'focus'], defaultShortcut: 'F11' },
   { id: 'open-dashboard', label: '打开总览', description: '查看项目进度和写作统计', keywords: ['总览', 'dashboard'], defaultShortcut: 'Ctrl+1' },
   { id: 'open-manuscript', label: '打开正文', description: '回到章节编辑器', keywords: ['正文', '编辑', 'manuscript'], defaultShortcut: 'Ctrl+2' },
+  { id: 'open-revision-workbench', label: '打开整卷修订', description: '选择章节、对比改稿并继续审阅', keywords: ['审稿', '修订', 'diff'] },
   { id: 'open-outline', label: '打开写作规划', description: '查看大纲、场景卡和看板', keywords: ['规划', '大纲', '看板', 'outline'], defaultShortcut: 'Ctrl+3' },
   { id: 'open-timeline', label: '打开时间线', description: '查看故事事件时间线', keywords: ['时间线', '事件', 'timeline'], defaultShortcut: 'Ctrl+4' },
   { id: 'open-foreshadowing', label: '打开伏笔', description: '查看和跟踪伏笔状态', keywords: ['伏笔', '回收', 'foreshadowing'], defaultShortcut: 'Ctrl+5' },
@@ -131,7 +133,7 @@ export function shortcutFromKeyboardEvent(event: KeyboardEvent) {
 
 export function commandView(commandId: CommandId): ViewId | undefined {
   const views: Partial<Record<CommandId, ViewId>> = {
-    'open-dashboard': 'dashboard', 'open-manuscript': 'manuscript', 'open-outline': 'outline',
+    'open-dashboard': 'dashboard', 'open-manuscript': 'manuscript', 'open-revision-workbench': 'revision-workbench', 'open-outline': 'outline',
     'open-timeline': 'timeline', 'open-foreshadowing': 'foreshadowing', 'open-relationship': 'relationship',
     'open-search': 'search', 'open-full-search': 'search', 'open-attachment': 'attachment', 'open-consistency': 'consistency', 'open-statistics': 'statistics', 'open-ai': 'ai',
     'open-story-arcs': 'story-arc',

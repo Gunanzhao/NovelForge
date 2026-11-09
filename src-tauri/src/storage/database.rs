@@ -60,6 +60,24 @@ CREATE TABLE IF NOT EXISTS batch_operations (
 CREATE TABLE IF NOT EXISTS annotation_tracking (
  node_id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, anchors_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS revision_rounds (
+  id TEXT PRIMARY KEY NOT NULL,
+  title TEXT NOT NULL,
+  opened_at TEXT NOT NULL,
+  selected_node_id TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS revision_round_chapters (
+  round_id TEXT NOT NULL REFERENCES revision_rounds(id),
+  node_id TEXT NOT NULL,
+  ordinal INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  original TEXT NOT NULL,
+  candidate TEXT,
+  version INTEGER NOT NULL DEFAULT 0,
+  confirmed_at TEXT,
+  PRIMARY KEY (round_id, node_id),
+  UNIQUE (round_id, ordinal)
+);
 CREATE TABLE IF NOT EXISTS activity (
   id TEXT PRIMARY KEY NOT NULL,
   node_id TEXT NOT NULL,

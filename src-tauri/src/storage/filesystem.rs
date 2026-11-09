@@ -237,6 +237,18 @@ pub fn safe_trash_path(root: &Path, stored_path: &str) -> Result<PathBuf, String
 }
 
 pub fn atomic_write(target: &Path, content: &[u8]) -> Result<(), String> {
+    atomic_write_with_check(target, content, None)
+}
+
+pub fn atomic_write_checked(target: &Path, content: &[u8], expected: &[u8]) -> Result<(), String> {
+    atomic_write_with_check(target, content, Some(expected))
+}
+
+fn atomic_write_with_check(
+    target: &Path,
+    content: &[u8],
+    expected: Option<&[u8]>,
+) -> Result<(), String> {
     let parent = target
         .parent()
         .ok_or_else(|| "无法确定文件目录".to_string())?;
@@ -257,6 +269,11 @@ pub fn atomic_write(target: &Path, content: &[u8]) -> Result<(), String> {
         file.sync_all()
             .map_err(|error| format!("刷新临时文件失败：{}", error))?;
         drop(file);
+        if let Some(expected) = expected {
+            if fs::read(target).as_deref().ok() != Some(expected) {
+                return Err("EXTERNAL_CONFLICT:磁盘正文已变化或无法读取，已取消应用。".into());
+            }
+        }
         replace_file(&temp, target)
     })();
     if result.is_err() {

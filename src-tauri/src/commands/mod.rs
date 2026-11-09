@@ -36,6 +36,7 @@ pub(crate) mod manuscript;
 pub(crate) mod manuscript_import;
 pub(crate) mod project;
 pub(crate) mod recovery;
+pub(crate) mod revision_workbench;
 pub(crate) mod search;
 pub(crate) mod statistics;
 pub(crate) mod trash;
