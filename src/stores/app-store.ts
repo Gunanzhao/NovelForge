@@ -15,7 +15,8 @@ import {
 import type { WorkspacePreferences } from '../lib/workspace-preferences'
 import { sortChapterNodes } from '../lib/planning-data'
 import type { AiAction } from '../lib/ai-data'
-import { chapterChecklistInput, checklistForChapter } from '../lib/chapter-workflow'
+import { chapterChecklistInput, checklistForChapter, parseChapterChecklist, type ChapterChecklist, type ChapterStage } from '../lib/chapter-workflow'
+import { entityState } from '../lib/entity-history'
 
 export interface RecentProject {
   path: string
@@ -36,6 +37,7 @@ let searchGeneration = 0
 let selectionGeneration = 0
 let transitionGeneration = 0
 let conflictGeneration = 0
+const checklistWrites = new Map<string, Promise<void>>()
 
 export interface ProjectSession {
   path: string | null
@@ -180,6 +182,8 @@ interface AppState {
   createNode: (kind: NodeRecord['kind'], title: string, parentId: string | null) => Promise<void>
   renameNode: (nodeId: string, title: string) => Promise<void>
   setNodeStatus: (nodeId: string, status: string) => Promise<void>
+  updateChapterChecklist: (nodeId: string, update: (value: ChapterChecklist) => ChapterChecklist) => Promise<void>
+  setChapterStage: (nodeId: string, stage: ChapterStage) => Promise<void>
   reorderNode: (nodeId: string, direction: 'up' | 'down') => Promise<void>
   moveNode: (nodeId: string, targetParentId: string | null, targetOrderIndex?: number) => Promise<void>
   copyNode: (nodeId: string, targetParentId: string | null, title?: string) => Promise<void>
@@ -586,6 +590,34 @@ export const useAppStore = create<AppState>((set, get) => ({
     await activeSave
   },
 
+  updateChapterChecklist: async (nodeId, update) => {
+    const session = captureProjectSession()
+    const key = `${session.generation}:${session.path}:${nodeId}`
+    const pending = (checklistWrites.get(key) ?? Promise.resolve()).catch(() => undefined).then(async () => {
+      if (!isCurrentProjectSession(session)) throw new Error('项目已切换，已取消更新章节进度')
+      const { data, projectPath } = get()
+      const chapter = data?.nodes.find(node => node.id === nodeId && node.kind === 'chapter')
+      if (!data || !chapter || !projectPath) throw new Error('章节不存在')
+      const entity = data.entities.find(item => item.kind === 'chapter-checklist' && item.content.chapterId === nodeId)
+      const initial = chapterChecklistInput(projectPath, chapter, data.entities)
+      const value = entity ? parseChapterChecklist(entity) : {
+        chapterId: nodeId, workflowStatus: initial.content.workflowStatus, items: initial.content.items,
+      } as ChapterChecklist
+      const input = chapterChecklistInput(projectPath, chapter, data.entities, update(value))
+      if (entity) { input.content = { ...entity.content, ...input.content }; input.tags = entity.tags; input.title = entity.title }
+      const result = await projectApi.upsertEntity(input, entity ? entityState(entity) : undefined)
+      await get().refreshData(result, true, session)
+    })
+    checklistWrites.set(key, pending)
+    try { await pending }
+    catch (error) { if (isCurrentProjectSession(session)) get().setError(error); throw error }
+    finally { if (checklistWrites.get(key) === pending) checklistWrites.delete(key) }
+  },
+
+  setChapterStage: async (nodeId, stage) => {
+    await get().updateChapterChecklist(nodeId, value => ({ ...value, workflowStatus: stage }))
+  },
+
   setNodeStatus: async (nodeId, status) => {
     const session = captureProjectSession()
     const projectPath = get().projectPath
@@ -593,6 +625,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       if (status === 'locked' && get().saveState !== 'saved' && !await get().saveCurrentDocument('锁定前保存')) throw new Error('正文保存失败，已取消锁定')
       if (!isCurrentProjectSession(session)) return
+      // Preserve the stage of older chapters before toggling the legacy storage lock flag.
+      const node = get().data?.nodes.find(item => item.id === nodeId)
+      if (node?.kind === 'chapter' && !checklistForChapter(get().data!.entities, nodeId)) {
+        await get().updateChapterChecklist(nodeId, value => value)
+        if (!isCurrentProjectSession(session)) return
+      }
       await get().refreshData(await projectApi.setNodeStatus({ projectPath, nodeId, status }), true, session)
     }
     catch (error) { if (isCurrentProjectSession(session)) get().setError(error) }

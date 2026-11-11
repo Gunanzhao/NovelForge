@@ -3,11 +3,12 @@ import { markDraftSaved, setDraftSaving } from '../lib/draft-guard'
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, ListChecks, RefreshCw, Save } from 'lucide-react'
 import {
-  chapterChecklistInput, checklistForChapter, checklistProgress, CHAPTER_WORKFLOW_STATUSES,
+  checklistForChapter, checklistProgress, CHAPTER_WORKFLOW_STATUSES, chapterStageLabel,
   DEFAULT_CHECKLIST_TEMPLATE, parseChecklistTemplate, workflowDashboard,
 } from '../lib/chapter-workflow'
 import type { ChapterChecklist } from '../lib/chapter-workflow'
 import { useAppStore } from '../stores/app-store'
+import { ChapterStageSelect } from './ChapterStageSelect'
 import { Button, Field, Panel } from './ui'
 
 export function ChecklistTemplateSettings() {
@@ -55,18 +56,17 @@ export function ChapterChecklistInspector() {
   const document = useAppStore((state) => state.document)
   const data = useAppStore((state) => state.data)
   const projectPath = useAppStore((state) => state.projectPath)
-  const saveEntity = useAppStore((state) => state.saveEntity)
   const setError = useAppStore((state) => state.setError)
   const [busy, setBusy] = useState(false)
   const chapter = document?.node.kind === 'chapter' ? document.node : null
   const checklist = chapter && data ? checklistForChapter(data.entities, chapter.id) : null
   const progress = checklistProgress(checklist)
 
-  async function save(next?: ChapterChecklist) {
+  async function save(update: (value: ChapterChecklist) => ChapterChecklist = value => value) {
     if (!chapter || !data || !projectPath) return
     setBusy(true)
     try {
-      await saveEntity(chapterChecklistInput(projectPath, chapter, data.entities, next ?? checklist ?? undefined))
+      await useAppStore.getState().updateChapterChecklist(chapter.id, update)
     } catch (error) {
       setError(error)
     } finally {
@@ -76,7 +76,7 @@ export function ChapterChecklistInspector() {
 
   function updateItem(id: string) {
     if (!checklist) return
-    void save({ ...checklist, items: checklist.items.map((item) => item.id === id ? { ...item, completed: !item.completed } : item) })
+    void save(value => ({ ...value, items: value.items.map(item => item.id === id ? { ...item, completed: !item.completed } : item) }))
   }
 
   useEffect(() => {
@@ -84,24 +84,17 @@ export function ChapterChecklistInspector() {
       const current = useAppStore.getState()
       const currentDocument = current.document
       if (!currentDocument || currentDocument.node.kind !== 'chapter' || !current.data || !current.projectPath) return
-      const value = checklistForChapter(current.data.entities, currentDocument.node.id)
-      if (!value) {
-        void current.saveEntity(chapterChecklistInput(current.projectPath, currentDocument.node, current.data.entities))
-        return
-      }
-      const first = value.items.find((item) => !item.completed)
-      if (!first) return
-      void current.saveEntity(chapterChecklistInput(current.projectPath, currentDocument.node, current.data.entities, {
-        ...value,
-        items: value.items.map((item) => item.id === first.id ? { ...item, completed: true } : item),
-      }))
+      void current.updateChapterChecklist(currentDocument.node.id, value => {
+        const first = value.items.find(item => !item.completed)
+        return { ...value, items: value.items.map(item => item.id === first?.id ? { ...item, completed: true } : item) }
+      }).catch(() => undefined)
     }
     window.addEventListener('novelforge:toggle-chapter-checklist', toggle)
     return () => window.removeEventListener('novelforge:toggle-chapter-checklist', toggle)
   }, [])
 
   if (!chapter || !data || !projectPath) return null
-  return <div className="chapter-checklist-inspector"><div className="panel-title"><h3><ListChecks size={14} />完成进度</h3><span>{progress.completed} / {progress.total} · {progress.percent}%</span></div>{checklist ? <><select className="select-input" value={checklist.workflowStatus} disabled={busy} onChange={(event) => void save({ ...checklist, workflowStatus: event.target.value as ChapterChecklist['workflowStatus'] })}>{CHAPTER_WORKFLOW_STATUSES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select><div className="chapter-checklist-items">{checklist.items.map((item) => <label key={item.id}><input type="checkbox" checked={item.completed} disabled={busy} onChange={() => updateItem(item.id)} /><span>{item.label}</span></label>)}</div><div className="progress-track"><div className="progress-bar" style={{ width: `${progress.percent}%` }} /></div></> : <><span className="field-hint">这个旧章节还没有 Checklist；初始化会复制当前项目模板。</span><Button variant="outline" disabled={busy} onClick={() => void save()}><ListChecks size={13} />初始化 Checklist</Button></>}</div>
+  return <div className="chapter-checklist-inspector"><div className="panel-title"><h3><ListChecks size={14} />检查事项</h3><span>{progress.completed} / {progress.total} · {progress.percent}%</span></div>{checklist ? <><ChapterStageSelect chapter={chapter} entities={data.entities} label="章节完成中的写作阶段" /><p className="field-hint">写作阶段与正文、看板及导出一致；勾选检查事项不会自动定稿。</p>{['self-check-complete', 'proofread-1', 'proofread-2'].includes(checklist.workflowStatus) && <p className="field-hint">{chapterStageLabel(chapter, data.entities)} · 保留原细分阶段：{CHAPTER_WORKFLOW_STATUSES.find(item => item.id === checklist.workflowStatus)?.label}</p>}<div className="chapter-checklist-items">{checklist.items.map((item) => <label key={item.id}><input type="checkbox" checked={item.completed} disabled={busy} onChange={() => updateItem(item.id)} /><span>{item.label}</span></label>)}</div><div className="progress-track"><div className="progress-bar" style={{ width: `${progress.percent}%` }} /></div></> : <><span className="field-hint">尚未建立检查清单；初始化会保留当前写作阶段，并复制项目检查模板。</span><Button variant="outline" disabled={busy} onClick={() => void save()}><ListChecks size={13} />初始化 Checklist</Button></>}</div>
 }
 
 export function ChecklistDashboard() {

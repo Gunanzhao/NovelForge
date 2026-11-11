@@ -1,6 +1,13 @@
 import type { EntityInput, EntityRecord, NodeRecord, ProjectData } from './types'
 
-export type ChapterWorkflowStatus = 'draft' | 'first-draft-complete' | 'self-check-complete' | 'proofread-1' | 'proofread-2' | 'final'
+export type ChapterWorkflowStatus = 'draft' | 'first-draft-complete' | 'editing' | 'self-check-complete' | 'proofread-1' | 'proofread-2' | 'final'
+export type ChapterStage = 'draft' | 'first-draft-complete' | 'editing' | 'final'
+export const CHAPTER_STAGES: Array<{ id: ChapterStage; label: string }> = [
+  { id: 'draft', label: '草稿' },
+  { id: 'first-draft-complete', label: '初稿完成' },
+  { id: 'editing', label: '修订中' },
+  { id: 'final', label: '定稿' },
+]
 export type ChapterWorkflowFilter = 'all' | 'incomplete' | 'not-final' | 'consistency'
 
 export interface ChecklistItem {
@@ -24,6 +31,7 @@ export interface ChecklistTemplate {
 export const CHAPTER_WORKFLOW_STATUSES: Array<{ id: ChapterWorkflowStatus; label: string }> = [
   { id: 'draft', label: '草稿' },
   { id: 'first-draft-complete', label: '初稿完成' },
+  { id: 'editing', label: '修订中' },
   { id: 'self-check-complete', label: '自检完成' },
   { id: 'proofread-1', label: '一校' },
   { id: 'proofread-2', label: '二校' },
@@ -87,12 +95,27 @@ export function checklistForChapter(entities: EntityRecord[], chapterId: string)
   return entity ? parseChapterChecklist(entity) : null
 }
 
+/** Existing checklists are authoritative. Legacy 'done' never implies approval to publish. */
+export function chapterStage(chapter: NodeRecord, entities: EntityRecord[]): ChapterStage {
+  const saved = checklistForChapter(entities, chapter.id)
+  if (saved) {
+    const status = saved.workflowStatus
+    return status === 'draft' || status === 'first-draft-complete' || status === 'final' ? status : 'editing'
+  }
+  return chapter.status === 'done' || chapter.status === 'first-draft' ? 'first-draft-complete'
+    : chapter.status === 'editing' ? 'editing' : 'draft'
+}
+
+export function chapterStageLabel(chapter: NodeRecord, entities: EntityRecord[]): string {
+  return CHAPTER_STAGES.find(stage => stage.id === chapterStage(chapter, entities))!.label
+}
+
 export function chapterChecklistInput(projectPath: string, chapter: NodeRecord, entities: EntityRecord[], checklist?: ChapterChecklist): EntityInput {
   const templateEntity = entities.find((entity) => entity.kind === 'checklist-template')
   const template = parseChecklistTemplate(templateEntity)
   const value = checklist ?? {
     chapterId: chapter.id,
-    workflowStatus: 'draft' as const,
+    workflowStatus: chapterStage(chapter, entities),
     items: template.items.map((item) => ({ ...item, completed: false })),
   }
   return {

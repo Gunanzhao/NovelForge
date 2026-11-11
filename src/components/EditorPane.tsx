@@ -26,11 +26,12 @@ import {
 import type { ContextMenuItem } from '../lib/context-menu'
 import { readClipboardText, writeClipboardText } from '../lib/clipboard'
 import type { AiAction } from '../lib/ai-data'
-import { ENTITY_LABELS, NODE_STATUS_LABELS, type EntityRecord } from '../lib/types'
+import { ENTITY_LABELS, type EntityRecord } from '../lib/types'
 import { isCurrentProjectSession, useAppStore } from '../stores/app-store'
 import { registerAiEditor, useAiTask } from '../stores/ai-task'
 import { aiAcceptanceEffect } from '../lib/ai-edit'
 import { ActionMenu, Button, IconButton } from './ui'
+import { ChapterStageSelect } from './ChapterStageSelect'
 import { useContextMenu } from './ContextMenu'
 import { MarkdownPreview } from './MarkdownPreview'
 
@@ -349,7 +350,7 @@ export function EditorPane() {
 
   return <div className="manuscript-view">
     <div className="editor-header">
-      <div className="editor-title-row"><div><p className="eyebrow">MANUSCRIPT / {document.node.kind.toUpperCase()}</p><h1>{document.node.title}</h1></div><label className="editor-chapter-status"><span className="sr-only">章节状态</span><select aria-label="章节状态" className="status-select" value={document.node.status} onChange={(event) => void setNodeStatus(document.node.id, event.target.value)}>{Object.entries(NODE_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><IconButton icon={Maximize2} label="专注模式（F11）" onClick={toggleFocusMode} /></div>
+      <div className="editor-title-row"><div><p className="eyebrow">MANUSCRIPT / {document.node.kind.toUpperCase()}</p><h1>{document.node.title}</h1></div><div className="editor-chapter-status">{document.node.kind === 'chapter' && <ChapterStageSelect chapter={document.node} entities={data?.entities ?? []} className="status-select" />}<Button variant="ghost" disabled={locked && document.node.status !== 'locked'} title={locked && document.node.status !== 'locked' ? '上级已锁定，请先解锁上级节点' : '锁定只保护正文，不改变写作阶段'} onClick={() => void setNodeStatus(document.node.id, document.node.status === 'locked' ? 'draft' : 'locked')}>{document.node.status === 'locked' ? '解锁正文' : locked ? '上级已锁定' : '锁定正文'}</Button></div><IconButton icon={Maximize2} label="专注模式（F11）" onClick={toggleFocusMode} /></div>
       <div className="editor-toolbar">
         {searchOrigin === document.node.id && <Button variant="outline" onClick={() => setView('search')}><Search size={13} />返回搜索</Button>}
         <IconButton icon={Bold} label="粗体（Ctrl+B）" onClick={() => applyCommand('bold')} /><IconButton icon={Italic} label="斜体（Ctrl+I）" onClick={() => applyCommand('italic')} /><IconButton icon={Heading1} label="标题" onClick={() => applyCommand('heading')} /><IconButton icon={Quote} label="引用" onClick={() => applyCommand('quote')} /><IconButton icon={Link} label="链接" onClick={() => applyCommand('link')} /><ActionMenu label="更多格式">{([{ icon: Strikethrough, label: '删除线', command: 'strikethrough' }, { icon: List, label: '无序列表', command: 'unordered-list' }, { icon: ListOrdered, label: '有序列表', command: 'ordered-list' }, { icon: ListChecks, label: '任务列表', command: 'task-list' }, { icon: Image, label: '图片', command: 'image' }, { icon: Code2, label: '代码', command: 'code' }, { icon: Minus, label: '分割线', command: 'horizontal-rule' }] as const).map(({ icon: Icon, label, command }) => <Button key={command} variant="ghost" onClick={() => applyCommand(command)}><Icon size={15} />{label}</Button>)}</ActionMenu>

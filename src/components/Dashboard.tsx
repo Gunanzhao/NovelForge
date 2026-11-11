@@ -5,6 +5,8 @@ import { projectApi } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/utils'
 import { captureProjectSession, isCurrentProjectSession, useAppStore } from '../stores/app-store'
 import { Button, Modal, Panel } from './ui'
+import { chapterStageLabel } from '../lib/chapter-workflow'
+import { isNodeLocked } from '../lib/node-lock'
 import { ChecklistDashboard } from './ChapterWorkflow'
 
 export function Dashboard() {
@@ -85,7 +87,7 @@ export function Dashboard() {
       <Panel className="metric-card"><span className="metric-label">项目目标</span><div className="metric-value">{progress}<small style={{ fontSize: 12 }}>%</small></div><span className="metric-sub">{formatNumber(stats.targetWords)} 字目标</span></Panel>
     </div>
     <div className="dashboard-columns">
-      <Panel className="dashboard-panel"><div className="panel-title"><h3>最近修改</h3><span>按最后保存排序</span></div>{chapters.length ? <div className="recent-list">{chapters.map((chapter, index) => <button className="recent-item" key={chapter.id} onClick={() => void selectNode(chapter.id)}><span className="recent-number">{String(index + 1).padStart(2, '0')}</span><span><strong>{chapter.title}</strong><small>{chapter.status === 'done' ? '已完成' : chapter.status === 'editing' ? '修改中' : '草稿'} · {formatDate(chapter.updatedAt)}</small></span></button>)}</div> : <div className="empty-state"><BookOpen size={22} /><div><strong>还没有章节</strong><span>从左侧正文结构创建第一卷和章节。</span></div></div>}</Panel>
+      <Panel className="dashboard-panel"><div className="panel-title"><h3>最近修改</h3><span>按最后保存排序</span></div>{chapters.length ? <div className="recent-list">{chapters.map((chapter, index) => <button className="recent-item" key={chapter.id} onClick={() => void selectNode(chapter.id)}><span className="recent-number">{String(index + 1).padStart(2, '0')}</span><span><strong>{chapter.title}</strong><small>{chapterStageLabel(chapter, data.entities)}{isNodeLocked(data.nodes, chapter.id) ? ' · 已锁定' : ''} · {formatDate(chapter.updatedAt)}</small></span></button>)}</div> : <div className="empty-state"><BookOpen size={22} /><div><strong>还没有章节</strong><span>从左侧正文结构创建第一卷和章节。</span></div></div>}</Panel>
       <div style={{ display: 'grid', gap: 10 }}>
         <Panel className="dashboard-panel"><div className="panel-title"><h3>写作目标</h3><Target size={15} color="var(--accent)" /></div><div className="progress-wrap"><div className="progress-track"><div className="progress-bar" style={{ width: String(progress) + '%' }} /></div><div className="progress-meta"><span>{formatNumber(stats.totalWords)} 字</span><span>{formatNumber(stats.targetWords)} 字</span></div></div><p className="metric-sub">本周新增 {formatNumber(stats.weekWords)} 字 · 本月新增 {formatNumber(stats.monthWords)} 字</p></Panel>
 

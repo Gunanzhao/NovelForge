@@ -227,7 +227,7 @@ export function ExportDialog({
         <label><input type="checkbox" checked={onlyFinal} onChange={event => setOnlyFinal(event.target.checked)} />仅导出定稿章</label>
         {scoped.sections > 0 && <label><input type="checkbox" checked={includeSections} onChange={event => setIncludeSections(event.target.checked)} />包含小节</label>}
       </div>
-      <p className="field-hint">定稿取自「章节完成」清单。{scoped.sections > 0 && '小节随所属章节导出，没有单独的定稿状态。'}</p>
+      <p className="field-hint">定稿取自统一的写作阶段，可在正文、看板或「章节完成」中设置。{scoped.sections > 0 && '小节随所属章节导出，没有单独的定稿状态。'}</p>
       {!scoped.chapters ? <p className="field-hint">请选择有正文的导出范围。</p>
         : !saved ? <div className="export-preflight-save"><span>正文有待保存的改动，保存后会重新检查。</span><Button variant="outline" disabled={saveState === 'saving'} onClick={() => void saveForPreflight()}>保存正文并预检</Button></div>
         : preflightError ? <div><p className="export-error" role="alert">预检失败：{preflightError}</p><Button variant="outline" onClick={() => setCheckAttempt(attempt => attempt + 1)}>重试预检</Button></div>

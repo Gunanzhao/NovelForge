@@ -9,7 +9,8 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '../stores/app-store'
 import type { NodeKind, NodeRecord, ViewId } from '../lib/types'
-import { NODE_STATUS_LABELS } from '../lib/types'
+import { CHAPTER_STAGES, chapterStage, chapterStageLabel } from '../lib/chapter-workflow'
+import { isNodeLocked } from '../lib/node-lock'
 import type { ContextMenuItem } from '../lib/context-menu'
 import { writeClipboardText } from '../lib/clipboard'
 import { useContextMenu } from './ContextMenu'
@@ -17,7 +18,7 @@ import { useContextMenu } from './ContextMenu'
 import { cn } from '../lib/utils'
 import { Button, IconButton } from './ui'
 import {
-  chapterChecklistInput, chapterMatchesWorkflowFilter, checklistForChapter,
+  chapterMatchesWorkflowFilter,
 } from '../lib/chapter-workflow'
 import type { ChapterWorkflowFilter } from '../lib/chapter-workflow'
 
@@ -75,6 +76,8 @@ function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectTogg
   onDrop: () => void
 }) {
   const current = useAppStore(state => state.document?.node.id === node.id)
+  const data = useAppStore(state => state.data)
+  const stage = chapterStage(node, data?.entities ?? [])
   const isContainer = node.kind !== 'section'
   const hasChildren = isContainer
   return <div className="tree-row-wrap">
@@ -84,7 +87,7 @@ function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectTogg
       <button className="tree-main-button" aria-current={current ? 'page' : undefined} onClick={onSelect}>
         <span className="tree-icon">{node.kind === 'volume' ? <FolderTree size={15} /> : <BookOpen size={14} />}</span>
         <span className="tree-label">{node.title}</span>
-        {node.kind === 'chapter' ? <span className={cn('tree-status-dot', node.status)} /> : null}
+        {node.kind === 'chapter' ? <span title={chapterStageLabel(node, data?.entities ?? []) + (isNodeLocked(data?.nodes ?? [], node.id) ? ' · 已锁定' : '')} className={cn('tree-status-dot', stage === 'final' ? 'done' : stage)} /> : null}
       </button>
       <span className="tree-row-actions">
         {node.kind !== 'section' ? <IconButton icon={Plus} label={'在此新建' + (node.kind === 'volume' ? '章' : '节')} onClick={onAdd} /> : null}
@@ -116,7 +119,7 @@ export function Sidebar({
   const renameNode = useAppStore((state) => state.renameNode)
   const deleteNode = useAppStore((state) => state.deleteNode)
   const setNodeStatus = useAppStore((state) => state.setNodeStatus)
-  const saveEntity = useAppStore((state) => state.saveEntity)
+  const setChapterStage = useAppStore((state) => state.setChapterStage)
   const reorderNode = useAppStore((state) => state.reorderNode)
   const moveNode = useAppStore((state) => state.moveNode)
   const projectPath = useAppStore((state) => state.projectPath)
@@ -201,15 +204,9 @@ export function Sidebar({
   }
   async function updateChecklistShortcut(node: NodeRecord, mode: 'body' | 'final') {
     if (node.kind !== 'chapter' || !projectPath) return
-    const checklist = checklistForChapter(currentData.entities, node.id) ?? {
-      chapterId: node.id,
-      workflowStatus: 'draft' as const,
-      items: chapterChecklistInput(projectPath, node, currentData.entities).content.items as Array<{ id: string; label: string; completed: boolean }>,
-    }
-    const next = mode === 'final'
-      ? { ...checklist, workflowStatus: 'final' as const }
-      : { ...checklist, items: checklist.items.map((item) => item.id === 'body-complete' || item.label === '正文完成' ? { ...item, completed: true } : item) }
-    await saveEntity(chapterChecklistInput(projectPath, node, currentData.entities, next))
+    await useAppStore.getState().updateChapterChecklist(node.id, value => mode === 'final'
+      ? { ...value, workflowStatus: 'final' }
+      : { ...value, items: value.items.map(item => item.id === 'body-complete' || item.label === '正文完成' ? { ...item, completed: true } : item) })
   }
   function openNodeMenu(event: ReactMouseEvent<HTMLDivElement>, node: NodeRecord) {
     const preservingSelection = selectedNodeIds.has(node.id) && selectedNodeIds.size > 1
@@ -218,15 +215,15 @@ export function Sidebar({
     const selectedNodes = currentData.nodes.filter((candidate) => ids.includes(candidate.id))
     if (preservingSelection) {
       const allChapters = selectedNodes.length > 0 && selectedNodes.every((candidate) => candidate.kind === 'chapter')
-      const statusItems: ContextMenuItem[] = allChapters ? Object.entries(NODE_STATUS_LABELS).map(([status, label]) => ({
+      const statusItems: ContextMenuItem[] = allChapters ? CHAPTER_STAGES.map(({ id: status, label }) => ({
         type: 'item' as const,
         id: 'selection-status-' + status,
         label,
-        checked: selectedNodes.every((candidate) => candidate.status === status),
-        onSelect: async () => { for (const candidate of selectedNodes) await setNodeStatus(candidate.id, status) },
+        checked: selectedNodes.every((candidate) => chapterStage(candidate, currentData.entities) === status),
+        onSelect: async () => { for (const candidate of selectedNodes) await setChapterStage(candidate.id, status) },
       })) : []
       const items: ContextMenuItem[] = [
-        ...(allChapters ? [{ type: 'item' as const, id: 'selection-status', label: '批量设置状态', children: statusItems, onSelect: () => undefined }] : []),
+        ...(allChapters ? [{ type: 'item' as const, id: 'selection-status', label: '批量设置写作阶段', children: statusItems, onSelect: () => undefined }] : []),
         { type: 'item', id: 'selection-trash', label: '批量移入回收站', icon: Trash2, tone: 'danger', onSelect: () => void deleteSelected() },
         { type: 'separator' },
         { type: 'item', id: 'selection-clear', label: '清除选择', onSelect: () => setSelectedNodeIds(new Set()) },
@@ -246,12 +243,13 @@ export function Sidebar({
       ...(node.kind !== 'volume' ? [{ type: 'item' as const, id: 'node-move', label: node.kind === 'chapter' ? '移动到其他卷' : '移动到其他章节', icon: ArrowRightLeft, onSelect: () => onMoveNode(node) }] : []),
       { type: 'item', id: 'node-up', label: '上移', icon: ArrowUp, disabled: siblingIndex <= 0, onSelect: () => void reorderNode(node.id, 'up') },
       { type: 'item', id: 'node-down', label: '下移', icon: ArrowDown, disabled: siblingIndex < 0 || siblingIndex >= siblings.length - 1, onSelect: () => void reorderNode(node.id, 'down') },
-      ...(node.kind === 'chapter' ? [{ type: 'item' as const, id: 'node-status', label: '写作状态', children: Object.entries(NODE_STATUS_LABELS).map(([status, label]) => ({ type: 'item' as const, id: 'node-status-' + status, label, checked: node.status === status, onSelect: () => void setNodeStatus(node.id, status) })), onSelect: () => undefined }] : []),
-      ...(node.kind === 'chapter' ? [{ type: 'item' as const, id: 'node-checklist', label: 'Checklist', children: [
-        { type: 'item' as const, id: 'node-checklist-body', label: '标记正文完成', onSelect: () => void updateChecklistShortcut(node, 'body') },
-        { type: 'item' as const, id: 'node-checklist-final', label: '标记定稿', onSelect: () => void updateChecklistShortcut(node, 'final') },
+      ...(node.kind === 'chapter' ? [{ type: 'item' as const, id: 'node-status', label: '写作阶段', children: CHAPTER_STAGES.map(({ id: status, label }) => ({ type: 'item' as const, id: 'node-status-' + status, label, checked: chapterStage(node, currentData.entities) === status, onSelect: () => void setChapterStage(node.id, status).catch(() => undefined) })), onSelect: () => undefined }] : []),
+      ...(node.kind === 'chapter' ? [{ type: 'item' as const, id: 'node-checklist', label: '检查清单', children: [
+        { type: 'item' as const, id: 'node-checklist-body', label: '标记正文完成', onSelect: () => void updateChecklistShortcut(node, 'body').catch(() => undefined) },
+        { type: 'item' as const, id: 'node-checklist-final', label: '标记定稿', onSelect: () => void updateChecklistShortcut(node, 'final').catch(() => undefined) },
       ], onSelect: () => undefined }] : []),
       ...(node.kind !== 'section' ? [{ type: 'item' as const, id: 'node-export', label: node.kind === 'volume' ? '导出此卷' : '导出此章', icon: FileDown, onSelect: () => onExportNode(node) }] : []),
+      { type: 'item', id: 'node-lock', label: node.status === 'locked' ? '解锁正文' : '锁定正文', onSelect: () => void setNodeStatus(node.id, node.status === 'locked' ? 'draft' : 'locked') },
       { type: 'item', id: 'node-copy-title', label: node.kind === 'chapter' ? '复制章节标题' : '复制标题', icon: Copy, onSelect: async () => { if (!await writeClipboardText(node.title)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
       { type: 'item', id: 'node-copy-path', label: node.kind === 'chapter' ? '复制文件路径' : '复制目录路径', icon: Copy, onSelect: copyPath },
       { type: 'separator' },
@@ -292,7 +290,7 @@ export function Sidebar({
         </div>
         </div>
       </nav><div className="sidebar-section-label"><span>正文结构</span><span>{data.nodes.filter((node) => node.kind === 'chapter').length} 章</span></div>
-      <select className="select-input workflow-tree-filter" value={workflowFilter} onChange={(event) => { setWorkflowFilter(event.target.value as ChapterWorkflowFilter); setTreeScrollTop(0) }} aria-label="章节 Checklist 过滤"><option value="all">显示全部章节</option><option value="incomplete">仅显示未完成</option><option value="not-final">仅显示未定稿</option><option value="consistency">仅显示待人物一致性检查</option></select>
+      <select className="select-input workflow-tree-filter" value={workflowFilter} onChange={(event) => { setWorkflowFilter(event.target.value as ChapterWorkflowFilter); setTreeScrollTop(0) }} aria-label="章节 Checklist 过滤"><option value="all">显示全部章节</option><option value="incomplete">仅显示检查未完成</option><option value="not-final">仅显示未定稿</option><option value="consistency">仅显示待人物一致性检查</option></select>
       <div className="tree" ref={treeRef} onScroll={(event) => setTreeScrollTop(event.currentTarget.scrollTop)}>
         {volumes.length === 0 ? <div className="tree-muted">还没有卷，点击右上角创建第一卷。</div> : <div className="tree-virtual-content" style={{ height: flatTree.length * treeRowHeight }}><div className="tree-virtual-rows" style={{ top: visibleStart * treeRowHeight }}>{visibleTree.map(({ node, level }) => <NodeRow key={node.id} node={node} level={level} open={openNodes.has(node.id)} selected={selectedNodeIds.has(node.id)} onToggle={() => toggle(node.id)} onSelect={() => node.kind === 'volume' ? toggle(node.id) : void selectNode(node.id)} onSelectToggle={() => toggleSelection(node.id)} onAdd={() => onAddNode(node.kind === 'volume' ? 'chapter' : 'section', node.id)} onRename={() => handleRename(node)} onMove={() => onMoveNode(node)} onCopy={() => onCopyNode(node)} onDelete={() => handleDelete(node)} onContextMenu={(event) => openNodeMenu(event, node)} onDragStart={() => setDraggedNodeId(node.id)} onDrop={() => handleDrop(node)} />)}</div></div>}
       </div>
