@@ -1,6 +1,6 @@
 import { savedAnnotationAnchors } from '../lib/annotations'
 import { notify } from '../lib/notifications'
-import { readEditorSession, rememberEditor } from '../lib/editor-session'
+import { readEditorSession, rememberEditor, resumeWritingNode } from '../lib/editor-session'
 import { busyDrafts, confirmDraftNavigation, dirtyDrafts, runGuarded } from '../lib/draft-guard'
 import { create } from 'zustand'
 import { isNodeLocked } from '../lib/node-lock'
@@ -339,7 +339,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set((state) => ({ projectPath: path, projectLease: targetLease ?? null, projectSession: state.projectSession + 1, deletingNodes: [], data, document: null, editorMode: 'markdown', editorSelection: null, documentVersion: state.documentVersion + 1, activeView: 'dashboard', error: null, selectedEntityId: null, searchResults: [], searchQuery: '', searchPage: null, trash: [], trashLoading: false, trashError: null, stats: emptyStats, saveState: 'saved' }))
       adopted = true
       const remembered = readEditorSession(path).nodeId
-      const chapter = data.nodes.find(node => node.id === remembered && node.kind !== 'volume') ?? firstChapter(data)
+      const chapter = resumeWritingNode(data.nodes, remembered)
       if (chapter) await get().selectNode(chapter.id)
       if (request !== transitionGeneration) return
       set({ recentProjects: rememberProject(path, data) })

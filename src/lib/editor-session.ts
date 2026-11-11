@@ -1,3 +1,13 @@
+import type { NodeRecord } from './types'
+import { sortChapterNodes } from './planning-data'
+
+/** Dashboard and project reopening must resolve the same last manuscript. */
+export function resumeWritingNode(nodes: NodeRecord[], rememberedId: string) {
+  return nodes.find(node => node.id === rememberedId && node.kind !== 'volume')
+    ?? sortChapterNodes(nodes)[0]
+    ?? nodes.find(node => node.kind === 'section')
+}
+
 export interface EditorPosition { anchor: number; head: number; scrollTop: number; scrollLeft: number }
 interface Session { nodeId: string; positions: Record<string, EditorPosition> }
 const memory = new Map<string, Session>()

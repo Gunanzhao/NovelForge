@@ -1825,3 +1825,5 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px
 .entity-list-item .entity-search-hit { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .entity-search-hit b { font-weight: 500; }
 .entity-search-hit mark { background: var(--accent-soft); color: var(--accent); }
+.dashboard-resume { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; min-width: 0; max-width: 40%; }
+.dashboard-resume > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--font-caption); }

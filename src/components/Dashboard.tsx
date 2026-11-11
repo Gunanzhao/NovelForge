@@ -8,6 +8,7 @@ import { Button, Modal, Panel } from './ui'
 import { chapterStageLabel } from '../lib/chapter-workflow'
 import { isNodeLocked } from '../lib/node-lock'
 import { ChecklistDashboard } from './ChapterWorkflow'
+import { readEditorSession, resumeWritingNode } from '../lib/editor-session'
 
 export function Dashboard() {
   const dailyTarget = useAppStore(state => state.workspacePreferences.dailyTargetWords)
@@ -23,6 +24,9 @@ export function Dashboard() {
 
   if (!data || !projectPath) return null
   const chapters = data.nodes.filter((node) => node.kind === 'chapter').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5)
+  const resumeNode = resumeWritingNode(data.nodes, readEditorSession(projectPath).nodeId)
+  const resumeParent = resumeNode?.kind === 'section' ? data.nodes.find(node => node.id === resumeNode.parentId) : undefined
+  const resumeTitle = resumeNode ? [resumeParent?.title, resumeNode.title].filter(Boolean).join(' / ') : '先从左侧创建章节'
   const dailyProgress = dailyTarget > 0 ? Math.min(100, Math.round(stats.todayWords / dailyTarget * 100)) : 0
   const progress = stats.targetWords > 0 ? Math.min(100, Math.round((stats.totalWords / stats.targetWords) * 100)) : 0
   const recovery = data.recovery.find((item) => item.id !== ignoredRecoveryId)
@@ -79,7 +83,7 @@ export function Dashboard() {
 
   return <div className="workspace-view">
     {recovery ? <div className="recovery-banner"><RotateCcw size={15} /><strong>检测到未恢复的写作内容：{recovery.nodeTitle}</strong><span>来自 {recovery.createdAt}</span><div className="banner-actions"><Button variant="ghost" disabled={recoveryBusy} onClick={() => void previewRecovery()}>查看</Button><Button variant="outline" disabled={recoveryBusy} onClick={ignoreRecovery}>稍后处理</Button><Button variant="danger" disabled={recoveryBusy} onClick={() => void discardRecovery()}>删除</Button>{data.nodes.some(node => node.id === recovery.nodeId) ? <Button disabled={recoveryBusy} onClick={() => void restoreRecovery()}>恢复</Button> : <Button disabled={recoveryBusy} onClick={() => useAppStore.getState().setView('settings')}>前往恢复中心另存</Button>}</div></div> : null}
-    <div className="view-header"><div><p className="eyebrow">PROJECT DASHBOARD</p><h1>{data.project.title}</h1><p>{data.project.description || '把设定、结构和每一次落笔，收拢在同一个安静的工作台。'}</p></div><div className="view-actions"><Button disabled={!chapters.length} onClick={() => void selectNode(chapters[0]?.id ?? '')}><BookOpen size={15} />继续写作</Button></div></div>
+    <div className="view-header"><div><p className="eyebrow">PROJECT DASHBOARD</p><h1>{data.project.title}</h1><p>{data.project.description || '把设定、结构和每一次落笔，收拢在同一个安静的工作台。'}</p></div><div className="dashboard-resume"><Button disabled={!resumeNode} title={resumeTitle} onClick={() => { if (resumeNode) void selectNode(resumeNode.id) }}><BookOpen size={15} />继续写作</Button><span title={resumeTitle}>{resumeTitle}</span></div></div>
     <div className="dashboard-grid">
       <Panel className="metric-card"><span className="metric-label">总字数</span><div className="metric-value">{formatNumber(stats.totalWords)}</div><span className="metric-sub">跨 {formatNumber(stats.chapterCount)} 个章节</span></Panel>
       <Panel className="metric-card"><span className="metric-label">今日新增</span><div className="metric-value">{formatNumber(stats.todayWords)}</div><span className="metric-sub">{dailyTarget > 0 ? '今日目标 ' + formatNumber(dailyTarget) + ' 字 · ' + dailyProgress + '%' : '未设置每日目标'}</span></Panel>
