@@ -191,13 +191,15 @@ export function buildAiPrompt(action: AiAction, context: Array<{ title: string; 
 }
 
 export function localAssist(action: AiAction, context: Array<{ title: string; kind: string; content: string }>, instruction: string): AiCompletionInput & { localContent: string } {
-  const actionLabel = AI_ACTIONS.find((item) => item.id === action)?.label ?? '辅助'
-  const excerpts = context.map((item) => `${item.title}：${item.content.replace(/\s+/gu, ' ').trim().slice(0, 260)}`).filter(Boolean)
+  const excerpts = context.map((item) => {
+    const text = item.content.replace(/\s+/gu, ' ').trim()
+    return `${item.title}：${text.slice(0, 260)}${text.length > 260 ? '（仅摘录前 260 字符）' : ''}`
+  }).filter(Boolean)
   const body = excerpts.length ? excerpts.join('\n') : '尚未选择上下文。'
   const chapterSource=context.find(item=>item.kind.includes('章节')||item.kind.includes('整章')) ?? context[0]
-  const quote=chapterSource?.content.split(/\n+/u).find(line=>line.trim()&&!line.startsWith('#'))?.trim() ?? ''
+  const quote=chapterSource?.content.split(/\n+/u).find(line=>line.trim()&&!line.startsWith('#'))?.trim().slice(0, 260) ?? ''
   const localContent = action === 'chapter-summary' ? JSON.stringify({summary:quote ? '本地摘录草稿：'+quote : '请补充章节摘要。',events:'',knowledge:'',changes:'',planted:'',resolved:'',next:'',sources:quote?[{field:'summary',quote}]:[]},null,2) : action === 'summary'
-    ? `【本地摘要草稿】\n${body}\n\n写作要求：${instruction.trim() || '请继续补充并校对关键情节。'}`
-    : `【本地${actionLabel}草稿】\n基于以下已选上下文生成的离线工作稿：\n${body}\n\n写作要求：${instruction.trim() || '请在此基础上继续编辑。'}`
+    ? `【本地摘录】\n以下内容按原文摘取，未调用 AI，也未概括情节。\n${body}\n\n整理备注：${instruction.trim() || '请自行补充并校对关键情节。'}`
+    : `【本地参考模板】\n以下内容按原文摘取，未进行续写或润色。\n${body}\n\n整理备注：${instruction.trim() || '请自行编辑。'}`
   return { endpoint: '', apiKey: '', model: 'novelforge-local', systemPrompt: '', prompt: '', localContent }
 }

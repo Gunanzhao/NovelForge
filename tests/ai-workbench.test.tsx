@@ -18,6 +18,32 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
+it('labels offline excerpts honestly and offers no direct manuscript application', async () => {
+  render(<AiAssistantView />)
+  expect(screen.queryByRole('button', { name: '续写' })).toBeNull()
+  expect(screen.getByRole('button', { name: '连接模型' })).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: '生成摘录 / 模板' }))
+  const result = await screen.findByLabelText('摘录与模板结果')
+  expect(result).toHaveProperty('value', expect.stringContaining('未调用 AI'))
+  expect(api.aiComplete).not.toHaveBeenCalled()
+  expect(screen.queryByRole('button', { name: '替换当前正文' })).toBeNull()
+  expect(screen.queryByRole('button', { name: '追加到正文' })).toBeNull()
+  expect(screen.getByRole('button', { name: '复制' })).toBeTruthy()
+  fireEvent.change(result, { target: { value: '作者自己整理的摘录' } })
+  expect(result).toHaveProperty('value', '作者自己整理的摘录')
+  expect(useAppStore.getState().document?.content).toBe('雨落在信封上。')
+})
+
+it('does not silently substitute excerpts when a provider has no endpoint', async () => {
+  writeAiPreferences({ mode: 'provider', endpoint: '', model: 'writer' })
+  render(<AiAssistantView />)
+  fireEvent.click(screen.getByRole('button', { name: '运行辅助' }))
+  await screen.findByText('本次生成失败')
+  expect(screen.getByRole('alert').textContent).toContain('请填写服务地址和模型名称')
+  expect(api.aiComplete).not.toHaveBeenCalled()
+  expect(useAiTask.getState().result).toBeNull()
+})
+
 it('puts writing and results first and opens templates only on demand', () => {
   render(<AiAssistantView />)
   expect(screen.getByRole('region', { name: '写作任务与参考资料' })).toBeTruthy()

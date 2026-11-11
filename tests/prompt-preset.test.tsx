@@ -68,7 +68,7 @@ describe('PromptPresetManager integration', () => {
     expect(screen.getByText(/当前章节 ·/)).toBeTruthy()
     expect(screen.getByText(/分析 林月推开门/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '确认运行' }))
-    expect(await screen.findByDisplayValue(/【本地模板草稿】/)).toBeTruthy()
+    expect(await screen.findByDisplayValue(/【提示词模板 · 未调用模型】/)).toBeTruthy()
     expect(api.aiComplete).not.toHaveBeenCalled()
   })
 

@@ -20,7 +20,10 @@ describe('AI context helpers', () => {
     expect(prompt).toContain('林月走进雾港')
     const local = localAssist('summary', [{ title: '第一章', kind: '正文', content: '林月走进雾港。' }], '')
     expect(local.model).toBe('novelforge-local')
-    expect(local.localContent).toContain('本地摘要草稿')
+    expect(local.localContent).toContain('本地摘录')
+    expect(local.localContent).toContain('未调用 AI')
+    const long = localAssist('summary', [{ title: '长章', kind: 'chapter', content: '字'.repeat(300) }], '')
+    expect(long.localContent).toContain('仅摘录前 260 字符')
     expect(local.apiKey).toBe('')
   })
 

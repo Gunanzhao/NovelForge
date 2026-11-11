@@ -111,7 +111,11 @@ export const useAiTask = create<AiTask>((set, get) => ({
       if (!valid()) return
       const { preferences: prefs, apiKey, systemPrompt, prompt, local } = request
       if (estimateContextBudget([{ title: 'System', kind: 'system', content: systemPrompt }, { title: 'User', kind: 'user', content: prompt }]).overLimit) throw new Error('System 与 User Prompt 总和超过安全阈值，请减少内容。')
-      const transport = prefs.mode === 'codex' ? 'codex' : prefs.mode === 'offline' || !prefs.endpoint.trim() || prefs.endpoint.trim().toLowerCase() === 'local' || !isDesktop ? 'offline' : 'provider'
+      const transport = prefs.mode === 'codex' ? 'codex' : prefs.mode === 'offline' || (!prefs.mode && !prefs.endpoint.trim()) ? 'offline' : 'provider'
+      if (transport === 'provider') {
+        if (!prefs.endpoint.trim() || prefs.endpoint.trim().toLowerCase() === 'local' || !prefs.model.trim()) throw new Error('请填写服务地址和模型名称，再运行 AI。连接未配置时不会改用本地摘录。')
+        if (!isDesktop) throw new Error('连接模型需要 NovelForge 桌面版；浏览器预览仅支持摘录与模板工具。')
+      }
       set({ transport, phase: 'running' })
       let result: AiCompletionResult
       if (transport === 'codex') {
