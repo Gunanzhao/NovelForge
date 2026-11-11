@@ -53,11 +53,11 @@ import { ActionMenu, Button, IconButton } from './components/ui'
 import { countWords, formatNumber } from './lib/utils'
 import { ContextMenuProvider } from './components/ContextMenu'
 
-function Welcome({ onProject }: { onProject: (mode: 'new' | 'open') => void }) {
+function Welcome({ onProject }: { onProject: (mode: 'new' | 'open' | 'import') => void }) {
   const recentProjects = useAppStore((state) => state.recentProjects)
   const openProject = useAppStore((state) => state.openProject)
   const setError = useAppStore((state) => state.setError)
-  return <div className="welcome"><div className="welcome-card"><div className="welcome-title"><span className="brand-mark">N</span><div><h1>NovelForge</h1><p>本地优先的中文长篇小说创作工作台</p></div></div><p className="welcome-copy">专注写下你的故事，把正文、人物和世界观放在同一个工作台。无需账号，也能完整写作。</p><div className="welcome-actions"><Button onClick={() => onProject('new')}><Plus size={15} />新建小说</Button><Button variant="outline" onClick={() => onProject('open')}><FolderOpen size={15} />打开项目</Button></div>{recentProjects.length ? <><p className="eyebrow">最近打开</p><div className="recent-projects">{recentProjects.map((project) => <button className="recent-project" key={project.path} onClick={() => void openProject(project.path).catch(setError)}><BookOpen size={16} /><span><strong>{project.title}</strong><small>{project.path}</small></span></button>)}</div></> : <div className="panel empty-state"><BookOpen size={25} /><div><strong>从一部小说开始</strong><span>新建一部小说，或打开已有项目继续写作。</span></div></div>}<Disclosure title="了解数据存储" className="welcome-storage"><p>正文保存在普通 Markdown 文件中，项目资料保存在本地。新建项目会创建 project.json 和 .novelforge 数据目录；备份时请保留整个项目文件夹。</p></Disclosure><ProjectBackup restoreOnly /><Disclosure title="恢复与救援" className="welcome-recovery"><DraftSnapshotRecovery /><ProjectRescue /></Disclosure></div></div>
+  return <div className="welcome"><div className="welcome-card"><div className="welcome-title"><span className="brand-mark">N</span><div><h1>NovelForge</h1><p>本地优先的中文长篇小说创作工作台</p></div></div><p className="welcome-copy">专注写下你的故事，把正文、人物和世界观放在同一个工作台。无需账号，也能完整写作。</p><div className="welcome-actions"><Button onClick={() => onProject('new')}><Plus size={15} />新建小说</Button><Button variant="outline" onClick={() => onProject('open')}><FolderOpen size={15} />打开项目</Button><Button variant="outline" onClick={() => onProject('import')}><FileDown size={15} />从已有稿件开始</Button></div>{recentProjects.length ? <><p className="eyebrow">最近打开</p><div className="recent-projects">{recentProjects.map((project) => <button className="recent-project" key={project.path} onClick={() => void openProject(project.path).catch(setError)}><BookOpen size={16} /><span><strong>{project.title}</strong><small>{project.path}</small></span></button>)}</div></> : <div className="panel empty-state"><BookOpen size={25} /><div><strong>从一部小说开始</strong><span>新建一部小说，或打开已有项目继续写作。</span></div></div>}<Disclosure title="了解数据存储" className="welcome-storage"><p>正文保存在普通 Markdown 文件中，项目资料保存在本地。新建项目会创建 project.json 和 .novelforge 数据目录；备份时请保留整个项目文件夹。</p></Disclosure><ProjectBackup restoreOnly /><Disclosure title="恢复与救援" className="welcome-recovery"><DraftSnapshotRecovery /><ProjectRescue /></Disclosure></div></div>
 }
 
 function ResizeHandle({ side, width, onResize }: { side: 'sidebar' | 'inspector'; width: number; onResize: (width: number) => void }) {
@@ -151,7 +151,7 @@ export default function App() {
   const setWorkspacePreferences = useAppStore((state) => state.setWorkspacePreferences)
   const clearError = useAppStore((state) => state.clearError)
   const refreshStats = useAppStore((state) => state.refreshStats)
-  const [projectDialog, setProjectDialog] = useState<'new' | 'open' | null>(null)
+  const [projectDialog, setProjectDialog] = useState<'new' | 'open' | 'import' | null>(null)
   const [exportPreset, setExportPreset] = useState<ExportDialogPreset | null>(null)
   const [nodeDialog, setNodeDialog] = useState<{ kind: NodeKind; parentId: string | null } | null>(null)
   const [transferDialog, setTransferDialog] = useState<{ mode: 'move' | 'copy'; nodeId: string } | null>(null)

@@ -5,7 +5,7 @@ import type { NodeKind, NodeRecord, ProjectData, ProjectInput } from '../lib/typ
 import { Button, Field, Modal, TextInput } from './ui'
 import { useAppStore } from '../stores/app-store'
 
-export function ProjectDialog({ mode, onClose }: { mode: 'new' | 'open' | null; onClose: () => void }) {
+export function ProjectDialog({ mode, onClose }: { mode: 'new' | 'open' | 'import' | null; onClose: () => void }) {
   const createProject = useAppStore((state) => state.createProject)
   const openProject = useAppStore((state) => state.openProject)
   const [path, setPath] = useState('')
@@ -20,7 +20,7 @@ export function ProjectDialog({ mode, onClose }: { mode: 'new' | 'open' | null; 
 
   useEffect(() => {
     setError('')
-    if (mode === 'new') {
+    if (mode === 'new' || mode === 'import') {
       setPath(isDesktop ? '' : 'browser-demo')
       setTitle('')
       setAuthor('')
@@ -32,7 +32,7 @@ export function ProjectDialog({ mode, onClose }: { mode: 'new' | 'open' | null; 
 
   async function pickPath() {
     try {
-      const selected = await chooseDirectory(mode === 'new' ? '选择新项目的空文件夹' : '选择已有项目的文件夹')
+      const selected = await chooseDirectory(mode !== 'open' ? '选择新项目的空文件夹' : '选择已有项目的文件夹')
       if (selected) { setPath(selected); setError('') }
     } catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)) }
   }
@@ -44,7 +44,7 @@ export function ProjectDialog({ mode, onClose }: { mode: 'new' | 'open' | null; 
     setError('')
     setBusy(true)
     try {
-      if (mode === 'new') {
+      if (mode !== 'open') {
         const input: ProjectInput = {
           path: path.trim(), title, author, description, genre,
           targetWords: Number.parseInt(targetWords, 10) || 300000,
@@ -53,7 +53,10 @@ export function ProjectDialog({ mode, onClose }: { mode: 'new' | 'open' | null; 
       } else {
         await openProject(path.trim())
       }
-      if (useAppStore.getState().projectSession !== generation) onClose()
+      if (useAppStore.getState().projectSession !== generation) {
+        if (mode === 'import') useAppStore.getState().setView('manuscript-import')
+        onClose()
+      }
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : String(reason)
       setError(mode === 'open' && message.startsWith('这里没有找到 project.json')
@@ -65,17 +68,19 @@ export function ProjectDialog({ mode, onClose }: { mode: 'new' | 'open' | null; 
     }
   }
 
-  return <Modal open={mode !== null} title={mode === 'new' ? '创建小说项目' : '打开小说项目'} onClose={() => { if (!inFlight.current) onClose() }}
-    footer={<><Button variant="ghost" disabled={busy} onClick={onClose}>取消</Button><Button onClick={() => void submit()} disabled={busy || !path.trim()}><Save size={15} />{busy ? '处理中…' : mode === 'new' ? '创建并开始写作' : '打开项目'}</Button></>}>
+  return <Modal open={mode !== null} title={mode === 'import' ? '从已有稿件开始' : mode === 'new' ? '创建小说项目' : '打开小说项目'} onClose={() => { if (!inFlight.current) onClose() }}
+    footer={<><Button variant="ghost" disabled={busy} onClick={onClose}>取消</Button><Button onClick={() => void submit()} disabled={busy || !path.trim()}><Save size={15} />{busy ? '处理中…' : mode === 'import' ? '创建项目并选择稿件' : mode === 'new' ? '创建并开始写作' : '打开项目'}</Button></>}>
     <div className="dialog-stack">
-      <Field label="项目文件夹" hint={isDesktop ? mode === 'new' ? '请选择一个空文件夹保存正文和资料。' : '选择包含 project.json 的项目文件夹。备份文件请使用「从备份恢复」。' : '浏览器开发模式使用 localStorage；桌面版可选择真实文件夹。'}>
-        <div className="input-with-action"><TextInput value={path} disabled={busy} aria-invalid={mode === 'open' && Boolean(error)} onChange={(event) => { setPath(event.target.value); setError('') }} placeholder={isDesktop ? '选择项目文件夹' : 'browser-demo'} /><Button variant="outline" disabled={busy} onClick={() => void pickPath()}><FolderOpen size={15} />选择</Button></div>
+      {mode === 'import' && <p className="field-hint">先创建项目，再选择 TXT / Markdown 原稿、预览分章并确认导入。原稿文件会保留。</p>}
+      <Field label="项目文件夹" hint={isDesktop ? mode !== 'open' ? '请选择一个空文件夹保存正文和资料。' : '选择包含 project.json 的项目文件夹。备份文件请使用「从备份恢复」。' : '浏览器开发模式使用 localStorage；桌面版可选择真实文件夹。'}>
+        <div className="input-with-action"><TextInput aria-label="项目文件夹" value={path} disabled={busy} aria-invalid={mode === 'open' && Boolean(error)} onChange={(event) => { setPath(event.target.value); setError('') }} placeholder={isDesktop ? '选择项目文件夹' : 'browser-demo'} /><Button variant="outline" disabled={busy} onClick={() => void pickPath()}><FolderOpen size={15} />选择</Button></div>
       </Field>
       {error && <p role="alert" className="settings-inline-error">{error}</p>}
-      {mode === 'new' ? <><Field label="作品名"><TextInput autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：雾港来信" /></Field>
+      {mode !== 'open' ? <><Field label="作品名"><TextInput autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder="例如：雾港来信" /></Field>
+        <details key={mode}><summary>更多作品信息（可稍后在项目设置补充）</summary>
         <div className="field-grid"><Field label="作者"><TextInput value={author} onChange={(event) => setAuthor(event.target.value)} placeholder="署名" /></Field><Field label="类型"><TextInput value={genre} onChange={(event) => setGenre(event.target.value)} placeholder="现代 / 仙侠 / 科幻" /></Field></div>
         <Field label="目标字数"><TextInput type="number" min="0" value={targetWords} onChange={(event) => setTargetWords(event.target.value)} /></Field>
-        <Field label="简介"><textarea className="text-area compact" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="一句话记录这部作品想写什么。" /></Field></> : null}
+        <Field label="简介"><textarea className="text-area compact" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="一句话记录这部作品想写什么。" /></Field></details></> : null}
     </div>
   </Modal>
 }
