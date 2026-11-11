@@ -362,11 +362,12 @@ export function ContextMenuProvider({ children, fallbackItems, pluginItems }: Co
     const extensionGroup = extensionItems.length
       ? [{ type: 'separator' as const }, { type: 'label' as const, id: 'context-plugin-label', label: '扩展' }, ...extensionItems]
       : []
+    const keyboardAnchor = event.type === 'click' && event.detail === 0 ? options.trigger?.getBoundingClientRect() : undefined
     setState({
       ...options,
       payload,
       items: [...ordinaryItems, ...extensionGroup, ...dangerItems],
-      point: { x: event.clientX, y: event.clientY },
+      point: keyboardAnchor ? { x: keyboardAnchor.left, y: keyboardAnchor.bottom } : { x: event.clientX, y: event.clientY },
     })
   }, [pluginItems])
 

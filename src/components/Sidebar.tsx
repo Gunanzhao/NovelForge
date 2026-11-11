@@ -5,7 +5,7 @@ import type { LucideIcon } from 'lucide-react'
 import {
   ArrowDown, ArrowRightLeft, ArrowUp, BarChart3, BookOpen, ChevronDown, ChevronRight, CircleUserRound, Clock3, Copy, FileDown, FilePlus2, FolderTree,
   GalleryVerticalEnd, GitBranch, GitCompare, Globe2, Inbox, LayoutDashboard, MoreHorizontal, Network, Paperclip, Pin, PinOff, Plus, Search,
-  ShieldCheck, Sparkles, Trash2, WandSparkles, X,
+  ShieldCheck, Sparkles, Trash2, WandSparkles,
 } from 'lucide-react'
 import { useAppStore } from '../stores/app-store'
 import type { NodeKind, NodeRecord, ViewId } from '../lib/types'
@@ -58,7 +58,7 @@ function flattenTree(nodes: NodeRecord[], volumes: NodeRecord[], openNodes: Set<
   return rows
 }
 
-function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectToggle, onAdd, onRename, onMove, onCopy, onDelete, onContextMenu, onDragStart, onDrop }: {
+function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectToggle, onRename, onContextMenu, onDragStart, onDrop }: {
   node: NodeRecord
   level: number
   open: boolean
@@ -66,12 +66,8 @@ function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectTogg
   onToggle: () => void
   onSelect: () => void
   onSelectToggle: () => void
-  onAdd: () => void
   onRename: () => void
-  onMove: () => void
-  onCopy: () => void
-  onDelete: () => void
-  onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void
+  onContextMenu: (event: ReactMouseEvent<HTMLElement>) => void
   onDragStart: () => void
   onDrop: () => void
 }) {
@@ -90,11 +86,7 @@ function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectTogg
         {node.kind === 'chapter' ? <span title={chapterStageLabel(node, data?.entities ?? []) + (isNodeLocked(data?.nodes ?? [], node.id) ? ' · 已锁定' : '')} className={cn('tree-status-dot', stage === 'final' ? 'done' : stage)} /> : null}
       </button>
       <span className="tree-row-actions">
-        {node.kind !== 'section' ? <IconButton icon={Plus} label={'在此新建' + (node.kind === 'volume' ? '章' : '节')} onClick={onAdd} /> : null}
-        {node.kind !== 'volume' ? <IconButton icon={ArrowRightLeft} label="移动节点" onClick={onMove} /> : null}
-        <IconButton icon={Copy} label="复制节点" onClick={onCopy} />
-        <IconButton icon={MoreHorizontal} label="更多操作" onClick={onRename} />
-        <IconButton icon={X} label="移入回收站" onClick={onDelete} />
+        <IconButton icon={MoreHorizontal} label={'更多操作：' + node.title} aria-haspopup="menu" onClick={onContextMenu} onDoubleClick={event => event.stopPropagation()} />
       </span>
     </div>
   </div>
@@ -208,7 +200,7 @@ export function Sidebar({
       ? { ...value, workflowStatus: 'final' }
       : { ...value, items: value.items.map(item => item.id === 'body-complete' || item.label === '正文完成' ? { ...item, completed: true } : item) })
   }
-  function openNodeMenu(event: ReactMouseEvent<HTMLDivElement>, node: NodeRecord) {
+  function openNodeMenu(event: ReactMouseEvent<HTMLElement>, node: NodeRecord) {
     const preservingSelection = selectedNodeIds.has(node.id) && selectedNodeIds.size > 1
     const ids = preservingSelection ? [...selectedNodeIds] : [node.id]
     if (!preservingSelection && (!selectedNodeIds.has(node.id) || selectedNodeIds.size !== 1)) setSelectedNodeIds(new Set([node.id]))
@@ -292,7 +284,7 @@ export function Sidebar({
       </nav><div className="sidebar-section-label"><span>正文结构</span><span>{data.nodes.filter((node) => node.kind === 'chapter').length} 章</span></div>
       <select className="select-input workflow-tree-filter" value={workflowFilter} onChange={(event) => { setWorkflowFilter(event.target.value as ChapterWorkflowFilter); setTreeScrollTop(0) }} aria-label="章节 Checklist 过滤"><option value="all">显示全部章节</option><option value="incomplete">仅显示检查未完成</option><option value="not-final">仅显示未定稿</option><option value="consistency">仅显示待人物一致性检查</option></select>
       <div className="tree" ref={treeRef} onScroll={(event) => setTreeScrollTop(event.currentTarget.scrollTop)}>
-        {volumes.length === 0 ? <div className="tree-muted">还没有卷，点击右上角创建第一卷。</div> : <div className="tree-virtual-content" style={{ height: flatTree.length * treeRowHeight }}><div className="tree-virtual-rows" style={{ top: visibleStart * treeRowHeight }}>{visibleTree.map(({ node, level }) => <NodeRow key={node.id} node={node} level={level} open={openNodes.has(node.id)} selected={selectedNodeIds.has(node.id)} onToggle={() => toggle(node.id)} onSelect={() => node.kind === 'volume' ? toggle(node.id) : void selectNode(node.id)} onSelectToggle={() => toggleSelection(node.id)} onAdd={() => onAddNode(node.kind === 'volume' ? 'chapter' : 'section', node.id)} onRename={() => handleRename(node)} onMove={() => onMoveNode(node)} onCopy={() => onCopyNode(node)} onDelete={() => handleDelete(node)} onContextMenu={(event) => openNodeMenu(event, node)} onDragStart={() => setDraggedNodeId(node.id)} onDrop={() => handleDrop(node)} />)}</div></div>}
+        {volumes.length === 0 ? <div className="tree-muted">还没有卷，点击右上角创建第一卷。</div> : <div className="tree-virtual-content" style={{ height: flatTree.length * treeRowHeight }}><div className="tree-virtual-rows" style={{ top: visibleStart * treeRowHeight }}>{visibleTree.map(({ node, level }) => <NodeRow key={node.id} node={node} level={level} open={openNodes.has(node.id)} selected={selectedNodeIds.has(node.id)} onToggle={() => toggle(node.id)} onSelect={() => node.kind === 'volume' ? toggle(node.id) : void selectNode(node.id)} onSelectToggle={() => toggleSelection(node.id)} onRename={() => handleRename(node)} onContextMenu={(event) => openNodeMenu(event, node)} onDragStart={() => setDraggedNodeId(node.id)} onDrop={() => handleDrop(node)} />)}</div></div>}
       </div>
       {selectedNodeIds.size ? <div className="tree-batch-actions"><span>已选 {selectedNodeIds.size} 项</span><Button variant="danger" onClick={() => void deleteSelected()}><Trash2 size={12} />批量移入回收站</Button><Button variant="ghost" onClick={() => setSelectedNodeIds(new Set())}>清除选择</Button></div> : null}
       <div className="sidebar-section-label"><span>工具</span></div>
