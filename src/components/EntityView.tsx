@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEven
 import { Copy, Plus, Save, Search, Trash2 } from 'lucide-react'
 import { ENTITY_FIELDS, ENTITY_LABELS } from '../lib/types'
 import type { EntityDraft, EntityKind, SearchResult } from '../lib/types'
+import { searchEntity } from '../lib/entity-search'
 import { getObjectString } from '../lib/utils'
 import { projectApi } from '../lib/api'
 import { captureProjectSession, isCurrentProjectSession, useAppStore } from '../stores/app-store'
@@ -97,6 +98,7 @@ export function EntityView({ kind }: { kind: EntityKind }) {
   const { openContextMenu } = useContextMenu()
   const [draft, setDraft] = useState<EntityDraft>(() => blankDraft(kind))
   const [filter, setFilter] = useState('')
+  const [searchContent, setSearchContent] = useState(false)
   const [sortMode, setSortMode] = useState<'created' | 'title' | 'updated'>('created')
   const [customFields, setCustomFields] = useState<Array<{ key: string; value: string }>>([])
   const [baseline, setBaseline] = useState(() => JSON.stringify({ draft: blankDraft(kind), customFields: [] }))
@@ -162,9 +164,10 @@ export function EntityView({ kind }: { kind: EntityKind }) {
     setBaseline(JSON.stringify({ draft: next, customFields: nextCustomFields }))
   }, [kind, selectedEntityId, selected])
 
+  const searchHits = useMemo(() => new Map(entities.map(entity => [entity.id, searchEntity(entity, filter, searchContent)])), [entities, filter, searchContent])
   const visibleEntities = useMemo(() => {
     const query = filter.trim().toLocaleLowerCase()
-    const filtered = query ? entities.filter((entity) => (entity.title + entity.tags.join(' ')).toLocaleLowerCase().includes(query)) : entities
+    const filtered = query ? entities.filter(entity => searchHits.get(entity.id)) : entities
     const sorted = filtered.slice()
     if (kind === 'location' && sortMode === 'created') {
       return sortLocations(sorted)
@@ -174,7 +177,7 @@ export function EntityView({ kind }: { kind: EntityKind }) {
       sorted.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     }
     return sorted
-  }, [entities, filter, kind, sortMode])
+  }, [entities, filter, kind, sortMode, searchHits])
 
   if (!data || !projectPath) return null
   function renderField(field: (typeof ENTITY_FIELDS)[EntityKind][number]) { return <Field key={field.key} label={field.label}>{kind === 'location' && field.key === 'parentId' ? <select className="select-input" value={draft.fields[field.key] ?? ''} onChange={(event) => updateField(field.key, event.target.value)}><option value="">无（顶层地点）</option>{locationEntities.filter((location) => location.id !== selected?.id && !isLocationDescendant(location.id, selected?.id ?? '', locationEntities)).sort((left, right) => locationDepth(left, locationEntities) - locationDepth(right, locationEntities) || left.title.localeCompare(right.title, 'zh-CN')).map((location) => <option key={location.id} value={location.id}>{'　'.repeat(locationDepth(location, locationEntities)) + location.title}</option>)}</select> : field.multiline ? <textarea className="text-area" value={draft.fields[field.key] ?? ''} onChange={(event) => updateField(field.key, event.target.value)} placeholder={'记录' + field.label + '…'} /> : <TextInput value={draft.fields[field.key] ?? ''} onChange={(event) => updateField(field.key, event.target.value)} placeholder={'填写' + field.label} />}</Field> }
@@ -242,8 +245,8 @@ export function EntityView({ kind }: { kind: EntityKind }) {
   return <div className="entity-view">
     <div className="entity-layout">
       <aside className="entity-list-pane">
-        <div className="entity-list-head"><div className="panel-title"><h2>{ENTITY_LABELS[kind]}</h2><Button onClick={() => selectEntity(kind, null)}><Plus size={14} />新建</Button></div><div className="entity-filter"><Search size={14} color="var(--faint)" style={{ marginTop: 8, flex: '0 0 auto' }} /><TextInput value={filter} onChange={(event) => setFilter(event.target.value)} placeholder={'搜索' + ENTITY_LABELS[kind]} /></div><select className="select-input entity-sort" value={sortMode} onChange={(event) => setSortMode(event.target.value as 'created' | 'title' | 'updated')} aria-label="资料排序"><option value="created">{kind === 'location' ? '按层级' : '默认顺序'}</option><option value="title">按名称</option><option value="updated">按最近更新</option></select></div>
-        <div className="entity-list">{visibleEntities.length ? visibleEntities.map((entity) => <button className={'entity-list-item' + (entity.id === selectedEntityId ? ' active' : '')} style={kind === 'location' ? { paddingLeft: String(10 + locationDepth(entity, locationEntities) * 16) + 'px' } : undefined} key={entity.id} onClick={() => selectEntity(kind, entity.id)} onContextMenu={(event) => openEntityMenu(event, entity)}><strong>{entity.title}</strong><span>{entity.tags.length ? entity.tags.join(' · ') : '未添加标签'}</span></button>) : <div className="tree-muted">{filter.trim() ? '没有匹配的资料，试试其他关键词。' : '还没有' + ENTITY_LABELS[kind] + '，点击“新建”开始建立资料。'}</div>}</div>
+        <div className="entity-list-head"><div className="panel-title"><h2>{ENTITY_LABELS[kind]}</h2><Button onClick={() => selectEntity(kind, null)}><Plus size={14} />新建</Button></div><div className="entity-filter"><Search size={14} color="var(--faint)" style={{ marginTop: 8, flex: '0 0 auto' }} /><TextInput value={filter} onChange={(event) => setFilter(event.target.value)} aria-label={'搜索' + ENTITY_LABELS[kind]} placeholder={'搜索' + ENTITY_LABELS[kind] + '名称、别名或标签'} /></div><label className="entity-search-content"><input type="checkbox" checked={searchContent} onChange={event => setSearchContent(event.target.checked)} />搜索设定正文</label>{filter.trim() && <p className="entity-search-count" role="status">找到 {visibleEntities.length} 条资料{searchContent ? ' · 含设定和自定义字段' : ' · 名称、别名、标签'}</p>}<select className="select-input entity-sort" value={sortMode} onChange={(event) => setSortMode(event.target.value as 'created' | 'title' | 'updated')} aria-label="资料排序"><option value="created">{kind === 'location' ? '按层级' : '默认顺序'}</option><option value="title">按名称</option><option value="updated">按最近更新</option></select></div>
+        <div className="entity-list">{visibleEntities.length ? visibleEntities.map((entity) => <button className={'entity-list-item' + (entity.id === selectedEntityId ? ' active' : '')} style={kind === 'location' ? { paddingLeft: String(10 + locationDepth(entity, locationEntities) * 16) + 'px' } : undefined} key={entity.id} onClick={() => selectEntity(kind, entity.id)} onContextMenu={(event) => openEntityMenu(event, entity)}><strong>{entity.title}</strong><span>{entity.tags.length ? entity.tags.join(' · ') : '未添加标签'}</span>{searchHits.get(entity.id) && (() => { const hit = searchHits.get(entity.id)!; return <span className="entity-search-hit"><b>{hit.field}：</b>{hit.excerpt.slice(0, hit.from)}<mark>{hit.excerpt.slice(hit.from, hit.to)}</mark>{hit.excerpt.slice(hit.to)}</span> })()}</button>) : <div className="tree-muted">{filter.trim() ? searchContent ? '没有匹配的资料，试试其他关键词。' : '没有匹配的名称、别名或标签。可勾选“搜索设定正文”扩大范围。' : '还没有' + ENTITY_LABELS[kind] + '，点击“新建”开始建立资料。'}</div>}</div>
       </aside>
       <section className="entity-editor">
         <div className="archive-editor-detail">
