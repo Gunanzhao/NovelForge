@@ -1,5 +1,6 @@
+import { sortManuscriptNodes } from '../lib/planning-data'
 import { sourceRangeFromNormalizedText } from '../lib/newline-offsets'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { projectApi } from '../lib/api'
 import { MEMORY_FIELDS, blankMemoryFields, memoryStatus, parseChapterMemory, useMemoryImport, type MemoryDraft, type MemoryField } from '../lib/chapter-memory'
 import { entityState } from '../lib/entity-history'
@@ -14,13 +15,54 @@ export function ChapterMemoryView(){
   const identity=useAppStore(state=>state.projectPath+':'+state.projectSession)
   return <ChapterMemoryWorkspace key={identity}/>
 }
-function ChapterMemoryWorkspace(){
-  const data=useAppStore(state=>state.data),document=useAppStore(state=>state.document),path=useAppStore(state=>state.projectPath),session=useAppStore(state=>state.projectSession)
-  const imported=useMemoryImport(state=>state.draft)
-  const [chapterId,setChapterId]=useState(imported?.projectPath===path&&imported.session===session?imported.chapterId:document?.node.id??data?.nodes.find(node=>node.kind==='chapter')?.id??'')
-  if(!data||!path)return null
-  const chapters=data.nodes.filter(node=>node.kind!=='volume')
-  return <div className="workspace-view chapter-memory-view"><div className="view-header"><div><p className="eyebrow">STORY MEMORY</p><h1>章节摘要与故事记忆</h1><p>先审阅草稿与原文依据，再确认用于后续写作。正文改动后须重新核对。</p></div></div><div className="memory-workspace"><aside className="memory-chapters" aria-label="记忆来源章节">{chapters.map(chapter=><button key={chapter.id} className={chapter.id===chapterId?'active':''} onClick={()=>runGuarded(()=>setChapterId(chapter.id))}>{chapter.title}<small>{data.entities.some(entity=>entity.kind==='chapter-memory'&&entity.content.chapterId===chapter.id)?'已有记忆记录':'待整理'}</small></button>)}</aside><div className="memory-editor-region">{chapters.some(chapter=>chapter.id===chapterId)?<MemoryEditor key={path+':'+chapterId} projectPath={path} chapterId={chapterId}/>:<p>请先创建或选择章节。</p>}</div></div></div>
+const queueLabels = { missing: '待整理', draft: '待确认', confirmed: '已确认', stale: '已过期', unavailable: '无法读取', checking: '核对中' } as const
+type MemoryQueueStatus = keyof typeof queueLabels
+function ChapterMemoryWorkspace() {
+  const data = useAppStore(state => state.data), document = useAppStore(state => state.document), path = useAppStore(state => state.projectPath), session = useAppStore(state => state.projectSession)
+  const imported = useMemoryImport(state => state.draft)
+  const [chapterId, setChapterId] = useState(imported?.projectPath === path && imported.session === session ? imported.chapterId : document?.node.id ?? data?.nodes.find(node => node.kind === 'chapter')?.id ?? '')
+  const [query, setQuery] = useState(''), [volume, setVolume] = useState(''), [filter, setFilter] = useState<MemoryQueueStatus | 'all'>('all')
+  const [checks, setChecks] = useState<Record<string, MemoryQueueStatus>>({}), [refresh, setRefresh] = useState(0)
+  const chapters = useMemo(() => sortManuscriptNodes(data?.nodes ?? []), [data?.nodes])
+  const memories = useMemo(() => new Map((data?.entities ?? []).filter(entity => entity.kind === 'chapter-memory').map(entity => [String(entity.content.chapterId), parseChapterMemory(entity)])), [data?.entities])
+  useEffect(() => {
+    let active = true, cursor = 0
+    setChecks({})
+    const pending = chapters.filter(chapter => memories.has(chapter.id))
+    async function worker() {
+      while (active && cursor < pending.length) {
+        const chapter = pending[cursor++], memory = memories.get(chapter.id)
+        let status: MemoryQueueStatus = 'unavailable'
+        if (memory && path) {
+          try { status = memoryStatus(memory, (await projectApi.getDocument({ projectPath: path, nodeId: chapter.id })).content) } catch { /* retain unavailable; never imply confirmed */ }
+        }
+        if (active) setChecks(previous => ({ ...previous, [chapter.id]: status }))
+      }
+    }
+    void Promise.all(Array.from({ length: Math.min(4, pending.length) }, worker))
+    return () => { active = false }
+  }, [chapters, memories, path, refresh])
+  if (!data || !path) return null
+  const byId = new Map(data.nodes.map(node => [node.id, node]))
+  const rows = chapters.map(chapter => {
+    const memory = memories.get(chapter.id)
+    const status: MemoryQueueStatus = !memories.has(chapter.id) ? 'missing' : memory && document?.node.id === chapter.id && document.content !== document.persistedContent ? memoryStatus(memory, document.content) : checks[chapter.id] ?? 'checking'
+    const volumeId = chapter.kind === 'section' ? byId.get(chapter.parentId ?? '')?.parentId : chapter.parentId
+    return { chapter, status, volumeId }
+  })
+  const visible = rows.filter(row => (!volume || row.volumeId === volume) && row.chapter.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()) && (filter === 'all' || row.status === filter))
+  const currentIndex = visible.findIndex(row => row.chapter.id === chapterId)
+  const next = [...visible.slice(currentIndex + 1), ...visible.slice(0, Math.max(0, currentIndex))].find(row => row.status === 'draft' || row.status === 'stale')
+  return <div className="workspace-view chapter-memory-view"><div className="view-header"><div><p className="eyebrow">STORY MEMORY</p><h1>章节摘要与故事记忆</h1><p>先审阅草稿与原文依据，再确认用于后续写作。正文改动后须重新核对。</p></div></div>
+    <div className="memory-queue-tools">
+      <Field label="搜索记忆章节"><input className="text-input" value={query} onChange={event => setQuery(event.target.value)} placeholder="章节或小节名称" /></Field>
+      <Field label="记忆所属卷"><select className="select-input" value={volume} onChange={event => setVolume(event.target.value)}><option value="">全部卷</option>{data.nodes.filter(node => node.kind === 'volume').map(node => <option key={node.id} value={node.id}>{node.title}</option>)}</select></Field>
+      <Field label="记忆状态"><select className="select-input" value={filter} onChange={event => setFilter(event.target.value as typeof filter)}><option value="all">全部状态</option>{Object.entries(queueLabels).map(([key, label]) => <option value={key} key={key}>{label}（{rows.filter(row => row.status === key).length}）</option>)}</select></Field>
+      <Button variant="outline" disabled={!next} onClick={() => next && runGuarded(() => setChapterId(next.chapter.id))}>下一份待确认／过期记忆</Button>
+      <Button variant="ghost" onClick={() => setRefresh(value => value + 1)}>刷新记忆状态</Button>
+    </div>
+    <p className="field-hint" role="status">当前范围 {visible.length} 项；下一份按目录顺序查找并循环。筛选不会丢弃正在编辑的草稿。</p>
+    <div className="memory-workspace"><aside className="memory-chapters" aria-label="记忆来源章节">{visible.length ? visible.map(({ chapter, status }) => <button key={chapter.id} className={chapter.id === chapterId ? 'active' : ''} aria-current={chapter.id === chapterId ? 'step' : undefined} onClick={() => runGuarded(() => setChapterId(chapter.id))}>{chapter.title}<small>{queueLabels[status]}</small></button>) : <p className="field-hint">没有符合筛选的章节。</p>}</aside><div className="memory-editor-region">{chapters.some(chapter => chapter.id === chapterId) ? <MemoryEditor key={path + ':' + chapterId} projectPath={path} chapterId={chapterId} /> : <p>请先创建或选择章节。</p>}</div></div></div>
 }
 function MemoryEditor({projectPath,chapterId}:{projectPath:string;chapterId:string}){
   const data=useAppStore(state=>state.data),live=useAppStore(state=>state.document?.node.id===chapterId?state.document:null)

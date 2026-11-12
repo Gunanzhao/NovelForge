@@ -1,5 +1,5 @@
 import { StrictMode } from 'react'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ChapterMemoryView } from '../src/components/ChapterMemoryView'
 import { projectApi } from '../src/lib/api'
@@ -7,6 +7,35 @@ import { blankMemoryFields, useMemoryImport } from '../src/lib/chapter-memory'
 import { contextItems } from '../src/lib/ai-data'
 import { useAppStore } from '../src/stores/app-store'
 afterEach(()=>{cleanup();vi.restoreAllMocks();useMemoryImport.setState({draft:null})})
+it('refreshes queue status from disk even when the editor still holds older saved text', async () => {
+  const { path, node, source } = await fixture()
+  render(<ChapterMemoryView />)
+  const queue = within(screen.getByRole('complementary', { name: '记忆来源章节' }))
+  await queue.findByRole('button', { name: '第一章 待确认' })
+  await projectApi.saveDocument({ projectPath: path, nodeId: node.id, content: source + '外部续写。', reason: '模拟另一处编辑' })
+  fireEvent.click(screen.getByRole('button', { name: '刷新记忆状态' }))
+  await queue.findByRole('button', { name: '第一章 已过期' })
+})
+it('filters the queue and advances to stale memory without auto-confirming it', async () => {
+  const { path, node, source } = await fixture()
+  let data = await projectApi.createNode({ projectPath: path, kind: 'chapter', parentId: node.parentId, title: '第二章 灯塔' })
+  const second = data.nodes.find(item => item.title === '第二章 灯塔')!
+  await projectApi.saveDocument({ projectPath: path, nodeId: second.id, content: source + '后来门开了。', reason: '过期来源' })
+  data = await projectApi.upsertEntity({ projectPath: path, id: 'stale-memory', kind: 'chapter-memory', title: '灯塔记忆', tags: [], content: { chapterId: second.id, sourceText: source, ...blankMemoryFields(), summary: '旧摘要', status: 'confirmed', sources: [{ id: 's', field: 'summary', from: 0, to: 7, quote: '林月拿到钥匙。' }] } })
+  useAppStore.setState({ data })
+  render(<ChapterMemoryView />)
+  const queue = within(screen.getByRole('complementary', { name: '记忆来源章节' }))
+  await queue.findByRole('button', { name: '第二章 灯塔 已过期' })
+  fireEvent.click(screen.getByRole('button', { name: '下一份待确认／过期记忆' }))
+  await waitFor(() => expect((screen.getByLabelText('章节摘要') as HTMLTextAreaElement).value).toBe('旧摘要'))
+  expect((screen.getByRole('button', { name: '确认这份章节记忆' }) as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.change(screen.getByLabelText('记忆状态'), { target: { value: 'draft' } })
+  expect(queue.queryByRole('button', { name: /第二章/ })).toBeNull()
+  expect(queue.getByRole('button', { name: '第一章 待确认' })).toBeTruthy()
+  fireEvent.change(screen.getByLabelText('搜索记忆章节'), { target: { value: '不存在' } })
+  expect(queue.getByText('没有符合筛选的章节。')).toBeTruthy()
+  expect((screen.getByLabelText('章节摘要') as HTMLTextAreaElement).value).toBe('旧摘要')
+})
 async function fixture(withMemory=true){const path='memory-view-'+crypto.randomUUID();let data=await projectApi.create({path,title:'记忆测试',author:'',description:'',genre:'',targetWords:1});const node=data.nodes.find(node=>node.kind==='chapter')!;const source='林月拿到钥匙。她没有打开门。';const document=await projectApi.saveDocument({projectPath:path,nodeId:node.id,content:source,reason:'测试'});if(withMemory)data=await projectApi.upsertEntity({projectPath:path,id:'memory',kind:'chapter-memory',title:'第一章记忆',tags:[],content:{chapterId:node.id,sourceText:source,...blankMemoryFields(),summary:'林月取得钥匙',status:'draft',sources:[{id:'s',field:'summary',from:0,to:7,quote:'林月拿到钥匙。'}]}});useAppStore.setState({...useAppStore.getInitialState(),projectPath:path,data,document:{...document,persistedContent:source},saveState:'saved',activeView:'chapter-memory'});return{path,data,node,source,document}}
 it('saves field edits as draft and only includes memory after explicit author confirmation',async()=>{
  const {source}=await fixture();render(<ChapterMemoryView/>);await screen.findByLabelText('关键事件');fireEvent.change(screen.getByLabelText('关键事件'),{target:{value:'林月取得钥匙但未开门'}});fireEvent.click(screen.getByRole('button',{name:'保存记忆草稿'}));await screen.findByText('草稿已保存；尚未纳入已确认记忆。');expect(useAppStore.getState().data!.entities.find(entity=>entity.id==='memory')!.content.status).toBe('draft')
