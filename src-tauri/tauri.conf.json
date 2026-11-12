@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "NovelForge",
-  "version": "1.2.0-rc.5",
-  "identifier": "com.novelforge.desktop",
+  "productName": "NovelForge Studio",
+  "version": "1.2.0-rc.6",
+  "identifier": "com.novelforge.studio",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "NovelForge",
+        "title": "NovelForge Studio",
         "create": false,
         "width": 1440,
         "height": 900,

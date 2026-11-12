@@ -1,3 +1,12 @@
+pub mod provider;
+mod stream;
+
+#[derive(Clone, serde::Serialize)]
+pub struct AiStreamEvent {
+    pub content: String,
+}
+type StreamSink = std::sync::Arc<dyn Fn(AiStreamEvent) + Send + Sync>;
+
 use crate::models::{AiCompletionInput, AiCompletionResult};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Mutex, OnceLock};
@@ -26,6 +35,7 @@ mod tests {
                 prompt: "文".repeat(user_length),
                 temperature: None,
                 max_tokens: None,
+                ..Default::default()
             };
             let error = tauri::async_runtime::block_on(complete_http(input)).unwrap_err();
             assert_eq!(
@@ -57,7 +67,9 @@ pub(crate) fn normalize_ai_endpoint(endpoint: &str) -> Result<String, String> {
         return Err("AI Provider 地址不能包含片段标识".to_string());
     }
     let path = url.path().trim_end_matches('/');
-    let path = if path.ends_with("/chat/completions") {
+    let path = if url.host_str() == Some("api.deepseek.com") && path.is_empty() {
+        "/chat/completions".to_string()
+    } else if path.ends_with("/chat/completions") {
         path.to_string()
     } else if path.ends_with("/v1") {
         format!("{path}/chat/completions")
@@ -105,6 +117,7 @@ async fn run_request(
     owner: String,
     id: String,
     input: AiCompletionInput,
+    sink: Option<StreamSink>,
 ) -> Result<AiCompletionResult, String> {
     if id.is_empty() || id.len() > 128 {
         return Err("无效的 Provider 请求 ID".into());
@@ -137,7 +150,7 @@ async fn run_request(
     tokio::select! {
         biased;
         _ = cancelled.changed() => Err("AI 生成已取消".into()),
-        result = complete_http(input) => result,
+        result = provider::complete(input, sink) => result,
     }
 }
 async fn cancel_request(owner: &str, id: &str) -> Result<(), String> {
@@ -176,8 +189,22 @@ pub async fn ai_complete(
         window.label().to_string(),
         request_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
         input,
+        None,
     )
     .await
+}
+#[tauri::command]
+pub async fn ai_complete_stream(
+    window: tauri::WebviewWindow,
+    mut input: AiCompletionInput,
+    request_id: String,
+    on_event: tauri::ipc::Channel<AiStreamEvent>,
+) -> Result<AiCompletionResult, String> {
+    input.stream = Some(true);
+    let sink: StreamSink = std::sync::Arc::new(move |event| {
+        let _ = on_event.send(event);
+    });
+    run_request(window.label().to_string(), request_id, input, Some(sink)).await
 }
 #[tauri::command]
 pub async fn ai_cancel(window: tauri::WebviewWindow, request_id: String) -> Result<(), String> {
@@ -190,95 +217,9 @@ pub(crate) async fn ai_complete_for_test(
     complete_http(input).await
 }
 
+#[cfg(test)]
 async fn complete_http(input: AiCompletionInput) -> Result<AiCompletionResult, String> {
-    if input.model.trim().is_empty() {
-        return Err("AI Provider 模型不能为空".to_string());
-    }
-    if input.prompt.trim().is_empty() {
-        return Err("AI 请求内容不能为空".to_string());
-    }
-    if input
-        .system_prompt
-        .chars()
-        .chain(input.prompt.chars())
-        .take(200_001)
-        .count()
-        > 200_000
-    {
-        return Err("AI 上下文过长，请减少选中的内容".to_string());
-    }
-    let endpoint = normalize_ai_endpoint(&input.endpoint)?;
-    let mut payload = serde_json::json!({
-        "model": input.model.trim(),
-        "messages": [
-            { "role": "system", "content": input.system_prompt.trim() },
-            { "role": "user", "content": input.prompt.trim() },
-        ],
-    });
-    if let Some(temperature) = input.temperature {
-        if temperature.is_finite() {
-            payload["temperature"] = serde_json::json!(temperature.clamp(0.0, 2.0));
-        }
-    }
-    if let Some(max_tokens) = input.max_tokens {
-        payload["max_tokens"] = serde_json::json!(max_tokens.clamp(1, 32_000));
-    }
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(120))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .map_err(|_| "无法初始化 AI Provider 网络客户端".to_string())?;
-    let mut request = client.post(endpoint).json(&payload);
-    if !input.api_key.trim().is_empty() {
-        request = request.bearer_auth(input.api_key.trim());
-    }
-    let mut response = request
-        .send()
-        .await
-        .map_err(|_| "AI Provider 网络请求失败，请检查地址、网络或本地服务状态".to_string())?;
-    let status = response.status();
-    if status.is_redirection() {
-        return Err(format!(
-            "AI Provider 返回 HTTP {} 重定向；为避免内容被转发，请直接填写最终地址",
-            status.as_u16()
-        ));
-    }
-    if !status.is_success() {
-        return Err(format!(
-            "AI Provider 返回 HTTP {}，请检查模型和鉴权设置",
-            status.as_u16()
-        ));
-    }
-    if response
-        .content_length()
-        .is_some_and(|length| length > MAX_AI_RESPONSE_BYTES)
-    {
-        return Err("AI Provider 响应超过 2 MiB 安全上限".to_string());
-    }
-    let mut body_bytes = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|_| "无法读取 AI Provider 响应".to_string())?
-    {
-        if body_bytes.len() as u64 + chunk.len() as u64 > MAX_AI_RESPONSE_BYTES {
-            return Err("AI Provider 响应超过 2 MiB 安全上限".into());
-        }
-        body_bytes.extend_from_slice(&chunk);
-    }
-    let body = serde_json::from_slice::<serde_json::Value>(&body_bytes)
-        .map_err(|_| "AI Provider 返回了无法解析的响应".to_string())?;
-    let content = response_content(&body)?;
-    let model = body
-        .get("model")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or(input.model.trim())
-        .to_string();
-    Ok(AiCompletionResult {
-        content: content.to_string(),
-        model,
-        incomplete: response_incomplete(&body),
-    })
+    provider::complete(input, None).await
 }
 
 fn response_incomplete(body: &serde_json::Value) -> bool {
@@ -450,6 +391,7 @@ mod cancellation_tests {
             prompt: "prompt".into(),
             temperature: None,
             max_tokens: Some(100),
+            ..Default::default()
         }
     }
     #[test]
@@ -508,16 +450,19 @@ mod cancellation_tests {
                     owner.clone(),
                     "first".into(),
                     input(endpoint.clone()),
+                    None,
                 ));
                 tauri::async_runtime::spawn_blocking(move || {
                     ready.recv_timeout(Duration::from_secs(5)).unwrap()
                 })
                 .await
                 .unwrap();
-                assert!(run_request(owner.clone(), "second".into(), input(endpoint))
-                    .await
-                    .unwrap_err()
-                    .contains("仍在结束"));
+                assert!(
+                    run_request(owner.clone(), "second".into(), input(endpoint), None)
+                        .await
+                        .unwrap_err()
+                        .contains("仍在结束")
+                );
                 cancel_request("another-window", "first").await.unwrap();
                 assert!(requests().lock().unwrap().active.contains_key(&owner));
                 tokio::time::timeout(Duration::from_secs(2), cancel_request(&owner, "first"))
@@ -526,10 +471,12 @@ mod cancellation_tests {
                     .unwrap();
                 assert!(run.await.unwrap().unwrap_err().contains("取消"));
                 assert!(!requests().lock().unwrap().active.contains_key(&owner));
-                assert!(run_request(owner, "next".into(), input("invalid".into()))
-                    .await
-                    .unwrap_err()
-                    .contains("地址格式"));
+                assert!(
+                    run_request(owner, "next".into(), input("invalid".into()), None)
+                        .await
+                        .unwrap_err()
+                        .contains("地址格式")
+                );
             });
             server.join().unwrap();
         }
@@ -539,10 +486,15 @@ mod cancellation_tests {
         tauri::async_runtime::block_on(async {
             let owner = uuid::Uuid::new_v4().to_string();
             cancel_request(&owner, "early").await.unwrap();
-            assert!(run_request(owner, "early".into(), input("invalid".into()))
-                .await
-                .unwrap_err()
-                .contains("取消"));
+            assert!(
+                run_request(owner, "early".into(), input("invalid".into()), None)
+                    .await
+                    .unwrap_err()
+                    .contains("取消")
+            );
         });
     }
 }
+
+#[cfg(test)]
+mod deepseek_tests;

@@ -1,3 +1,5 @@
+import { ProviderSettings } from './ProviderSettings'
+import { providerRequest } from '../lib/ai-provider'
 import { useEffect, useRef, useState } from 'react'
 import { isDesktop, projectApi } from '../lib/api'
 import { readAiPreferences, AI_CONTEXT_SAFE_CHAR_LIMIT } from '../lib/ai-data'
@@ -7,14 +9,14 @@ import { NAME_CATEGORY_LABELS, type NameCategory, type NameStyle } from '../lib/
 import { matchesNameRules, type NameRules } from '../lib/name-rules'
 import { nameKey, parseAiNames, type NameCandidate } from '../lib/name-workspace'
 import { captureProjectSession, isCurrentProjectSession, useAppStore } from '../stores/app-store'
-import { Button, Field, TextInput } from './ui'
+import { Button, Field } from './ui'
 
 export function NameAiPanel({ category, style, count, rules, excluded, onResults, revision = '' }: { category: NameCategory; style: NameStyle; count: number; rules: NameRules; excluded: string[]; onResults: (items: NameCandidate[]) => void; revision?: string }) {
   const data = useAppStore(state => state.data)
   const [preferences] = useState(readAiPreferences)
   const [mode, setMode] = useState<'provider' | 'codex'>(preferences.mode === 'codex' ? 'codex' : 'provider')
-  const [endpoint, setEndpoint] = useState(preferences.endpoint)
-  const [model, setModel] = useState(preferences.model === 'local-writer' ? '' : preferences.model)
+  const [connection, setConnection] = useState(preferences)
+  const { endpoint, model } = connection
   const [apiKey, setApiKey] = useState('')
   const [background, setBackground] = useState('')
   const [selected, setSelected] = useState<string[]>([])
@@ -59,7 +61,7 @@ export function NameAiPanel({ category, style, count, rules, excluded, onResults
         if (!status.ready) throw new Error(status.compatibility?.diagnostic?.message ?? 'Codex 尚未就绪，请在 AI 辅助设置中检查连接并登录。')
         content = (await codexApi.generate({ cliPath, requestId: id, model: status.selectedModel, effort: status.selectedEffort, systemPrompt, prompt }, () => {}, () => active.current?.id !== id)).content
       } else {
-        const result = await projectApi.aiComplete({ endpoint, model, apiKey, systemPrompt, prompt, temperature: preferences.temperature ?? 0.8, maxTokens: preferences.maxTokens ?? 4000 }, id)
+        const result = await projectApi.aiComplete(providerRequest(connection, apiKey, systemPrompt, prompt), id)
         if (result.incomplete) throw new Error('AI 名字结果不完整，请提高输出上限或调整模型后重试。')
         content = result.content
       }
@@ -82,7 +84,7 @@ export function NameAiPanel({ category, style, count, rules, excluded, onResults
   return <details className="name-options"><summary>可选 AI 命名</summary><fieldset disabled={busy} className="name-ai-fields">
     <p className="field-hint">使用 AI 辅助中已保存的连接设置。仅发送下方背景、勾选资料和命名条件（含避重名单）；不会自动发送正文。API Key 仅用于本次打开的面板。</p>
     <Field label="命名服务"><select className="select-input" value={mode} onChange={event => setMode(event.target.value as 'provider' | 'codex')}><option value="provider">兼容 Provider</option><option value="codex">Codex 订阅</option></select></Field>
-    {mode === 'provider' ? <div className="field-grid"><Field label="Provider 地址"><TextInput value={endpoint} onChange={event => setEndpoint(event.target.value)} /></Field><Field label="模型"><TextInput value={model} onChange={event => setModel(event.target.value)} /></Field><Field label="API Key（可选）"><TextInput type="password" autoComplete="off" value={apiKey} onChange={event => setApiKey(event.target.value)} /></Field></div> : <p className="field-hint">使用 AI 辅助设置中的 Codex 路径、模型及登录状态。</p>}
+    {mode === 'provider' ? <ProviderSettings value={connection} onChange={setConnection} apiKey={apiKey} onKeyChange={setApiKey} disabled={busy} endpointLabel="Provider 地址" /> : <p className="field-hint">使用 AI 辅助设置中的 Codex 路径、模型及登录状态。</p>}
     <Field label="世界观、人物背景与命名意象"><textarea className="text-area compact" value={background} onChange={event => setBackground(event.target.value)} placeholder="例如：海洋文明中的年轻航海家，希望名字有风与潮汐的意象。" /></Field>
     <div className="name-ai-context">{available.map(entity => <label key={entity.id}><input type="checkbox" checked={selected.includes(entity.id)} onChange={() => setSelected(current => current.includes(entity.id) ? current.filter(id => id !== entity.id) : [...current, entity.id])} />{entity.title}</label>)}</div>
     <details><summary>预览将发送的内容（{prompt.length + systemPrompt.length} 字符）</summary><pre className="settings-log">{systemPrompt}{'\n'}{prompt}</pre></details>

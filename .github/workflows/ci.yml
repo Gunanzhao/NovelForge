@@ -145,6 +145,8 @@ jobs:
         run: node scripts/reliability-smoke-cdp.mjs
       - name: Production UI layouts and draft retention
         run: node scripts/frontend-polish-cdp.mjs
+      - name: DeepSeek protocol and native UI (local fixture)
+        run: node scripts/deepseek-ui-cdp.mjs
       - name: Upload synthetic UI acceptance screenshots
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

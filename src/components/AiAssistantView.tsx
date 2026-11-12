@@ -1,9 +1,11 @@
+import { ProviderSettings } from './ProviderSettings'
+import { deepseekPreset, providerKind, providerTokenLimit, usageLabel } from '../lib/ai-provider'
 import { memoryContextText, parseChapterMemory, parseMemoryDraft, useMemoryImport } from '../lib/chapter-memory'
 import { runGuarded } from '../lib/draft-guard'
 import { attachmentContextText } from '../lib/attachment-data'
 import { parseTemperature } from '../lib/ai-data'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Clipboard, Eye, KeyRound, Send, Sparkles, TriangleAlert } from 'lucide-react'
+import { Clipboard, Eye, Send, Sparkles, TriangleAlert } from 'lucide-react'
 import { projectApi } from '../lib/api'
 import { aiHttpConfirmationKey, confirmInsecureAiEndpoint } from '../lib/ai-security'
 import {
@@ -48,11 +50,13 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
   const resultStatus = { idle: '已应用', preparing: '准备上下文', running: '生成中', complete: '已完成', cancelled: '已停止 · 结果未完成', failed: '生成失败 · 结果未完成', incomplete: '结果不完整 · 禁止应用' }[task.phase]
   const [draftTarget, setDraftTarget] = useState<AiTarget | null>(null)
   const [reviewOpen, setReviewOpen] = useState(false)
-  const [providerName, setProviderName] = useState(preferences.providerName ?? '')
-  const [endpoint, setEndpoint] = useState(preferences.endpoint)
-  const [model, setModel] = useState(preferences.model)
-  const [temperature, setTemperature] = useState(String(preferences.temperature ?? 0.7))
-  const [maxTokens, setMaxTokens] = useState(String(preferences.maxTokens ?? 4000))
+  const [connection, setConnection] = useState<AiPreferences>(preferences)
+  const { endpoint, model, providerName } = connection
+  const temperature = String(connection.temperature ?? 0.7)
+  const maxTokens = String(connection.maxTokens ?? (providerKind(connection) === 'deepseek' ? 8192 : 4000))
+  const outputLimit = providerTokenLimit(connection)
+  const setModel = (model: string) => setConnection(current => ({ ...current, model }))
+  const setMaxTokens = (value: string) => setConnection(current => ({ ...current, maxTokens: Number.parseInt(value, 10) }))
   const [apiKey, setApiKey] = useState('')
   const [action, setAction] = useState<AiAction>((preferences.mode ?? 'offline') === 'offline' ? 'summary' : 'continue')
   const offlineTaskSupported = action === 'summary' || action === 'chapter-summary'
@@ -129,12 +133,12 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
 
   useEffect(() => {
     writeAiPreferences({
-      mode, codexPath, codexModel, codexEffort,
+      ...connection, mode, codexPath, codexModel, codexEffort,
       endpoint, model, providerName,
       temperature: parseTemperature(temperature),
       maxTokens: Number.parseInt(maxTokens, 10) || 4000,
     })
-  }, [endpoint, maxTokens, model, providerName, temperature, mode, codexPath, codexModel, codexEffort])
+  }, [connection, endpoint, maxTokens, model, providerName, temperature, mode, codexPath, codexModel, codexEffort])
 
   if (!data || !projectPath) return null
   const currentProjectPath = projectPath
@@ -151,8 +155,8 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
   function request(systemPrompt: string, prompt: string, local: AiRequest['local']): AiRequest {
     if (mode === 'codex' && !codexReady) throw new Error('请在桌面版检查 Codex 连接并完成 ChatGPT 登录。')
     return { systemPrompt, prompt, local, apiKey, preferences: {
-      mode, codexPath, codexModel, codexEffort, endpoint, model, providerName,
-      temperature: parseTemperature(temperature), maxTokens: Math.max(1, Math.min(32000, Number.parseInt(maxTokens, 10) || 4000)),
+      ...connection, mode, codexPath, codexModel, codexEffort, endpoint, model, providerName,
+      temperature: parseTemperature(temperature), maxTokens: Math.max(1, Math.min(outputLimit, Number.parseInt(maxTokens, 10) || 4000)),
     } }
   }
   function canSend() {
@@ -256,12 +260,12 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
   return <div className={'workspace-view ai-view ai-workbench' + (compact ? ' ai-inline-workbench' : '')}>
     <div className="view-header ai-workbench-header"><div><p className="eyebrow">WRITING ASSISTANT</p><h1>AI 辅助</h1></div><span className="ai-workbench-subtitle">{offline ? '摘录原文与整理模板，连接模型后可续写、润色' : '选择资料与任务，预览后应用结果'}</span>{compact ? <div className="ai-inline-nav"><Button variant="ghost" onClick={onExpand}>完整工作台</Button><Button variant="ghost" onClick={onDismiss}>收起</Button></div> : null}</div>
     <div className="ai-connection-bar" aria-label="AI 连接">
-      <Field label="AI 模式"><select aria-label="AI 模式" className="select-input" value={mode} disabled={connectionLocked} onChange={(e) => { setMode(e.target.value as NonNullable<AiPreferences['mode']>); if (e.target.value === 'offline') setAction('summary'); setCodexReady(false); task.clear(); setConnectionOpen(false) }}><option value="offline">摘录与模板</option><option value="provider">兼容服务</option><option value="codex">Codex 订阅（实验性）</option></select></Field>
+      <Field label="AI 模式"><select aria-label="AI 模式" className="select-input" value={mode} disabled={connectionLocked} onChange={(e) => { setMode(e.target.value as NonNullable<AiPreferences['mode']>); if (e.target.value === 'offline') setAction('summary'); setCodexReady(false); task.clear(); setConnectionOpen(false) }}><option value="offline">摘录与模板</option><option value="provider">兼容服务 / DeepSeek</option><option value="codex">Codex 订阅（实验性）</option></select></Field>
       {mode === 'codex' ? <CodexSettings compact path={codexPath} model={codexModel} effort={codexEffort} busy={busy} onPath={setCodexPath} onModel={setCodexModel} onEffort={setCodexEffort} onReady={setCodexReady} /> : mode === 'provider' ? <>
         <Field label="模型"><TextInput value={model} disabled={busy} onChange={(event) => setModel(event.target.value)} placeholder="模型名称" /></Field>
         <span className="ai-connection-state">{endpoint.trim() ? providerName || '已配置服务' : '待配置连接'}</span>
         <Button variant="outline" onClick={() => setConnectionOpen(true)}>连接设置</Button>
-      </> : <><span className="ai-connection-state">本地摘录 · 未连接模型</span><Button variant="outline" onClick={() => { setMode('provider'); task.clear(); setConnectionOpen(true) }}>连接模型</Button></>}
+      </> : <><span className="ai-connection-state">本地摘录 · 未连接模型</span><Button variant="outline" onClick={() => { setMode('provider'); task.clear(); setConnectionOpen(true) }}>连接模型</Button><Button variant="outline" onClick={() => { setConnection(deepseekPreset(connection)); setApiKey(''); setMode('provider'); task.clear(); setConnectionOpen(true) }}>连接 DeepSeek</Button></>}
       {mode === 'provider' && insecureHttpProvider ? <div className="ai-provider-warning"><TriangleAlert size={14} /><span>该地址使用非加密 HTTP。发送时，小说内容和 API Key 可能被网络中的其他人读取或篡改。</span></div> : null}
     </div>
     <div className="ai-workbench-grid">
@@ -290,8 +294,9 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
         </div>
       </Panel>
       <Panel className="ai-output-panel" aria-label="AI 结果工作区">
-        {!result && task.error ? <div className="ai-task-error" role="alert"><p>{task.error}</p><Button variant="outline" disabled={busy} onClick={() => setConnectionOpen(true)}>调整连接设置</Button>{mode === 'provider' && resultApplication === 'builtin' && task.error.includes('输出上限耗尽') && Number(maxTokens) < 32000 ? <Button disabled={busy} onClick={() => { const next = Math.min(32000, Math.max(4096, (Number.parseInt(maxTokens, 10) || 4000) * 2)); setMaxTokens(String(next)); void runAssistant(next) }}>提高上限至 {Math.min(32000, Math.max(4096, (Number.parseInt(maxTokens, 10) || 4000) * 2))} 并重试</Button> : null}</div> : null}
+        {!result && task.error ? <div className="ai-task-error" role="alert"><p>{task.error}</p><Button variant="outline" disabled={busy} onClick={() => setConnectionOpen(true)}>调整连接设置</Button>{mode === 'provider' && resultApplication === 'builtin' && task.error.includes('输出上限耗尽') && Number(maxTokens) < outputLimit ? <Button disabled={busy} onClick={() => { const next = Math.min(outputLimit, Math.max(4096, (Number.parseInt(maxTokens, 10) || 4000) * 2)); setMaxTokens(String(next)); void runAssistant(next) }}>提高上限至 {Math.min(outputLimit, Math.max(4096, (Number.parseInt(maxTokens, 10) || 4000) * 2))} 并重试</Button> : null}</div> : null}
         <div className="panel-title ai-output-heading"><h3>{offlineResult || offline ? '摘录与模板' : 'AI 结果'}</h3><span role="status">{result ? `${offlineResult ? '本地整理 · 未调用 AI' : result.model} · ${resultStatus}` : task.phase === 'idle' ? '尚未运行' : resultStatus}</span></div>
+        {result?.usage ? <p className="ai-usage">{usageLabel(result.usage)}</p> : null}
         {result ? <>
           {!offlineResult && selectionAction && resultComplete ? <div className="ai-result-tabs"><Button variant="ghost" aria-pressed={!reviewOpen} onClick={() => setReviewOpen(false)}>生成结果</Button><Button variant="ghost" aria-pressed={reviewOpen} onClick={() => setReviewOpen(true)}>修改对比 · {task.edits.length}</Button></div> : null}
           {!offlineResult && reviewOpen && selectionAction && resultComplete ? <AiReview /> : <textarea aria-label={offlineResult ? '摘录与模板结果' : 'AI 结果'} readOnly={!resultComplete || task.edits.some(edit => edit.state === 'accepted')} className="text-area ai-result-text" value={result.content} onChange={(event) => task.editResult(event.target.value)} />}
@@ -308,13 +313,8 @@ export function AiAssistantView({ compact = false, visible = true, onExpand, onD
         </> : <div className="ai-result-empty"><Sparkles size={26} /><strong>{task.phase === 'failed' ? '本次生成失败' : busy ? '正在等待模型返回正文' : task.phase === 'cancelled' ? '已停止接收结果' : offline ? '等待整理摘录或模板' : '等待一次辅助任务'}</strong><span>{busy ? '可以继续编辑正文或切换页面；思考模型可能需要较长时间。' : task.phase === 'failed' ? '请按上方提示调整后重试，原文未被覆盖。' : offline ? '选择资料后生成摘录，可编辑、复制，或审阅为章节记忆草稿。' : '在左侧选择任务和参考资料，结果将在这里显示。完成后可以编辑、复制或应用到正文。'}</span></div>}
       </Panel>
     </div>
-    <div className="ai-connection-dialog"><Modal open={connectionOpen} title="Provider 连接设置" onClose={() => setConnectionOpen(false)}>
-      <fieldset disabled={busy} className="ai-provider-fields">
-        <Field label="名称"><TextInput value={providerName} onChange={(event) => setProviderName(event.target.value)} placeholder="例如：本地 LM Studio" /></Field>
-        <Field label="Base URL" hint="例如 http://127.0.0.1:1234/v1"><TextInput value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder="填写服务地址，例如 http://127.0.0.1:1234/v1" /></Field>
-        <div className="field-grid"><Field label="Temperature"><TextInput type="number" min="0" max="2" step="0.1" value={temperature} onChange={(event) => setTemperature(event.target.value)} /></Field><Field label="Max Tokens"><TextInput type="number" min="1" max="32000" value={maxTokens} onChange={(event) => setMaxTokens(event.target.value)} /></Field></div>
-        <Field label="API Key" hint="仅保留在当前窗口内，既不保存也不写入日志"><div className="input-with-action"><KeyRound size={14} color="var(--faint)" style={{ marginTop: 8 }} /><TextInput type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="可选；本地 Provider 通常不需要" autoComplete="off" /></div></Field>
-      </fieldset>
+    <div className="ai-connection-dialog"><Modal open={connectionOpen} title="AI 服务连接设置" onClose={() => setConnectionOpen(false)}>
+      <ProviderSettings value={connection} onChange={setConnection} apiKey={apiKey} onKeyChange={setApiKey} disabled={busy} />
     </Modal></div>
     <div className="ai-request-dialog"><Modal open={previewOpen} title="请求预览" onClose={() => setPreviewOpen(false)} footer={<><Button variant="outline" onClick={() => setPreviewOpen(false)}>返回编辑</Button><Button disabled={busy || contextBudget.overLimit || (offline && !offlineTaskSupported) || (mode === 'codex' && !codexReady)} onClick={() => { setPreviewOpen(false); void runAssistant() }}>{offline ? '确认整理' : '确认运行'}</Button></>}>
       <div className="ai-preview-panel">{offline ? <><p>本地摘录预览 · 不调用模型</p><pre>{localAssist(action, loadedContext, instruction).localContent}</pre></> : <><div className={'ai-context-budget' + (contextBudget.overLimit ? ' over' : '')}>System + User：{contextBudget.characters.toLocaleString()} 字符 · 预计 {contextBudget.estimatedTokens.toLocaleString()} Token · 安全阈值 {contextBudget.safeLimit.toLocaleString()} 字符{contextBudget.overLimit ? ' · 超过安全阈值，请减少选择' : ''}</div><h4>System Prompt</h4><pre>{SYSTEM_PROMPT}</pre><h4>User Prompt</h4><pre>{previewText}</pre></>}</div>

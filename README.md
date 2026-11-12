@@ -1,19 +1,50 @@
-# NovelForge
+# NovelForge Studio
 
-NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
+NovelForge Studio 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。支持章节管理、人物与世界观资料、版本历史、备份恢复，以及由作者确认后应用的 AI 辅助写作。
 
-当前版本：**1.2.0-rc.5（预发布）**。
+当前版本：**1.2.0-rc.6（预发布）**。
 
-[![Release branch CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=codex%2Frelease-1.2.0-rc.5)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Acodex%2Frelease-1.2.0-rc.5)
+[![CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Amain)
 
-## 下载
+## 下载与运行
 
-- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.5/NovelForge_1.2.0-rc.5_x64-setup.exe)
-- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.5/novelforge.exe)
-- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.5/SHA256SUMS.txt)
-- [版本说明与历史 Release](https://github.com/Gunanzhao/NovelForge/releases)
+- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.6/NovelForge.Studio_1.2.0-rc.6_x64-setup.exe)
+- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.6/novelforge-studio.exe)
+- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.6/SHA256SUMS.txt)
+- [本版发布说明](https://github.com/Gunanzhao/NovelForge/releases/tag/v1.2.0-rc.6) · [历史版本](https://github.com/Gunanzhao/NovelForge/releases)
 
-已有安装版用户运行新安装包升级；直接运行独立 EXE 不会更新旧快捷方式。桌面版需要 Windows WebView2。
+桌面版需要 Windows WebView2。本版产品名改为 **NovelForge Studio**，应用标识为 `com.novelforge.studio`，与旧 NovelForge 安装并存；不会替换旧快捷方式。首次运行可通过“打开项目”选择原有小说，小说存储格式未改变。切换程序前请保存并关闭另一版本中的同一项目。
+
+独立 EXE 下载后直接运行。源码仓库不包含生成的二进制文件；也可将独立 EXE 放入仓库的 `desktop/novelforge-studio.exe` 后使用 `Start-Studio.ps1`。
+
+## 1.2.0-rc.6 新增内容
+
+- **重新设计写作工作区**：更新欢迎页、项目总览、侧栏、工具栏和浅深主题；支持最近作品搜索、章节筛选、快速打开与专注写作。
+- **DeepSeek 连接设置**：服务预设、模型列表检查、思考模式与强度、输出额度、超时设置；名字生成器使用相同适配规则。
+- **实时生成与用量**：支持 SSE 正文流式输出、停止生成及 Token 用量展示；思考内容不混入正文，截断或未完成的结果不能直接应用。
+- **兼容与保护**：继续支持通用 Chat Completions 服务；API Key 只保留在内存中，生成结果需作者确认后才写入小说。
+- **模块整理**：拆分应用生命周期、导航、界面组件、数据接口及样式，保留现有写作和数据恢复能力。
+
+使用 DeepSeek：打开小说 → **AI 辅助 → 连接 DeepSeek** → 填写 API Key → 检查连接并选择模型。模型列表检查不提交小说内容、不生成文本；执行生成时会向所选服务发送你确认的上下文。
+
+前端 **528 项**、Rust **183 项**测试通过（7 项原有忽略）；**72 组**原生布局检查通过。DeepSeek 专项以本地模拟服务验证流式、取消、截断、错误反馈和明确应用后的保存，尚未使用真实收费账户验收。
+
+[DeepSeek 使用说明](docs/deepseek-support.md) · [rc.6 发布说明](docs/release-1.2.0-rc.6.md) · [重构记录](docs/refactor-2026-11-12.md)
+
+![写作工作区](docs/studio-preview/editor-dark.png)
+
+## 从源码开发
+
+安装 Node.js、pnpm 和 Rust；Windows 桌面构建还需 MSVC C++ Build Tools 与 WebView2。
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm tauri:dev
+```
+
+`pnpm dev` 用于浏览器预览（使用浏览器本地存储）；`pnpm tauri:build` 构建桌面程序和安装包。前端检查可运行 `pnpm typecheck`、`pnpm lint`、`pnpm test`；后端检查运行 `cargo test --manifest-path src-tauri/Cargo.toml --locked`。
+
+## 历史更新
 
 ## 1.2.0-rc.5 相比 1.2.0-rc.4
 

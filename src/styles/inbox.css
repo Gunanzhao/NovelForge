@@ -1,0 +1,72 @@
+/* Idea inbox: one toolbar, independently scrolling list and reading pane. */
+.inbox-view { display: flex; flex-direction: column; min-height: 0; overflow: hidden; padding: 0 24px 24px; gap: 16px; }
+.inbox-view .inbox-header { flex: 0 0 auto; align-items: center; padding: 22px 0 0; }
+.inbox-header kbd { font-size: var(--font-caption); opacity: .8; margin-left: 5px; font-family: inherit; }
+.inbox-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; flex: 0 0 auto; }
+.inbox-toolbar .planning-tabs { flex-shrink: 0; margin: 0; }
+.inbox-filters { display: flex; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 0; }
+.inbox-filters > .select-input { width: 132px; min-width: 0; }
+.inbox-search { display: flex; align-items: center; gap: 8px; width: 240px; min-width: 0; padding-left: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; color: var(--muted); }
+.inbox-search:focus-within { border-color: var(--accent); }
+.inbox-search svg { flex-shrink: 0; }
+.inbox-search .text-input { width: 100%; min-width: 0; border: 0; background: transparent; box-shadow: none; }
+.inbox-view .inbox-layout { display: grid; grid-template-columns: clamp(320px, 30%, 380px) minmax(0, 1fr); align-items: stretch; flex: 1; min-height: 0; gap: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.inbox-list { display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow: auto; overscroll-behavior: contain; border-right: 1px solid var(--line); padding: 8px; }
+.inbox-view .inbox-list > button { display: flex; flex-direction: column; align-items: stretch; flex-shrink: 0; gap: 8px; width: 100%; padding: 14px; background: transparent; border: 1px solid transparent; border-left: 3px solid transparent; text-align: left; color: var(--text); border-radius: 6px; }
+.inbox-view .inbox-list > button:hover { background: var(--surface-hover); }
+.inbox-view .inbox-list > button.active { background: var(--accent-soft); border-color: transparent; border-left-color: var(--accent); }
+.inbox-item-heading { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.inbox-item-heading svg { color: var(--accent); flex-shrink: 0; }
+.inbox-item-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.inbox-item-summary { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; color: var(--muted); font-size: var(--font-ui); line-height: 1.7; }
+.inbox-item-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: var(--font-caption); color: var(--faint); }
+.inbox-item-meta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-item-meta time { flex-shrink: 0; }
+.inbox-view .inbox-detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 0; overflow: hidden; }
+.inbox-detail-header { padding: 22px 28px 18px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.inbox-detail-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.inbox-detail-title > div { min-width: 0; }
+.inbox-detail-title h2 { margin: 0 0 8px; font-size: 20px; line-height: 1.5; overflow-wrap: anywhere; }
+.inbox-detail-title p { margin: 0; color: var(--faint); font-size: var(--font-caption); line-height: 1.7; }
+.inbox-detail-title > button { flex-shrink: 0; color: var(--muted); }
+.inbox-detail-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 24px 28px; }
+.inbox-reading { width: 100%; max-width: 760px; margin-inline: auto; }
+.inbox-content { margin: 0; font-family: inherit; font-size: 14px; line-height: 1.95; white-space: pre-wrap; overflow-wrap: anywhere; }
+.inbox-detail-tags { margin-top: 32px; padding-top: 18px; border-top: 1px solid var(--line); }
+.inbox-detail-tags h3 { margin: 0 0 10px; font-size: var(--font-caption); color: var(--muted); }
+.inbox-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.inbox-tags span { border-radius: 4px; background: var(--surface-hover); color: var(--muted); font-size: var(--font-caption); padding: 4px 8px; overflow-wrap: anywhere; max-width: 100%; }
+.inbox-tags small { color: var(--faint); }
+.inbox-detail-footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 24px; border-top: 1px solid var(--line); flex-shrink: 0; }
+.inbox-organize { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.inbox-organize .select-input { width: 150px; max-width: 100%; }
+.inbox-processed { display: flex; align-items: center; gap: 7px; color: var(--green); font-size: var(--font-ui); }
+.inbox-view .inbox-back { display: none; }
+.inbox-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 14px; min-height: 0; padding: 32px 20px; overflow: auto; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--radius); }
+.inbox-empty h2 { margin: 0; color: var(--text); font-size: 20px; }
+.inbox-empty p { margin: 0 0 6px; font-size: 13px; line-height: 1.9; }
+.inbox-empty small { font-size: var(--font-caption); color: var(--faint); }
+.inbox-empty-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); }
+@container workspace (max-width: 1100px) {
+  .inbox-filters { flex: 1 0 100%; }
+  .inbox-search { flex: 1; width: auto; }
+  .inbox-header kbd { display: none; }
+}
+@container workspace (max-width: 900px) {
+  .inbox-view { padding: 0 16px 16px; gap: 12px; }
+  .inbox-view .inbox-layout { grid-template-columns: minmax(0, 1fr); }
+  .inbox-list { border-right: 0; }
+  .inbox-view .inbox-detail { display: none; }
+  .inbox-view .detail-open .inbox-list { display: none; }
+  .inbox-view .detail-open .inbox-detail { display: flex; }
+  .inbox-view .inbox-back { display: inline-flex; margin: -6px 0 12px -10px; }
+  .inbox-detail-header { padding: 16px 20px; }
+  .inbox-detail-scroll { padding: 20px; }
+  .inbox-detail-footer { padding: 14px 20px; }
+}
+@container workspace (max-width: 560px) {
+  .inbox-view .inbox-header { align-items: flex-start; gap: 12px; }
+  .inbox-filters { flex-wrap: wrap; }
+  .inbox-search { flex: 1 0 100%; }
+  .inbox-filters > .select-input { flex: 1; }
+}

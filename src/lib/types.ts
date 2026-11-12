@@ -283,12 +283,31 @@ export interface AiCompletionInput {
   prompt: string
   temperature?: number
   maxTokens?: number
+  providerKind?: 'compatible' | 'deepseek'
+  thinking?: 'disabled' | 'enabled'
+  reasoningEffort?: 'low' | 'high' | 'max'
+  stream?: boolean
+  timeoutSeconds?: number
 }
 
+export interface AiUsage {
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  reasoningTokens?: number
+  cachedTokens?: number
+}
+export interface AiProviderModel {
+  id: string
+  name?: string
+  contextWindow?: number
+  maxOutputTokens?: number
+}
 export interface AiCompletionResult {
   content: string
   model: string
   incomplete?: boolean
+  usage?: AiUsage
 }
 
 export interface EntityState {

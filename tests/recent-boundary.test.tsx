@@ -12,7 +12,7 @@ it.each(['null', '{}', '"bad"', '[null]', '{invalid'])('malformed recent cache %
   localStorage.setItem('novelforge:theme', 'dark')
   localStorage.setItem('private-draft', 'keep')
   const view = render(<App />)
-  expect(screen.getByText('从一部小说开始')).toBeTruthy()
+  expect(screen.getByText('下一部作品，属于你')).toBeTruthy()
   expect(useAppStore.getState().recentProjects).toEqual([])
   view.unmount()
   await act(async () => { await useAppStore.getState().createProject({ ...fixture.project, path: 'recent-' + crypto.randomUUID() }) })

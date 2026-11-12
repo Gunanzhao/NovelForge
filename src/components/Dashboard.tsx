@@ -1,9 +1,23 @@
 import { Disclosure } from './Disclosure'
 import { useState } from 'react'
-import { BookOpen, Flame, RotateCcw, Sparkles, Target } from 'lucide-react'
+import {
+  ArrowRight,
+  BookOpen,
+  CircleUserRound,
+  Globe2,
+  Search,
+  Flame,
+  RotateCcw,
+  Sparkles,
+  Target,
+} from 'lucide-react'
 import { projectApi } from '../lib/api'
 import { formatDate, formatNumber } from '../lib/utils'
-import { captureProjectSession, isCurrentProjectSession, useAppStore } from '../stores/app-store'
+import {
+  captureProjectSession,
+  isCurrentProjectSession,
+  useAppStore,
+} from '../stores/app-store'
 import { Button, Modal, Panel } from './ui'
 import { chapterStageLabel } from '../lib/chapter-workflow'
 import { isNodeLocked } from '../lib/node-lock'
@@ -11,7 +25,9 @@ import { ChecklistDashboard } from './ChapterWorkflow'
 import { readEditorSession, resumeWritingNode } from '../lib/editor-session'
 
 export function Dashboard() {
-  const dailyTarget = useAppStore(state => state.workspacePreferences.dailyTargetWords)
+  const dailyTarget = useAppStore(
+    (state) => state.workspacePreferences.dailyTargetWords,
+  )
   const data = useAppStore((state) => state.data)
   const stats = useAppStore((state) => state.stats)
   const projectPath = useAppStore((state) => state.projectPath)
@@ -19,16 +35,39 @@ export function Dashboard() {
   const refreshData = useAppStore((state) => state.refreshData)
   const setError = useAppStore((state) => state.setError)
   const [recoveryBusy, setRecoveryBusy] = useState(false)
-  const [ignoredRecoveryId, setIgnoredRecoveryId] = useState<string | null>(null)
-  const [recoveryPreview, setRecoveryPreview] = useState<{ id: string; title: string; content: string } | null>(null)
+  const [ignoredRecoveryId, setIgnoredRecoveryId] = useState<string | null>(
+    null,
+  )
+  const [recoveryPreview, setRecoveryPreview] = useState<{
+    id: string
+    title: string
+    content: string
+  } | null>(null)
 
   if (!data || !projectPath) return null
-  const chapters = data.nodes.filter((node) => node.kind === 'chapter').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 5)
-  const resumeNode = resumeWritingNode(data.nodes, readEditorSession(projectPath).nodeId)
-  const resumeParent = resumeNode?.kind === 'section' ? data.nodes.find(node => node.id === resumeNode.parentId) : undefined
-  const resumeTitle = resumeNode ? [resumeParent?.title, resumeNode.title].filter(Boolean).join(' / ') : '先从左侧创建章节'
-  const dailyProgress = dailyTarget > 0 ? Math.min(100, Math.round(stats.todayWords / dailyTarget * 100)) : 0
-  const progress = stats.targetWords > 0 ? Math.min(100, Math.round((stats.totalWords / stats.targetWords) * 100)) : 0
+  const chapters = data.nodes
+    .filter((node) => node.kind === 'chapter')
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 5)
+  const resumeNode = resumeWritingNode(
+    data.nodes,
+    readEditorSession(projectPath).nodeId,
+  )
+  const resumeParent =
+    resumeNode?.kind === 'section'
+      ? data.nodes.find((node) => node.id === resumeNode.parentId)
+      : undefined
+  const resumeTitle = resumeNode
+    ? [resumeParent?.title, resumeNode.title].filter(Boolean).join(' / ')
+    : '先从左侧创建章节'
+  const dailyProgress =
+    dailyTarget > 0
+      ? Math.min(100, Math.round((stats.todayWords / dailyTarget) * 100))
+      : 0
+  const progress =
+    stats.targetWords > 0
+      ? Math.min(100, Math.round((stats.totalWords / stats.targetWords) * 100))
+      : 0
   const recovery = data.recovery.find((item) => item.id !== ignoredRecoveryId)
   const currentProjectPath = projectPath
 
@@ -37,10 +76,21 @@ export function Dashboard() {
     if (!recovery) return
     setRecoveryBusy(true)
     try {
-      const content = await projectApi.readRecovery({ projectPath: currentProjectPath, recoveryId: recovery.id })
+      const content = await projectApi.readRecovery({
+        projectPath: currentProjectPath,
+        recoveryId: recovery.id,
+      })
       if (!isCurrentProjectSession(session)) return
-      setRecoveryPreview({ id: recovery.id, title: recovery.nodeTitle, content })
-    } catch (error) { setError(error) } finally { setRecoveryBusy(false) }
+      setRecoveryPreview({
+        id: recovery.id,
+        title: recovery.nodeTitle,
+        content,
+      })
+    } catch (error) {
+      setError(error)
+    } finally {
+      setRecoveryBusy(false)
+    }
   }
 
   function ignoreRecovery() {
@@ -55,52 +105,297 @@ export function Dashboard() {
     setRecoveryBusy(true)
     try {
       const store = useAppStore.getState()
-      if (store.document && store.saveState !== 'saved' && !await store.saveCurrentDocument('恢复前保存')) return
+      if (
+        store.document &&
+        store.saveState !== 'saved' &&
+        !(await store.saveCurrentDocument('恢复前保存'))
+      )
+        return
       if (!isCurrentProjectSession(session)) return
       const version = useAppStore.getState().documentVersion
-      const result = await projectApi.restoreRecovery({ projectPath: currentProjectPath, recoveryId: recovery.id })
+      const result = await projectApi.restoreRecovery({
+        projectPath: currentProjectPath,
+        recoveryId: recovery.id,
+      })
       if (!isCurrentProjectSession(session)) return
       await refreshData(result, false, session)
-      if (useAppStore.getState().document?.node.id === recovery.nodeId && useAppStore.getState().documentVersion === version) await selectNode(recovery.nodeId, true)
+      if (
+        useAppStore.getState().document?.node.id === recovery.nodeId &&
+        useAppStore.getState().documentVersion === version
+      )
+        await selectNode(recovery.nodeId, true)
       setIgnoredRecoveryId(null)
       setRecoveryPreview(null)
-    } catch (error) { setError(error) } finally { setRecoveryBusy(false) }
+    } catch (error) {
+      setError(error)
+    } finally {
+      setRecoveryBusy(false)
+    }
   }
 
   async function discardRecovery() {
     const session = captureProjectSession()
-    if (!recovery || !window.confirm('删除这份恢复数据？删除后无法从 NovelForge 恢复。')) return
+    if (
+      !recovery ||
+      !window.confirm('删除这份恢复数据？删除后无法从 NovelForge 恢复。')
+    )
+      return
     setRecoveryBusy(true)
     try {
-      const remaining = await projectApi.discardRecovery({ projectPath: currentProjectPath, recoveryId: recovery.id })
+      const remaining = await projectApi.discardRecovery({
+        projectPath: currentProjectPath,
+        recoveryId: recovery.id,
+      })
       const latest = useAppStore.getState().data
       if (!isCurrentProjectSession(session) || !latest) return
       await refreshData({ ...latest, recovery: remaining }, true, session)
       setIgnoredRecoveryId(null)
       setRecoveryPreview(null)
-    } catch (error) { setError(error) } finally { setRecoveryBusy(false) }
+    } catch (error) {
+      setError(error)
+    } finally {
+      setRecoveryBusy(false)
+    }
   }
 
-  return <div className="workspace-view">
-    {recovery ? <div className="recovery-banner"><RotateCcw size={15} /><strong>检测到未恢复的写作内容：{recovery.nodeTitle}</strong><span>来自 {recovery.createdAt}</span><div className="banner-actions"><Button variant="ghost" disabled={recoveryBusy} onClick={() => void previewRecovery()}>查看</Button><Button variant="outline" disabled={recoveryBusy} onClick={ignoreRecovery}>稍后处理</Button><Button variant="danger" disabled={recoveryBusy} onClick={() => void discardRecovery()}>删除</Button>{data.nodes.some(node => node.id === recovery.nodeId) ? <Button disabled={recoveryBusy} onClick={() => void restoreRecovery()}>恢复</Button> : <Button disabled={recoveryBusy} onClick={() => useAppStore.getState().setView('settings')}>前往恢复中心另存</Button>}</div></div> : null}
-    <div className="view-header"><div><p className="eyebrow">PROJECT DASHBOARD</p><h1>{data.project.title}</h1><p>{data.project.description || '把设定、结构和每一次落笔，收拢在同一个安静的工作台。'}</p></div><div className="dashboard-resume"><Button disabled={!resumeNode} title={resumeTitle} onClick={() => { if (resumeNode) void selectNode(resumeNode.id) }}><BookOpen size={15} />继续写作</Button><span title={resumeTitle}>{resumeTitle}</span></div></div>
-    <div className="dashboard-grid">
-      <Panel className="metric-card"><span className="metric-label">总字数</span><div className="metric-value">{formatNumber(stats.totalWords)}</div><span className="metric-sub">跨 {formatNumber(stats.chapterCount)} 个章节</span></Panel>
-      <Panel className="metric-card"><span className="metric-label">今日新增</span><div className="metric-value">{formatNumber(stats.todayWords)}</div><span className="metric-sub">{dailyTarget > 0 ? '今日目标 ' + formatNumber(dailyTarget) + ' 字 · ' + dailyProgress + '%' : '未设置每日目标'}</span></Panel>
-      <Panel className="metric-card"><span className="metric-label">连续写作</span><div className="metric-value">{formatNumber(stats.writingStreak)}<small style={{ fontSize: 12 }}> 天</small></div><span className="metric-sub"><Flame size={11} style={{ verticalAlign: 'middle' }} /> 保持节奏</span></Panel>
-      <Panel className="metric-card"><span className="metric-label">项目目标</span><div className="metric-value">{progress}<small style={{ fontSize: 12 }}>%</small></div><span className="metric-sub">{formatNumber(stats.targetWords)} 字目标</span></Panel>
-    </div>
-    <div className="dashboard-columns">
-      <Panel className="dashboard-panel"><div className="panel-title"><h3>最近修改</h3><span>按最后保存排序</span></div>{chapters.length ? <div className="recent-list">{chapters.map((chapter, index) => <button className="recent-item" key={chapter.id} onClick={() => void selectNode(chapter.id)}><span className="recent-number">{String(index + 1).padStart(2, '0')}</span><span><strong>{chapter.title}</strong><small>{chapterStageLabel(chapter, data.entities)}{isNodeLocked(data.nodes, chapter.id) ? ' · 已锁定' : ''} · {formatDate(chapter.updatedAt)}</small></span></button>)}</div> : <div className="empty-state"><BookOpen size={22} /><div><strong>还没有章节</strong><span>从左侧正文结构创建第一卷和章节。</span></div></div>}</Panel>
-      <div style={{ display: 'grid', gap: 10 }}>
-        <Panel className="dashboard-panel"><div className="panel-title"><h3>写作目标</h3><Target size={15} color="var(--accent)" /></div><div className="progress-wrap"><div className="progress-track"><div className="progress-bar" style={{ width: String(progress) + '%' }} /></div><div className="progress-meta"><span>{formatNumber(stats.totalWords)} 字</span><span>{formatNumber(stats.targetWords)} 字</span></div></div><p className="metric-sub">本周新增 {formatNumber(stats.weekWords)} 字 · 本月新增 {formatNumber(stats.monthWords)} 字</p></Panel>
-
+  return (
+    <div className="workspace-view dashboard-view">
+      {recovery ? (
+        <div className="recovery-banner">
+          <RotateCcw size={15} />
+          <strong>检测到未恢复的写作内容：{recovery.nodeTitle}</strong>
+          <span>来自 {recovery.createdAt}</span>
+          <div className="banner-actions">
+            <Button
+              variant="ghost"
+              disabled={recoveryBusy}
+              onClick={() => void previewRecovery()}
+            >
+              查看
+            </Button>
+            <Button
+              variant="outline"
+              disabled={recoveryBusy}
+              onClick={ignoreRecovery}
+            >
+              稍后处理
+            </Button>
+            <Button
+              variant="danger"
+              disabled={recoveryBusy}
+              onClick={() => void discardRecovery()}
+            >
+              删除
+            </Button>
+            {data.nodes.some((node) => node.id === recovery.nodeId) ? (
+              <Button
+                disabled={recoveryBusy}
+                onClick={() => void restoreRecovery()}
+              >
+                恢复
+              </Button>
+            ) : (
+              <Button
+                disabled={recoveryBusy}
+                onClick={() => useAppStore.getState().setView('settings')}
+              >
+                前往恢复中心另存
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : null}
+      <div className="view-header">
+        <div>
+          <p className="eyebrow">YOUR WRITING DESK</p>
+          <h1>{data.project.title}</h1>
+          <p>
+            {data.project.description ||
+              '把设定、结构和每一次落笔，收拢在同一个安静的工作台。'}
+          </p>
+        </div>
+        <div className="dashboard-resume">
+          <Button
+            disabled={!resumeNode}
+            title={resumeTitle}
+            onClick={() => {
+              if (resumeNode) void selectNode(resumeNode.id)
+            }}
+          >
+            <BookOpen size={15} />
+            继续写作
+            <ArrowRight size={15} />
+          </Button>
+          <span title={resumeTitle}>{resumeTitle}</span>
+        </div>
       </div>
+      <div className="dashboard-grid">
+        <Panel className="metric-card">
+          <span className="metric-label">总字数</span>
+          <div className="metric-value">{formatNumber(stats.totalWords)}</div>
+          <span className="metric-sub">
+            跨 {formatNumber(stats.chapterCount)} 个章节
+          </span>
+        </Panel>
+        <Panel className="metric-card">
+          <span className="metric-label">今日新增</span>
+          <div className="metric-value">{formatNumber(stats.todayWords)}</div>
+          <span className="metric-sub">
+            {dailyTarget > 0
+              ? '今日目标 ' +
+                formatNumber(dailyTarget) +
+                ' 字 · ' +
+                dailyProgress +
+                '%'
+              : '未设置每日目标'}
+          </span>
+        </Panel>
+        <Panel className="metric-card">
+          <span className="metric-label">连续写作</span>
+          <div className="metric-value">
+            {formatNumber(stats.writingStreak)}
+            <small style={{ fontSize: 12 }}> 天</small>
+          </div>
+          <span className="metric-sub">
+            <Flame size={11} style={{ verticalAlign: 'middle' }} /> 保持节奏
+          </span>
+        </Panel>
+        <Panel className="metric-card">
+          <span className="metric-label">项目目标</span>
+          <div className="metric-value">
+            {progress}
+            <small style={{ fontSize: 12 }}>%</small>
+          </div>
+          <span className="metric-sub">
+            {formatNumber(stats.targetWords)} 字目标
+          </span>
+        </Panel>
+      </div>
+      <div className="dashboard-columns">
+        <Panel className="dashboard-panel">
+          <div className="panel-title">
+            <h3>最近修改</h3>
+            <span>按最后保存排序</span>
+          </div>
+          {chapters.length ? (
+            <div className="recent-list">
+              {chapters.map((chapter, index) => (
+                <button
+                  className="recent-item"
+                  key={chapter.id}
+                  onClick={() => void selectNode(chapter.id)}
+                >
+                  <span className="recent-number">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <span>
+                    <strong>{chapter.title}</strong>
+                    <small>
+                      {chapterStageLabel(chapter, data.entities)}
+                      {isNodeLocked(data.nodes, chapter.id)
+                        ? ' · 已锁定'
+                        : ''}{' '}
+                      · {formatDate(chapter.updatedAt)}
+                    </small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <BookOpen size={22} />
+              <div>
+                <strong>还没有章节</strong>
+                <span>从左侧正文结构创建第一卷和章节。</span>
+              </div>
+            </div>
+          )}
+        </Panel>
+        <div style={{ display: 'grid', gap: 10 }}>
+          <Panel className="dashboard-panel">
+            <div className="panel-title">
+              <h3>写作目标</h3>
+              <Target size={15} color="var(--accent)" />
+            </div>
+            <div className="progress-wrap">
+              <div className="progress-track">
+                <div
+                  className="progress-bar"
+                  style={{ width: String(progress) + '%' }}
+                />
+              </div>
+              <div className="progress-meta">
+                <span>{formatNumber(stats.totalWords)} 字</span>
+                <span>{formatNumber(stats.targetWords)} 字</span>
+              </div>
+            </div>
+            <p className="metric-sub">
+              本周新增 {formatNumber(stats.weekWords)} 字 · 本月新增{' '}
+              {formatNumber(stats.monthWords)} 字
+            </p>
+          </Panel>
+        </div>
+      </div>
+      <Disclosure
+        title="章节检查清单"
+        storageKey="dashboard:checklist"
+        className="dashboard-checklist"
+      >
+        <ChecklistDashboard />
+      </Disclosure>
+      <div className="dashboard-columns" style={{ paddingTop: 0 }}>
+        <Panel className="dashboard-panel">
+          <div className="panel-title">
+            <h3>下一步</h3>
+            <Sparkles size={15} color="var(--accent)" />
+          </div>
+          <div className="dashboard-quick-actions">
+            <button onClick={() => useAppStore.getState().setView('character')}>
+              <CircleUserRound size={18} />
+              <span>
+                建立人物<small>让故事中的每个人鲜活起来</small>
+              </span>
+              <ArrowRight size={14} />
+            </button>
+            <button onClick={() => useAppStore.getState().setView('world')}>
+              <Globe2 size={18} />
+              <span>
+                补充世界观<small>记录设定，让细节彼此呼应</small>
+              </span>
+              <ArrowRight size={14} />
+            </button>
+            <button onClick={() => useAppStore.getState().setView('search')}>
+              <Search size={18} />
+              <span>
+                搜索全文<small>在章节与资料之间找到线索</small>
+              </span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+        </Panel>
+        <Disclosure title="保存与备份" className="dashboard-note">
+          <p>
+            正文保存在项目内的 Markdown
+            文件中，并有自动保存、恢复文件与历史快照。删除内容先移入回收站；备份时请保留完整项目目录。
+          </p>
+        </Disclosure>
+      </div>
+      {recoveryPreview ? (
+        <Modal
+          open
+          title={`恢复内容 · ${recoveryPreview.title}`}
+          onClose={() => setRecoveryPreview(null)}
+          footer={
+            <Button variant="outline" onClick={() => setRecoveryPreview(null)}>
+              关闭
+            </Button>
+          }
+        >
+          <pre className="history-preview" style={{ maxHeight: '60vh' }}>
+            {recoveryPreview.content}
+          </pre>
+        </Modal>
+      ) : null}
     </div>
-    <Disclosure title="章节检查清单" storageKey="dashboard:checklist" className="dashboard-checklist"><ChecklistDashboard /></Disclosure><div className="dashboard-columns" style={{ paddingTop: 0 }}>
-      <Panel className="dashboard-panel"><div className="panel-title"><h3>下一步</h3><Sparkles size={15} color="var(--accent)" /></div><div className="inspector-actions"><Button variant="outline" onClick={() => useAppStore.getState().setView('character')}>建立人物</Button><Button variant="outline" onClick={() => useAppStore.getState().setView('world')}>补充世界观</Button><Button variant="outline" onClick={() => useAppStore.getState().setView('search')}>搜索全文</Button></div></Panel>
-      <Disclosure title="保存与备份" className="dashboard-note"><p>正文保存在项目内的 Markdown 文件中，并有自动保存、恢复文件与历史快照。删除内容先移入回收站；备份时请保留完整项目目录。</p></Disclosure>
-    </div>
-    {recoveryPreview ? <Modal open title={`恢复内容 · ${recoveryPreview.title}`} onClose={() => setRecoveryPreview(null)} footer={<Button variant="outline" onClick={() => setRecoveryPreview(null)}>关闭</Button>}><pre className="history-preview" style={{ maxHeight: '60vh' }}>{recoveryPreview.content}</pre></Modal> : null}
-  </div>
+  )
 }

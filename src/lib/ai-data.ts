@@ -15,6 +15,11 @@ export interface AiPreferences {
   providerName?: string
   temperature?: number
   maxTokens?: number
+  providerKind?: 'compatible' | 'deepseek'
+  thinking?: 'disabled' | 'enabled'
+  reasoningEffort?: 'low' | 'high' | 'max'
+  stream?: boolean
+  timeoutSeconds?: number
 }
 
 export interface AiContextItem {
@@ -70,7 +75,13 @@ export function readAiPreferences(): AiPreferences {
     }
     if (typeof value.providerName === 'string') defaults.providerName = value.providerName
     if (typeof value.temperature === 'number' && Number.isFinite(value.temperature)) defaults.temperature = Math.max(0, Math.min(2, value.temperature))
-    if (typeof value.maxTokens === 'number' && Number.isFinite(value.maxTokens)) defaults.maxTokens = Math.max(1, Math.min(32_000, Math.round(value.maxTokens)))
+    if (value.providerKind === 'compatible' || value.providerKind === 'deepseek') defaults.providerKind = value.providerKind
+    if (value.thinking === 'enabled' || value.thinking === 'disabled') defaults.thinking = value.thinking
+    if (value.reasoningEffort === 'low' || value.reasoningEffort === 'high' || value.reasoningEffort === 'max') defaults.reasoningEffort = value.reasoningEffort
+    if (typeof value.stream === 'boolean') defaults.stream = value.stream
+    if (typeof value.timeoutSeconds === 'number' && Number.isFinite(value.timeoutSeconds)) defaults.timeoutSeconds = Math.max(30, Math.min(600, Math.round(value.timeoutSeconds)))
+    const deepseek = defaults.providerKind === 'deepseek' || (!defaults.providerKind && /^https:\/\/api\.deepseek\.com(?:\/|$)/i.test(defaults.endpoint))
+    if (typeof value.maxTokens === 'number' && Number.isFinite(value.maxTokens)) defaults.maxTokens = Math.max(1, Math.min(deepseek ? 65_536 : 32_000, Math.round(value.maxTokens)))
   } catch {
     // 损坏的 Provider 偏好只回退到本地模式。
   }
@@ -79,7 +90,8 @@ export function readAiPreferences(): AiPreferences {
 }
 
 export function writeAiPreferences(preferences: AiPreferences) {
-  try { localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences)) } catch { /* 偏好不是核心数据 */ }
+  const { mode, codexPath, codexModel, codexEffort, endpoint, model, providerName, temperature, maxTokens, providerKind, thinking, reasoningEffort, stream, timeoutSeconds } = preferences
+  try { localStorage.setItem(PREFERENCES_KEY, JSON.stringify({ mode, codexPath, codexModel, codexEffort, endpoint, model, providerName, temperature, maxTokens, providerKind, thinking, reasoningEffort, stream, timeoutSeconds })) } catch { /* 偏好不是核心数据 */ }
 }
 
 export function parseTemperature(value: string): number {

@@ -90,6 +90,7 @@ fn ai_input(endpoint: String) -> super::models::AiCompletionInput {
         prompt: "用户请求".to_string(),
         temperature: Some(0.7),
         max_tokens: Some(100),
+        ..Default::default()
     }
 }
 

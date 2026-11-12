@@ -1,0 +1,71 @@
+:root {
+  font-family: 'Noto Sans SC', 'Microsoft YaHei UI', 'Segoe UI', sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --font-caption: 12px;
+  --font-ui: 13px;
+  --control-height: 34px;
+  --space-page: 24px;
+  --surface-hover: var(--surface-2);
+  --bg: #f5f6f2;
+  --surface: #fffefa;
+  --surface-2: #eef1eb;
+  --surface-3: #e5eae1;
+  --line: #e1e5dc;
+  --line-strong: #cbd3c6;
+  --text: #293a32;
+  --muted: #657268;
+  --faint: #738074;
+  --accent: #315f4d;
+  --accent-soft: #e3eee6;
+  --green: #376d50;
+  --green-soft: #e0efe2;
+  --yellow: #a06a2c;
+  --yellow-soft: #f5e8d1;
+  --danger: #a54b4b;
+  --danger-soft: #f4dddd;
+  --shadow: 0 16px 48px #263e2e10;
+  --radius: 12px;
+  --sidebar-width: 272px;
+  --inspector-width: 278px;
+  --editor-font-family: 'Noto Serif SC', 'Source Han Serif SC', Georgia, serif;
+  --editor-font-size: 16px;
+  --editor-line-height: 1.95;
+  --content-width: 920px;
+  --paragraph-spacing: 15px;
+  --editor-selection-bg: #bfd8e8;
+  --editor-selection-text: #162a35;
+  --studio-sidebar: #edf1e9;
+  --studio-paper: #fdfcf6;
+  --studio-serif:
+    'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', 'SimSun', Georgia,
+    serif;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #19231f;
+  --surface: #222e28;
+  --surface-2: #29382f;
+  --surface-3: #33463a;
+  --line: #36473d;
+  --line-strong: #4c6052;
+  --text: #e5eade;
+  --muted: #adbbac;
+  --faint: #a4b3a4;
+  --accent: #a8ceb1;
+  --accent-soft: #334b3c;
+  --green: #a8ceb1;
+  --green-soft: #304936;
+  --yellow: #d7a56a;
+  --yellow-soft: #4f3d26;
+  --danger: #e28a8a;
+  --danger-soft: #4e2c2c;
+  --shadow: 0 16px 48px #0003;
+  --editor-selection-bg: #365770;
+  --editor-selection-text: #f5f7fa;
+  --studio-sidebar: #1e2a23;
+  --studio-paper: #28372d;
+}

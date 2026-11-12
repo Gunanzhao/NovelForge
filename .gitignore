@@ -15,6 +15,7 @@ src-tauri/gen/
 
 # Local audit toolchains and synthetic projects
 /tmp/
+/desktop/
 
 # Local audit payloads are not part of the public release.
 /docs/audits/independent-2026-09-06/

@@ -1,99 +1,46 @@
-import { readPinnedNavigation, writePinnedNavigation } from '../lib/navigation-preferences'
-import { Disclosure } from './Disclosure'
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
-import type { LucideIcon } from 'lucide-react'
 import {
-  ArrowDown, ArrowRightLeft, ArrowUp, BarChart3, BookOpen, ChevronDown, ChevronRight, CircleUserRound, Clock3, Copy, FileDown, FilePlus2, FolderTree,
-  GalleryVerticalEnd, GitBranch, GitCompare, Globe2, Inbox, LayoutDashboard, MoreHorizontal, Network, Paperclip, Pin, PinOff, Plus, Search,
-  ShieldCheck, Sparkles, Trash2, WandSparkles,
+ArrowDown,
+ArrowRightLeft,
+ArrowUp,
+BookOpen,
+ChevronDown,
+ChevronRight,
+Copy,
+FileDown,
+FilePlus2,
+Plus,
+Search,
+Trash2,
+WandSparkles,
+X,
 } from 'lucide-react'
-import { useAppStore } from '../stores/app-store'
-import type { NodeKind, NodeRecord, ViewId } from '../lib/types'
-import { CHAPTER_STAGES, chapterStage, chapterStageLabel } from '../lib/chapter-workflow'
-import { isNodeLocked } from '../lib/node-lock'
-import type { ContextMenuItem } from '../lib/context-menu'
-import { writeClipboardText } from '../lib/clipboard'
-import { useContextMenu } from './ContextMenu'
-
-import { cn } from '../lib/utils'
-import { Button, IconButton } from './ui'
 import {
-  chapterMatchesWorkflowFilter,
-} from '../lib/chapter-workflow'
+useEffect,
+useMemo,
+useRef,
+useState,
+type MouseEvent as ReactMouseEvent,
+} from 'react'
+import { CHAPTER_STAGES,chapterStage } from '../lib/chapter-workflow'
+import { writeClipboardText } from '../lib/clipboard'
+import type { ContextMenuItem } from '../lib/context-menu'
+import type { NodeKind,NodeRecord } from '../lib/types'
+import { useAppStore } from '../stores/app-store'
+import { useContextMenu } from './ContextMenu'
+import { Navigation } from './sidebar/Navigation'
+import { NodeRow } from './sidebar/NodeRow'
+import { filterTreeByTitle,flattenTree } from './sidebar/tree'
+
 import type { ChapterWorkflowFilter } from '../lib/chapter-workflow'
-
-const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon; group: '写作' | '资料' | '分析与辅助' }> = [
-  { id: 'dashboard', label: '总览', icon: LayoutDashboard, group: '写作' },
-  { id: 'manuscript', label: '正文', icon: BookOpen, group: '写作' },
-  { id: 'revision-workbench', label: '整卷修订', icon: GitCompare, group: '写作' },
-  { id: 'manuscript-import', label: '稿件导入', icon: FilePlus2, group: '写作' },
-  { id: 'outline', label: '写作规划', icon: BookOpen, group: '写作' },
-  { id: 'character', label: '人物', icon: CircleUserRound, group: '资料' },
-  { id: 'location', label: '地点', icon: GalleryVerticalEnd, group: '资料' },
-  { id: 'world', label: '世界观 Wiki', icon: Globe2, group: '资料' },
-  { id: 'timeline', label: '时间线', icon: Clock3, group: '写作' },
-  { id: 'foreshadowing', label: '伏笔', icon: GitBranch, group: '写作' },
-  { id: 'story-arc', label: '剧情线', icon: GitBranch, group: '写作' },
-  { id: 'inbox', label: '灵感箱', icon: Inbox, group: '写作' },
-  { id: 'relationship', label: '人物关系图', icon: Network, group: '分析与辅助' },
-  { id: 'attachment', label: '资料附件', icon: Paperclip, group: '资料' },
-  { id: 'chapter-memory', label: '章节记忆', icon: BookOpen, group: '写作' },
-  { id: 'annotation', label: '批注与修订', icon: ShieldCheck, group: '写作' },
-  { id: 'consistency', label: '一致性检查', icon: ShieldCheck, group: '分析与辅助' },
-  { id: 'statistics', label: '详细统计', icon: BarChart3, group: '分析与辅助' },
-  { id: 'ai', label: 'AI 辅助', icon: Sparkles, group: '分析与辅助' },
-]
-
-function nodeChildren(nodes: NodeRecord[], parentId: string) {
-  return nodes.filter((node) => node.parentId === parentId).sort((a, b) => a.orderIndex - b.orderIndex)
-}
-
-function flattenTree(nodes: NodeRecord[], volumes: NodeRecord[], openNodes: Set<string>) {
-  const rows: Array<{ node: NodeRecord; level: number }> = []
-  const visit = (node: NodeRecord, level: number) => {
-    rows.push({ node, level })
-    if (openNodes.has(node.id)) nodeChildren(nodes, node.id).forEach((child) => visit(child, level + 1))
-  }
-  volumes.forEach((volume) => visit(volume, 0))
-  return rows
-}
-
-function NodeRow({ node, level, open, selected, onToggle, onSelect, onSelectToggle, onRename, onContextMenu, onDragStart, onDrop }: {
-  node: NodeRecord
-  level: number
-  open: boolean
-  selected: boolean
-  onToggle: () => void
-  onSelect: () => void
-  onSelectToggle: () => void
-  onRename: () => void
-  onContextMenu: (event: ReactMouseEvent<HTMLElement>) => void
-  onDragStart: () => void
-  onDrop: () => void
-}) {
-  const current = useAppStore(state => state.document?.node.id === node.id)
-  const data = useAppStore(state => state.data)
-  const stage = chapterStage(node, data?.entities ?? [])
-  const isContainer = node.kind !== 'section'
-  const hasChildren = isContainer
-  return <div className="tree-row-wrap">
-    <div className={cn('tree-row', node.kind !== 'volume' && 'tree-document-row', selected && 'selected', current && 'current')} style={{ paddingLeft: 5 + level * 13 }} draggable onDragStart={onDragStart} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); onDrop() }} onDoubleClick={onRename} onContextMenu={onContextMenu}>
-      {hasChildren ? <IconButton icon={open ? ChevronDown : ChevronRight} label={open ? '收起' : '展开'} onClick={onToggle} className="tree-toggle" /> : <span style={{ width: 30 }} />}
-      <input type="checkbox" className="tree-checkbox" checked={selected} onChange={onSelectToggle} onClick={(event) => event.stopPropagation()} aria-label={'选择' + node.title} />
-      <button className="tree-main-button" aria-current={current ? 'page' : undefined} onClick={onSelect}>
-        <span className="tree-icon">{node.kind === 'volume' ? <FolderTree size={15} /> : <BookOpen size={14} />}</span>
-        <span className="tree-label">{node.title}</span>
-        {node.kind === 'chapter' ? <span title={chapterStageLabel(node, data?.entities ?? []) + (isNodeLocked(data?.nodes ?? [], node.id) ? ' · 已锁定' : '')} className={cn('tree-status-dot', stage === 'final' ? 'done' : stage)} /> : null}
-      </button>
-      <span className="tree-row-actions">
-        <IconButton icon={MoreHorizontal} label={'更多操作：' + node.title} aria-haspopup="menu" onClick={onContextMenu} onDoubleClick={event => event.stopPropagation()} />
-      </span>
-    </div>
-  </div>
-}
+import { chapterMatchesWorkflowFilter } from '../lib/chapter-workflow'
+import { cn } from '../lib/utils'
+import { Button,IconButton } from './ui'
 
 export function Sidebar({
-  onAddNode, onMoveNode, onCopyNode, onExportNode,
+  onAddNode,
+  onMoveNode,
+  onCopyNode,
+  onExportNode,
 }: {
   onAddNode: (kind: NodeKind, parentId: string | null) => void
   onMoveNode: (node: NodeRecord) => void
@@ -102,8 +49,7 @@ export function Sidebar({
 }) {
   const data = useAppStore((state) => state.data)
   const activeView = useAppStore((state) => state.activeView)
-  const currentNodeId = useAppStore(state => state.document?.node.id)
-  const [pinned, setPinned] = useState(readPinnedNavigation)
+  const currentNodeId = useAppStore((state) => state.document?.node.id)
 
   const setView = useAppStore((state) => state.setView)
   const selectNode = useAppStore((state) => state.selectNode)
@@ -123,26 +69,86 @@ export function Sidebar({
   const treeRef = useRef<HTMLDivElement>(null)
   const [treeScrollTop, setTreeScrollTop] = useState(0)
   const [treeViewportHeight, setTreeViewportHeight] = useState(480)
-  const [workflowFilter, setWorkflowFilter] = useState<ChapterWorkflowFilter>('all')
+  const [workflowFilter, setWorkflowFilter] =
+    useState<ChapterWorkflowFilter>('all')
 
-  const filteredNodes = useMemo(() => {
+  const [chapterQuery, setChapterQuery] = useState('')
+
+  const workflowNodes = useMemo(() => {
     if (!data || workflowFilter === 'all') return data?.nodes ?? []
-    const matchingChapters = new Set(data.nodes.filter((node) => node.kind === 'chapter' && chapterMatchesWorkflowFilter(node, data.entities, workflowFilter)).map((node) => node.id))
-    const matchingVolumes = new Set(data.nodes.filter((node) => node.kind === 'chapter' && matchingChapters.has(node.id)).map((node) => node.parentId))
-    return data.nodes.filter((node) => node.kind === 'volume' ? matchingVolumes.has(node.id) : node.kind === 'chapter' ? matchingChapters.has(node.id) : matchingChapters.has(node.parentId ?? ''))
+    const matchingChapters = new Set(
+      data.nodes
+        .filter(
+          (node) =>
+            node.kind === 'chapter' &&
+            chapterMatchesWorkflowFilter(node, data.entities, workflowFilter),
+        )
+        .map((node) => node.id),
+    )
+    const matchingVolumes = new Set(
+      data.nodes
+        .filter(
+          (node) => node.kind === 'chapter' && matchingChapters.has(node.id),
+        )
+        .map((node) => node.parentId),
+    )
+    return data.nodes.filter((node) =>
+      node.kind === 'volume'
+        ? matchingVolumes.has(node.id)
+        : node.kind === 'chapter'
+          ? matchingChapters.has(node.id)
+          : matchingChapters.has(node.parentId ?? ''),
+    )
   }, [data, workflowFilter])
-  const volumes = useMemo(() => filteredNodes.filter((node) => node.kind === 'volume').sort((a, b) => a.orderIndex - b.orderIndex), [filteredNodes])
-  const flatTree = useMemo(() => flattenTree(filteredNodes, volumes, openNodes), [filteredNodes, openNodes, volumes])
+  const filteredNodes = useMemo(
+    () => filterTreeByTitle(workflowNodes, chapterQuery),
+    [workflowNodes, chapterQuery],
+  )
+  useEffect(() => {
+    setTreeScrollTop(0)
+    if (treeRef.current) treeRef.current.scrollTop = 0
+  }, [chapterQuery, workflowFilter])
+  useEffect(() => {
+    if (chapterQuery.trim())
+      setOpenNodes(
+        (current) =>
+          new Set([
+            ...current,
+            ...filteredNodes
+              .filter((node) => node.kind !== 'section')
+              .map((node) => node.id),
+          ]),
+      )
+  }, [chapterQuery, filteredNodes])
+  const volumes = useMemo(
+    () =>
+      filteredNodes
+        .filter((node) => node.kind === 'volume')
+        .sort((a, b) => a.orderIndex - b.orderIndex),
+    [filteredNodes],
+  )
+  const flatTree = useMemo(
+    () => flattenTree(filteredNodes, volumes, openNodes),
+    [filteredNodes, openNodes, volumes],
+  )
   const treeRowHeight = 38
   const treeOverscan = 10
-  const visibleStart = Math.max(0, Math.floor(treeScrollTop / treeRowHeight) - treeOverscan)
-  const visibleEnd = Math.min(flatTree.length, Math.ceil((treeScrollTop + treeViewportHeight) / treeRowHeight) + treeOverscan)
+  const visibleStart = Math.max(
+    0,
+    Math.floor(treeScrollTop / treeRowHeight) - treeOverscan,
+  )
+  const visibleEnd = Math.min(
+    flatTree.length,
+    Math.ceil((treeScrollTop + treeViewportHeight) / treeRowHeight) +
+      treeOverscan,
+  )
   const visibleTree = flatTree.slice(visibleStart, visibleEnd)
 
   useEffect(() => {
     const element = treeRef.current
     if (!element) return
-    const updateHeight = () => setTreeViewportHeight(element.clientHeight || 480)
+    const updateHeight = () =>
+      setTreeViewportHeight(element.clientHeight || 480)
     updateHeight()
     window.addEventListener('resize', updateHeight)
     return () => window.removeEventListener('resize', updateHeight)
@@ -152,38 +158,58 @@ export function Sidebar({
   useEffect(() => {
     if (!currentNodeId || !nodes) return
     const parents: string[] = []
-    let node = nodes.find(item => item.id === currentNodeId)
+    let node = nodes.find((item) => item.id === currentNodeId)
     while (node?.parentId && !parents.includes(node.parentId)) {
       parents.push(node.parentId)
-      node = nodes.find(item => item.id === node?.parentId)
+      node = nodes.find((item) => item.id === node?.parentId)
     }
-    setOpenNodes(current => new Set([...current, ...parents]))
+    setOpenNodes((current) => new Set([...current, ...parents]))
   }, [currentNodeId, nodes])
 
   if (!data) return null
   const currentData = data
 
-  const toggle = (id: string) => setOpenNodes((current) => {
-    const next = new Set(current)
-    if (next.has(id)) next.delete(id); else next.add(id)
-    return next
-  })
+  const toggle = (id: string) =>
+    setOpenNodes((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   const handleRename = (node: NodeRecord) => {
     const title = window.prompt('重命名', node.title)
-    if (title?.trim() && title.trim() !== node.title) void renameNode(node.id, title.trim())
+    if (title?.trim() && title.trim() !== node.title)
+      void renameNode(node.id, title.trim())
   }
   const handleDelete = (node: NodeRecord) => {
-    if (window.confirm('将“' + node.title + '”移入回收站？正文文件可在回收站恢复。')) void deleteNode(node.id)
+    if (
+      window.confirm(
+        '将“' + node.title + '”移入回收站？正文文件可在回收站恢复。',
+      )
+    )
+      void deleteNode(node.id)
   }
-  const toggleSelection = (id: string) => setSelectedNodeIds((current) => {
-    const next = new Set(current)
-    if (next.has(id)) next.delete(id); else next.add(id)
-    return next
-  })
+  const toggleSelection = (id: string) =>
+    setSelectedNodeIds((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   async function deleteSelected() {
-    const selected = currentData.nodes.filter((node) => selectedNodeIds.has(node.id))
-    const roots = selected.filter((node) => !selected.some((candidate) => candidate.id === node.parentId))
-    if (!roots.length || !window.confirm('将选中的 ' + String(roots.length) + ' 个节点移入回收站？')) return
+    const selected = currentData.nodes.filter((node) =>
+      selectedNodeIds.has(node.id),
+    )
+    const roots = selected.filter(
+      (node) => !selected.some((candidate) => candidate.id === node.parentId),
+    )
+    if (
+      !roots.length ||
+      !window.confirm(
+        '将选中的 ' + String(roots.length) + ' 个节点移入回收站？',
+      )
+    )
+      return
     try {
       for (const node of roots) await deleteNode(node.id)
       setSelectedNodeIds(new Set())
@@ -192,107 +218,463 @@ export function Sidebar({
     }
   }
   function siblingNodes(node: NodeRecord) {
-    return currentData.nodes.filter((candidate) => candidate.kind === node.kind && candidate.parentId === node.parentId).sort((a, b) => a.orderIndex - b.orderIndex)
+    return currentData.nodes
+      .filter(
+        (candidate) =>
+          candidate.kind === node.kind && candidate.parentId === node.parentId,
+      )
+      .sort((a, b) => a.orderIndex - b.orderIndex)
   }
-  async function updateChecklistShortcut(node: NodeRecord, mode: 'body' | 'final') {
+  async function updateChecklistShortcut(
+    node: NodeRecord,
+    mode: 'body' | 'final',
+  ) {
     if (node.kind !== 'chapter' || !projectPath) return
-    await useAppStore.getState().updateChapterChecklist(node.id, value => mode === 'final'
-      ? { ...value, workflowStatus: 'final' }
-      : { ...value, items: value.items.map(item => item.id === 'body-complete' || item.label === '正文完成' ? { ...item, completed: true } : item) })
+    await useAppStore
+      .getState()
+      .updateChapterChecklist(node.id, (value) =>
+        mode === 'final'
+          ? { ...value, workflowStatus: 'final' }
+          : {
+              ...value,
+              items: value.items.map((item) =>
+                item.id === 'body-complete' || item.label === '正文完成'
+                  ? { ...item, completed: true }
+                  : item,
+              ),
+            },
+      )
   }
   function openNodeMenu(event: ReactMouseEvent<HTMLElement>, node: NodeRecord) {
-    const preservingSelection = selectedNodeIds.has(node.id) && selectedNodeIds.size > 1
+    const preservingSelection =
+      selectedNodeIds.has(node.id) && selectedNodeIds.size > 1
     const ids = preservingSelection ? [...selectedNodeIds] : [node.id]
-    if (!preservingSelection && (!selectedNodeIds.has(node.id) || selectedNodeIds.size !== 1)) setSelectedNodeIds(new Set([node.id]))
-    const selectedNodes = currentData.nodes.filter((candidate) => ids.includes(candidate.id))
+    if (
+      !preservingSelection &&
+      (!selectedNodeIds.has(node.id) || selectedNodeIds.size !== 1)
+    )
+      setSelectedNodeIds(new Set([node.id]))
+    const selectedNodes = currentData.nodes.filter((candidate) =>
+      ids.includes(candidate.id),
+    )
     if (preservingSelection) {
-      const allChapters = selectedNodes.length > 0 && selectedNodes.every((candidate) => candidate.kind === 'chapter')
-      const statusItems: ContextMenuItem[] = allChapters ? CHAPTER_STAGES.map(({ id: status, label }) => ({
-        type: 'item' as const,
-        id: 'selection-status-' + status,
-        label,
-        checked: selectedNodes.every((candidate) => chapterStage(candidate, currentData.entities) === status),
-        onSelect: async () => { for (const candidate of selectedNodes) await setChapterStage(candidate.id, status) },
-      })) : []
+      const allChapters =
+        selectedNodes.length > 0 &&
+        selectedNodes.every((candidate) => candidate.kind === 'chapter')
+      const statusItems: ContextMenuItem[] = allChapters
+        ? CHAPTER_STAGES.map(({ id: status, label }) => ({
+            type: 'item' as const,
+            id: 'selection-status-' + status,
+            label,
+            checked: selectedNodes.every(
+              (candidate) =>
+                chapterStage(candidate, currentData.entities) === status,
+            ),
+            onSelect: async () => {
+              for (const candidate of selectedNodes)
+                await setChapterStage(candidate.id, status)
+            },
+          }))
+        : []
       const items: ContextMenuItem[] = [
-        ...(allChapters ? [{ type: 'item' as const, id: 'selection-status', label: '批量设置写作阶段', children: statusItems, onSelect: () => undefined }] : []),
-        { type: 'item', id: 'selection-trash', label: '批量移入回收站', icon: Trash2, tone: 'danger', onSelect: () => void deleteSelected() },
+        ...(allChapters
+          ? [
+              {
+                type: 'item' as const,
+                id: 'selection-status',
+                label: '批量设置写作阶段',
+                children: statusItems,
+                onSelect: () => undefined,
+              },
+            ]
+          : []),
+        {
+          type: 'item',
+          id: 'selection-trash',
+          label: '批量移入回收站',
+          icon: Trash2,
+          tone: 'danger',
+          onSelect: () => void deleteSelected(),
+        },
         { type: 'separator' },
-        { type: 'item', id: 'selection-clear', label: '清除选择', onSelect: () => setSelectedNodeIds(new Set()) },
+        {
+          type: 'item',
+          id: 'selection-clear',
+          label: '清除选择',
+          onSelect: () => setSelectedNodeIds(new Set()),
+        },
       ]
-      openContextMenu(event, { title: '已选 ' + String(ids.length) + ' 项', location: 'tree.selection', payload: { location: 'tree.selection', projectPath: projectPath ?? undefined, nodeIds: ids }, items, trigger: event.currentTarget })
+      openContextMenu(event, {
+        title: '已选 ' + String(ids.length) + ' 项',
+        location: 'tree.selection',
+        payload: {
+          location: 'tree.selection',
+          projectPath: projectPath ?? undefined,
+          nodeIds: ids,
+        },
+        items,
+        trigger: event.currentTarget,
+      })
       return
     }
     const siblings = siblingNodes(node)
-    const siblingIndex = siblings.findIndex((candidate) => candidate.id === node.id)
-    const location = ('tree.' + node.kind) as 'tree.volume' | 'tree.chapter' | 'tree.section'
-    const copyPath = async () => { if (!await writeClipboardText(node.filePath)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') }
+    const siblingIndex = siblings.findIndex(
+      (candidate) => candidate.id === node.id,
+    )
+    const location = ('tree.' + node.kind) as
+      | 'tree.volume'
+      | 'tree.chapter'
+      | 'tree.section'
+    const copyPath = async () => {
+      if (!(await writeClipboardText(node.filePath)))
+        setError('无法访问系统剪贴板，请改用 Ctrl+C。')
+    }
     const items: ContextMenuItem[] = [
-      { type: 'item', id: 'node-open', label: node.kind === 'volume' ? (openNodes.has(node.id) ? '收起' : '展开') : '打开' , icon: node.kind === 'volume' ? (openNodes.has(node.id) ? ChevronDown : ChevronRight) : BookOpen, onSelect: () => node.kind === 'volume' ? toggle(node.id) : void selectNode(node.id) },
-      ...(node.kind !== 'section' ? [{ type: 'item' as const, id: 'node-add', label: node.kind === 'volume' ? '新建章节' : '新建小节', icon: Plus, onSelect: () => onAddNode(node.kind === 'volume' ? 'chapter' : 'section', node.id) }] : []),
-      { type: 'item', id: 'node-rename', label: '重命名', onSelect: () => handleRename(node) },
-      { type: 'item', id: 'node-copy', label: node.kind === 'volume' ? '复制整卷' : node.kind === 'chapter' ? '复制章节' : '复制小节', icon: Copy, onSelect: () => onCopyNode(node) },
-      ...(node.kind !== 'volume' ? [{ type: 'item' as const, id: 'node-move', label: node.kind === 'chapter' ? '移动到其他卷' : '移动到其他章节', icon: ArrowRightLeft, onSelect: () => onMoveNode(node) }] : []),
-      { type: 'item', id: 'node-up', label: '上移', icon: ArrowUp, disabled: siblingIndex <= 0, onSelect: () => void reorderNode(node.id, 'up') },
-      { type: 'item', id: 'node-down', label: '下移', icon: ArrowDown, disabled: siblingIndex < 0 || siblingIndex >= siblings.length - 1, onSelect: () => void reorderNode(node.id, 'down') },
-      ...(node.kind === 'chapter' ? [{ type: 'item' as const, id: 'node-status', label: '写作阶段', children: CHAPTER_STAGES.map(({ id: status, label }) => ({ type: 'item' as const, id: 'node-status-' + status, label, checked: chapterStage(node, currentData.entities) === status, onSelect: () => void setChapterStage(node.id, status).catch(() => undefined) })), onSelect: () => undefined }] : []),
-      ...(node.kind === 'chapter' ? [{ type: 'item' as const, id: 'node-checklist', label: '检查清单', children: [
-        { type: 'item' as const, id: 'node-checklist-body', label: '标记正文完成', onSelect: () => void updateChecklistShortcut(node, 'body').catch(() => undefined) },
-        { type: 'item' as const, id: 'node-checklist-final', label: '标记定稿', onSelect: () => void updateChecklistShortcut(node, 'final').catch(() => undefined) },
-      ], onSelect: () => undefined }] : []),
-      ...(node.kind !== 'section' ? [{ type: 'item' as const, id: 'node-export', label: node.kind === 'volume' ? '导出此卷' : '导出此章', icon: FileDown, onSelect: () => onExportNode(node) }] : []),
-      { type: 'item', id: 'node-lock', label: node.status === 'locked' ? '解锁正文' : '锁定正文', onSelect: () => void setNodeStatus(node.id, node.status === 'locked' ? 'draft' : 'locked') },
-      { type: 'item', id: 'node-copy-title', label: node.kind === 'chapter' ? '复制章节标题' : '复制标题', icon: Copy, onSelect: async () => { if (!await writeClipboardText(node.title)) setError('无法访问系统剪贴板，请改用 Ctrl+C。') } },
-      { type: 'item', id: 'node-copy-path', label: node.kind === 'chapter' ? '复制文件路径' : '复制目录路径', icon: Copy, onSelect: copyPath },
+      {
+        type: 'item',
+        id: 'node-open',
+        label:
+          node.kind === 'volume'
+            ? openNodes.has(node.id)
+              ? '收起'
+              : '展开'
+            : '打开',
+        icon:
+          node.kind === 'volume'
+            ? openNodes.has(node.id)
+              ? ChevronDown
+              : ChevronRight
+            : BookOpen,
+        onSelect: () =>
+          node.kind === 'volume' ? toggle(node.id) : void selectNode(node.id),
+      },
+      ...(node.kind !== 'section'
+        ? [
+            {
+              type: 'item' as const,
+              id: 'node-add',
+              label: node.kind === 'volume' ? '新建章节' : '新建小节',
+              icon: Plus,
+              onSelect: () =>
+                onAddNode(
+                  node.kind === 'volume' ? 'chapter' : 'section',
+                  node.id,
+                ),
+            },
+          ]
+        : []),
+      {
+        type: 'item',
+        id: 'node-rename',
+        label: '重命名',
+        onSelect: () => handleRename(node),
+      },
+      {
+        type: 'item',
+        id: 'node-copy',
+        label:
+          node.kind === 'volume'
+            ? '复制整卷'
+            : node.kind === 'chapter'
+              ? '复制章节'
+              : '复制小节',
+        icon: Copy,
+        onSelect: () => onCopyNode(node),
+      },
+      ...(node.kind !== 'volume'
+        ? [
+            {
+              type: 'item' as const,
+              id: 'node-move',
+              label:
+                node.kind === 'chapter' ? '移动到其他卷' : '移动到其他章节',
+              icon: ArrowRightLeft,
+              onSelect: () => onMoveNode(node),
+            },
+          ]
+        : []),
+      {
+        type: 'item',
+        id: 'node-up',
+        label: '上移',
+        icon: ArrowUp,
+        disabled: siblingIndex <= 0,
+        onSelect: () => void reorderNode(node.id, 'up'),
+      },
+      {
+        type: 'item',
+        id: 'node-down',
+        label: '下移',
+        icon: ArrowDown,
+        disabled: siblingIndex < 0 || siblingIndex >= siblings.length - 1,
+        onSelect: () => void reorderNode(node.id, 'down'),
+      },
+      ...(node.kind === 'chapter'
+        ? [
+            {
+              type: 'item' as const,
+              id: 'node-status',
+              label: '写作阶段',
+              children: CHAPTER_STAGES.map(({ id: status, label }) => ({
+                type: 'item' as const,
+                id: 'node-status-' + status,
+                label,
+                checked: chapterStage(node, currentData.entities) === status,
+                onSelect: () =>
+                  void setChapterStage(node.id, status).catch(() => undefined),
+              })),
+              onSelect: () => undefined,
+            },
+          ]
+        : []),
+      ...(node.kind === 'chapter'
+        ? [
+            {
+              type: 'item' as const,
+              id: 'node-checklist',
+              label: '检查清单',
+              children: [
+                {
+                  type: 'item' as const,
+                  id: 'node-checklist-body',
+                  label: '标记正文完成',
+                  onSelect: () =>
+                    void updateChecklistShortcut(node, 'body').catch(
+                      () => undefined,
+                    ),
+                },
+                {
+                  type: 'item' as const,
+                  id: 'node-checklist-final',
+                  label: '标记定稿',
+                  onSelect: () =>
+                    void updateChecklistShortcut(node, 'final').catch(
+                      () => undefined,
+                    ),
+                },
+              ],
+              onSelect: () => undefined,
+            },
+          ]
+        : []),
+      ...(node.kind !== 'section'
+        ? [
+            {
+              type: 'item' as const,
+              id: 'node-export',
+              label: node.kind === 'volume' ? '导出此卷' : '导出此章',
+              icon: FileDown,
+              onSelect: () => onExportNode(node),
+            },
+          ]
+        : []),
+      {
+        type: 'item',
+        id: 'node-lock',
+        label: node.status === 'locked' ? '解锁正文' : '锁定正文',
+        onSelect: () =>
+          void setNodeStatus(
+            node.id,
+            node.status === 'locked' ? 'draft' : 'locked',
+          ),
+      },
+      {
+        type: 'item',
+        id: 'node-copy-title',
+        label: node.kind === 'chapter' ? '复制章节标题' : '复制标题',
+        icon: Copy,
+        onSelect: async () => {
+          if (!(await writeClipboardText(node.title)))
+            setError('无法访问系统剪贴板，请改用 Ctrl+C。')
+        },
+      },
+      {
+        type: 'item',
+        id: 'node-copy-path',
+        label: node.kind === 'chapter' ? '复制文件路径' : '复制目录路径',
+        icon: Copy,
+        onSelect: copyPath,
+      },
       { type: 'separator' },
-      { type: 'item', id: 'node-trash', label: '移入回收站', icon: Trash2, tone: 'danger', onSelect: () => handleDelete(node) },
+      {
+        type: 'item',
+        id: 'node-trash',
+        label: '移入回收站',
+        icon: Trash2,
+        tone: 'danger',
+        onSelect: () => handleDelete(node),
+      },
     ]
-    openContextMenu(event, { title: node.title, location, payload: { location, projectPath: projectPath ?? undefined, nodeIds: [node.id], nodeKind: node.kind }, items, trigger: event.currentTarget })
+    openContextMenu(event, {
+      title: node.title,
+      location,
+      payload: {
+        location,
+        projectPath: projectPath ?? undefined,
+        nodeIds: [node.id],
+        nodeKind: node.kind,
+      },
+      items,
+      trigger: event.currentTarget,
+    })
   }
   function handleDrop(target: NodeRecord) {
-    const source = draggedNodeId ? currentData.nodes.find((node) => node.id === draggedNodeId) : undefined
+    const source = draggedNodeId
+      ? currentData.nodes.find((node) => node.id === draggedNodeId)
+      : undefined
     setDraggedNodeId(null)
     if (!source || source.id === target.id) return
     if (source.parentId === target.parentId) {
-      void reorderNode(source.id, source.orderIndex < target.orderIndex ? 'down' : 'up')
+      void reorderNode(
+        source.id,
+        source.orderIndex < target.orderIndex ? 'down' : 'up',
+      )
       return
     }
-    if ((source.kind === 'chapter' && target.kind === 'volume') || (source.kind === 'section' && target.kind === 'chapter')) {
+    if (
+      (source.kind === 'chapter' && target.kind === 'volume') ||
+      (source.kind === 'section' && target.kind === 'chapter')
+    ) {
       void moveNode(source.id, target.id)
     }
   }
-  const primaryIds: ViewId[] = ['dashboard', 'manuscript', 'outline', 'character', 'ai']
-  function togglePin(id: ViewId) {
-    if (!pinned.includes(id) && pinned.length >= 4) return
-    const next = pinned.includes(id) ? pinned.filter(item => item !== id) : [...pinned, id].slice(-4)
-    setPinned(next); writePinnedNavigation(next)
-  }
-  function navigationItem({ id, label, icon: Icon }: typeof navItems[number], pinnable = false) {
-    return <div className="nav-entry" key={id}><button className={cn('nav-item', activeView === id && 'active')} aria-current={activeView === id ? 'page' : undefined} onClick={() => setView(id)}><Icon size={16} strokeWidth={1.8} /><span>{label}</span>{id === 'character' ? <span className="count">{currentData.entities.filter(entity => entity.kind === 'character').length}</span> : null}</button>{pinnable && <IconButton className="nav-pin" disabled={!pinned.includes(id) && pinned.length >= 4} title={!pinned.includes(id) && pinned.length >= 4 ? '最多固定 4 项，请先取消一个固定入口' : undefined} icon={pinned.includes(id) ? PinOff : Pin} label={(pinned.includes(id) ? '取消固定' : '固定') + label} onClick={() => togglePin(id)} />}</div>
-  }
-  return <aside className="sidebar">
-    <div className="sidebar-inner">
-      <div className="sidebar-head"><div><h2>项目导航</h2><small>{data.project.title}</small></div><IconButton icon={Plus} label="新建卷" onClick={() => onAddNode('volume', null)} /></div>
-      <nav className="sidebar-nav-groups" aria-label="功能导航">
-        <div className="nav-list primary-navigation">{navItems.filter(item => primaryIds.includes(item.id)).map(item => navigationItem(item))}</div>
-        <div className="nav-secondary-scroll">{pinned.length > 0 && <div className="nav-list pinned-navigation" aria-label="固定入口">{pinned.map(id => navItems.find(item => item.id === id)!).map(item => navigationItem(item, true))}</div>}
-        <div className="nav-list secondary-navigation">
-          {['写作', '资料', '分析与辅助'].map(group => <Disclosure key={group} title={group === '写作' ? '更多写作工具' : group === '资料' ? '更多资料' : group} storageKey={'compact-nav:' + group} meta={navItems.find(item => item.group === group && item.id === activeView && !primaryIds.includes(item.id) && !pinned.includes(item.id))?.label} className="nav-group">{navItems.filter(item => item.group === group && !primaryIds.includes(item.id) && !pinned.includes(item.id)).map(item => navigationItem(item, true))}</Disclosure>)}
-          <button className={cn('nav-item', activeView === 'search' && 'active')} onClick={() => setView('search')}><Search size={15} /><span>全文搜索</span><span className="count" title="Ctrl+Shift+F">Ctrl⇧F</span></button>
+  return (
+    <aside className="sidebar">
+      <div className="sidebar-inner">
+        <div className="sidebar-head">
+          <div>
+            <h2>项目导航</h2>
+            <small>{data.project.title}</small>
+          </div>
+          <IconButton
+            icon={Plus}
+            label="新建卷"
+            onClick={() => onAddNode('volume', null)}
+          />
         </div>
+        <Navigation />
+        <div className="sidebar-section-label">
+          <span>正文结构</span>
+          <span>
+            {data.nodes.filter((node) => node.kind === 'chapter').length} 章
+          </span>
         </div>
-      </nav><div className="sidebar-section-label"><span>正文结构</span><span>{data.nodes.filter((node) => node.kind === 'chapter').length} 章</span></div>
-      <select className="select-input workflow-tree-filter" value={workflowFilter} onChange={(event) => { setWorkflowFilter(event.target.value as ChapterWorkflowFilter); setTreeScrollTop(0) }} aria-label="章节 Checklist 过滤"><option value="all">显示全部章节</option><option value="incomplete">仅显示检查未完成</option><option value="not-final">仅显示未定稿</option><option value="consistency">仅显示待人物一致性检查</option></select>
-      <div className="tree" ref={treeRef} onScroll={(event) => setTreeScrollTop(event.currentTarget.scrollTop)}>
-        {volumes.length === 0 ? <div className="tree-muted">还没有卷，点击右上角创建第一卷。</div> : <div className="tree-virtual-content" style={{ height: flatTree.length * treeRowHeight }}><div className="tree-virtual-rows" style={{ top: visibleStart * treeRowHeight }}>{visibleTree.map(({ node, level }) => <NodeRow key={node.id} node={node} level={level} open={openNodes.has(node.id)} selected={selectedNodeIds.has(node.id)} onToggle={() => toggle(node.id)} onSelect={() => node.kind === 'volume' ? toggle(node.id) : void selectNode(node.id)} onSelectToggle={() => toggleSelection(node.id)} onRename={() => handleRename(node)} onContextMenu={(event) => openNodeMenu(event, node)} onDragStart={() => setDraggedNodeId(node.id)} onDrop={() => handleDrop(node)} />)}</div></div>}
+        <div className="chapter-search">
+          <Search size={13} />
+          <input
+            aria-label="查找章节"
+            placeholder="查找卷、章或小节…"
+            value={chapterQuery}
+            onChange={(event) => setChapterQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.stopPropagation()
+                setChapterQuery('')
+              }
+            }}
+          />
+          {chapterQuery && (
+            <IconButton
+              icon={X}
+              label="清除章节搜索"
+              onClick={() => setChapterQuery('')}
+            />
+          )}
+        </div>
+        <select
+          className="select-input workflow-tree-filter"
+          value={workflowFilter}
+          onChange={(event) => {
+            setWorkflowFilter(event.target.value as ChapterWorkflowFilter)
+            setTreeScrollTop(0)
+          }}
+          aria-label="章节 Checklist 过滤"
+        >
+          <option value="all">显示全部章节</option>
+          <option value="incomplete">仅显示检查未完成</option>
+          <option value="not-final">仅显示未定稿</option>
+          <option value="consistency">仅显示待人物一致性检查</option>
+        </select>
+        <div
+          className="tree"
+          ref={treeRef}
+          onScroll={(event) => setTreeScrollTop(event.currentTarget.scrollTop)}
+        >
+          {volumes.length === 0 ? (
+            <div className="tree-muted">
+              {data.nodes.some((node) => node.kind === 'volume')
+                ? '没有匹配的章节，试试其他名称或筛选条件。'
+                : '还没有卷，点击右上角创建第一卷。'}
+            </div>
+          ) : (
+            <div
+              className="tree-virtual-content"
+              style={{ height: flatTree.length * treeRowHeight }}
+            >
+              <div
+                className="tree-virtual-rows"
+                style={{ top: visibleStart * treeRowHeight }}
+              >
+                {visibleTree.map(({ node, level }) => (
+                  <NodeRow
+                    key={node.id}
+                    node={node}
+                    level={level}
+                    open={openNodes.has(node.id)}
+                    selected={selectedNodeIds.has(node.id)}
+                    onToggle={() => toggle(node.id)}
+                    onSelect={() =>
+                      node.kind === 'volume'
+                        ? toggle(node.id)
+                        : void selectNode(node.id)
+                    }
+                    onSelectToggle={() => toggleSelection(node.id)}
+                    onRename={() => handleRename(node)}
+                    onContextMenu={(event) => openNodeMenu(event, node)}
+                    onDragStart={() => setDraggedNodeId(node.id)}
+                    onDrop={() => handleDrop(node)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        {selectedNodeIds.size ? (
+          <div className="tree-batch-actions">
+            <span>已选 {selectedNodeIds.size} 项</span>
+            <Button variant="danger" onClick={() => void deleteSelected()}>
+              <Trash2 size={12} />
+              批量移入回收站
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setSelectedNodeIds(new Set())}
+            >
+              清除选择
+            </Button>
+          </div>
+        ) : null}
+        <div className="sidebar-section-label">
+          <span>工具</span>
+        </div>
+        <div className="nav-list">
+          <button
+            className={cn('nav-item', activeView === 'trash' && 'active')}
+            onClick={() => setView('trash')}
+          >
+            <Trash2 size={15} strokeWidth={1.8} />
+            <span>回收站</span>
+          </button>
+          <button className="nav-item" onClick={() => setView('settings')}>
+            <WandSparkles size={15} strokeWidth={1.8} />
+            <span>项目设置</span>
+          </button>
+        </div>
+        <div className="sidebar-tip">
+          <FilePlus2 size={14} />
+          <span>双击章节标题可快速重命名；删除内容会先移动到回收站。</span>
+        </div>
       </div>
-      {selectedNodeIds.size ? <div className="tree-batch-actions"><span>已选 {selectedNodeIds.size} 项</span><Button variant="danger" onClick={() => void deleteSelected()}><Trash2 size={12} />批量移入回收站</Button><Button variant="ghost" onClick={() => setSelectedNodeIds(new Set())}>清除选择</Button></div> : null}
-      <div className="sidebar-section-label"><span>工具</span></div>
-      <div className="nav-list">
-        <button className={cn('nav-item', activeView === 'trash' && 'active')} onClick={() => setView('trash')}><Trash2 size={15} strokeWidth={1.8} /><span>回收站</span></button>
-        <button className="nav-item" onClick={() => setView('settings')}><WandSparkles size={15} strokeWidth={1.8} /><span>项目设置</span></button>
-      </div>
-      <div className="sidebar-tip"><FilePlus2 size={14} /><span>双击章节标题可快速重命名；删除内容会先移动到回收站。</span></div>
-    </div>
-  </aside>
+    </aside>
+  )
 }

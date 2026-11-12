@@ -323,7 +323,7 @@ pub struct ExportInput {
     pub cover_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiCompletionInput {
     pub endpoint: String,
@@ -333,6 +333,21 @@ pub struct AiCompletionInput {
     pub prompt: String,
     pub temperature: Option<f32>,
     pub max_tokens: Option<u32>,
+    pub provider_kind: Option<String>,
+    pub thinking: Option<String>,
+    pub reasoning_effort: Option<String>,
+    pub stream: Option<bool>,
+    pub timeout_seconds: Option<u64>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiUsage {
+    pub prompt_tokens: Option<u64>,
+    pub completion_tokens: Option<u64>,
+    pub total_tokens: Option<u64>,
+    pub reasoning_tokens: Option<u64>,
+    pub cached_tokens: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -342,6 +357,8 @@ pub struct AiCompletionResult {
     pub model: String,
     #[serde(default)]
     pub incomplete: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<AiUsage>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

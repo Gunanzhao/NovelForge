@@ -1,3 +1,4 @@
+import { providerRequest } from '../lib/ai-provider'
 import { normalizeLineBreaks, sourceRangeFromNormalizedText, newlineNormalizationChanges } from '../lib/newline-offsets'
 import { protectBeforeChange } from '../lib/history'
 import { create } from 'zustand'
@@ -125,7 +126,10 @@ export const useAiTask = create<AiTask>((set, get) => ({
           if (valid()) set(state => ({ result: { content: (state.result?.content ?? '') + delta, model: prefs.codexModel ?? '' } }))
         }, () => !valid())
       } else if (transport === 'provider') {
-        result = await projectApi.aiComplete({ endpoint: prefs.endpoint, model: prefs.model, apiKey, systemPrompt, prompt, temperature: prefs.temperature ?? 0.7, maxTokens: prefs.maxTokens ?? 4000 }, id)
+        const input = providerRequest(prefs, apiKey, systemPrompt, prompt)
+        result = input.stream ? await projectApi.aiComplete(input, id, content => {
+          if (valid()) set({ result: { content, model: prefs.model, incomplete: true } })
+        }) : await projectApi.aiComplete(input, id)
       } else result = local
       if (!valid()) return
       if (result.incomplete) {

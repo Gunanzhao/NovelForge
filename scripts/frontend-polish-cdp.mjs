@@ -26,7 +26,7 @@ try {
   delete env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS; delete env.WEBVIEW2_USER_DATA_FOLDER
   child = spawn(desktop ? executable : 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', desktop ? ['--diagnostic-webview', String(port), join(temp, 'profile')] : ['--headless=new', '--disable-gpu', '--no-first-run', `--remote-debugging-port=${port}`, '--user-data-dir=' + join(temp, 'profile'), `http://127.0.0.1:${serverPort}`], { windowsHide: true, stdio: 'ignore', env })
   let page
-  for (let i = 0; i < 160; i++) { try { page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(p => p.type === 'page' && (!desktop || p.url.startsWith('http://tauri.localhost'))) } catch { /* bounded startup */ } if (page) break; await delay(250) }
+  for (let i = 0; i < 160; i++) { try { page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(p => p.type === 'page' && (desktop ? p.url.startsWith('http://tauri.localhost') : p.url.startsWith(`http://127.0.0.1:${serverPort}`))) } catch { /* bounded startup */ } if (page) break; await delay(250) }
   assert.ok(page, 'production WebView/browser is available')
   socket = new WebSocket(page.webSocketDebuggerUrl)
   await new Promise((yes, no) => { socket.addEventListener('open', yes, { once: true }); socket.addEventListener('error', no, { once: true }) })
@@ -34,7 +34,7 @@ try {
   socket.addEventListener('message', e => { const m = JSON.parse(e.data); if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails.text); const p = pending.get(m.id); if (p) { pending.delete(m.id); if (m.error) p.reject(Error(m.error.message)); else p.resolve(m.result) } })
   const cmd = (method, params = {}) => new Promise((resolve, reject) => { const n = ++id; pending.set(n, { resolve, reject }); socket.send(JSON.stringify({ id: n, method, params })) })
   const ev = async expression => { const r = await cmd('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }); assert.equal(r.exceptionDetails, undefined, JSON.stringify(r.exceptionDetails)); return r.result.value }
-  const wait = async expression => { for (let i = 0; i < 100; i++) { if (await ev(expression)) return; await delay(100) } throw Error('UI timeout: ' + expression) }
+  const wait = async expression => { for (let i = 0; i < 300; i++) { if (await ev(expression)) return; await delay(100) } await capture('timeout'); writeFileSync(join(out, 'timeout-page.txt'), await ev('document.body.innerText')); throw Error('UI timeout: ' + expression) }
   const click = async (selector, label) => {
     await ev(`(()=>{const e=[...document.querySelectorAll(${JSON.stringify(selector)})].find(e=>e.textContent.trim()===${JSON.stringify(label)}||e.querySelector('span')?.textContent===${JSON.stringify(label)}||e.getAttribute('aria-label')===${JSON.stringify(label)});if(!e)throw Error('Missing action: '+${JSON.stringify(label)});let parent=e.tagName==='SUMMARY'?e.parentElement?.parentElement:e.parentElement;while(parent){if(parent.tagName==='DETAILS')parent.open=true;parent=parent.parentElement}e.scrollIntoView({block:'nearest'});e.click()})()`)
     await delay(180)
@@ -97,11 +97,34 @@ try {
   assert.ok(await ev('document.activeElement===document.querySelector(".editor-toolbar .action-menu summary")'))
   assert.ok(await ev('document.querySelector(".statusbar").textContent.includes("76 字")'))
   assert.equal(await ev('document.querySelector(".editor-subbar")!==null'), false)
+  // Studio interactions use real controls in both the browser and production desktop.
+  const fill = async (selector, value) => {
+    await ev(`(()=>{const input=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(value)});input.dispatchEvent(new Event('input',{bubbles:true}))})()`)
+    await delay(200)
+  }
+  await fill('.chapter-search input', '不存在的章节')
+  assert.ok(await ev('document.querySelector(".tree").textContent.includes("没有匹配的章节")'))
+  await fill('.chapter-search input', '第一章')
+  assert.ok(await ev('[...document.querySelectorAll(".tree-main-button")].some(e=>e.textContent.includes("第一章"))'))
+  await click('button', '清除章节搜索')
+  assert.equal(await ev('document.querySelector(".chapter-search input").value'), '')
+  await click('.nav-item', '总览')
+  await click('button', '进入专注模式')
+  await wait('!!document.querySelector(".studio-exit-focus")')
+  assert.equal(await ev('getComputedStyle(document.querySelector(".studio-exit-focus")).position'), 'fixed')
+  await ev('document.querySelector(".studio-exit-focus").click()')
+  await wait('!!document.querySelector(".topbar")')
+  await click('.nav-item', '正文')
   await click('button', '固定时间线'); await wait('!!document.querySelector(".pinned-navigation")')
-  await cmd('Page.reload'); await wait('!!document.querySelector(".recent-project")'); await ev('document.querySelector(".recent-project").click()'); await wait('!!document.querySelector(".pinned-navigation")')
+  await cmd('Page.reload'); await wait('!!document.querySelector(".recent-project")')
+  await fill('.library-search input', '不存在的作品')
+  assert.ok(await ev('document.querySelector(".library-empty").textContent.includes("没有找到")'))
+  await click('button', '查看全部作品')
+  await capture('studio-library')
+  await ev('document.querySelector(".recent-project").click()'); await wait('!!document.querySelector(".pinned-navigation")')
   assert.ok(await ev('document.querySelector(".pinned-navigation").textContent.includes("时间线")'))
   assert.deepEqual(errors, [], 'uncaught runtime errors')
-  writeFileSync(join(out, 'result.json'), JSON.stringify({ desktop, rows, assertions: ['drawer preserves mounted content', 'AI instruction retained', 'menu Escape and focus', 'consistent word count', 'navigation pin survives reload'], errors }, null, 2))
+  writeFileSync(join(out, 'result.json'), JSON.stringify({ desktop, rows, assertions: ['drawer preserves mounted content', 'AI instruction retained', 'menu Escape and focus', 'consistent word count', 'navigation pin survives reload', 'chapter search and clear', 'focus mode exit from dashboard', 'recent project search and reopen'], errors }, null, 2))
   console.log(`PASS: ${rows.length} rendered layouts; drawers, menus, retained drafts, word count and persistent navigation; desktop=${desktop}`)
 } finally {
   writeFileSync(join(out, 'layout-progress.json'), JSON.stringify({ rows, errors }, null, 2))

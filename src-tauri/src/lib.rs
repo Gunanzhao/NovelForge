@@ -144,6 +144,8 @@ pub fn run() {
             commands::search::search_project_page,
             commands::consistency::check_consistency,
             commands::ai::ai_complete,
+            commands::ai::ai_complete_stream,
+            commands::ai::provider::ai_models,
             commands::ai::ai_cancel,
             commands::codex::codex_status,
             commands::codex::codex_models,
