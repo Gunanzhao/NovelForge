@@ -2,18 +2,29 @@
 
 NovelForge 是一款本地优先的中文长篇小说 Markdown 创作工作台，采用 Tauri 2、React、TypeScript、Rust 和 SQLite。
 
-当前版本：**1.2.0-rc.4（预发布）**。
+当前版本：**1.2.0-rc.5（预发布）**。
 
-[![Release branch CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=codex%2Frelease-1.2.0-rc.4)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Acodex%2Frelease-1.2.0-rc.4)
+[![Release branch CI](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml/badge.svg?branch=codex%2Frelease-1.2.0-rc.5)](https://github.com/Gunanzhao/NovelForge/actions/workflows/ci.yml?query=branch%3Acodex%2Frelease-1.2.0-rc.5)
 
 ## 下载
 
-- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.4/NovelForge_1.2.0-rc.4_x64-setup.exe)
-- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.4/novelforge.exe)
-- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.4/SHA256SUMS.txt)
+- [Windows x64 安装包](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.5/NovelForge_1.2.0-rc.5_x64-setup.exe)
+- [独立 EXE](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.5/novelforge.exe)
+- [SHA-256 校验文件](https://github.com/Gunanzhao/NovelForge/releases/download/v1.2.0-rc.5/SHA256SUMS.txt)
 - [版本说明与历史 Release](https://github.com/Gunanzhao/NovelForge/releases)
 
 已有安装版用户运行新安装包升级；直接运行独立 EXE 不会更新旧快捷方式。桌面版需要 Windows WebView2。
+
+## 1.2.0-rc.5 相比 1.2.0-rc.4
+
+- **章节状态一致**：草稿、初稿完成、修改中、定稿在目录、规划与导出中使用同一含义；章节锁定单独显示。侧栏操作收进固定的“更多”入口，避免悬停时挤动标题。
+- **离线辅助更明确**：本地摘录与模板说明不会生成新正文，不再与模型生成混淆；人物别名、标签及可选的资料正文搜索提供命中上下文。
+- **开始与继续写作**：总览继续上次的章或小节；欢迎页可“从已有稿件开始”，可选项默认折叠，进入分章预览后再确认导入。
+- **备份状态可见**：状态栏持续显示独立备份是否配置、是否暂停；首次写作后提供可跳过的设置提醒。
+- **章节记忆审阅队列**：按卷、名称、状态筛选，跳到下一份待确认或过期记忆；刷新时核对磁盘正文，筛选保留当前草稿。
+- **批量改稿与长文对比**：预览文件与章节匹配，提示重名、重复目标、未匹配和缺少文件；只保存待确认改稿，继续逐章确认。长文支持差异导航与未改正文折叠。
+
+前端 519 项测试通过；已用 Windows 原生程序验收导入、备份提醒、记忆过期筛选、批量改稿、千行差异导航及逐章应用。详见 [rc.5 发布说明](docs/release-1.2.0-rc.5.md)。
 
 ## 1.2.0-rc.4 相比 1.2.0-rc.3
 
@@ -139,7 +150,7 @@ GTK 和 urlpattern 依赖链仍有 `proc-macro-error` 及五个 `unic-*` 包停�
 
 ## 开始使用
 
-1. 创建项目时选择空目录，或打开已有 NovelForge 项目。
+1. 创建项目时选择空目录，或打开已有 NovelForge 项目。导入旧稿可在欢迎页选择“从已有稿件开始”，创建独立项目后预览分章并确认。
 2. 在左侧建立卷、章或节，进入正文写作；人物、地点等资料可在对应页面维护。
 3. 正文直接输入已有资料名称或别名，淡虚线提示可点击查看资料；需要固定关联时选择“固定关联”，也可手动输入 `[[人物名]]`。在设置 → 编辑器中开关自动识别、恢复忽略项。
 4. 正文工具栏点击“AI 辅助”，或选中文字后使用浮动工具栏／右键菜单。确认目标及参考资料，预览请求后运行，再审阅结果并决定是否应用。
