@@ -1,3 +1,4 @@
+import { RevisionBatchImport } from './RevisionBatchImport'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, FileCheck2, GitCompare, Plus, RefreshCw, Save } from 'lucide-react'
 import { isDesktop, projectApi } from '../lib/api'
@@ -6,7 +7,7 @@ import { historyChanged } from '../lib/history'
 import { decodeManuscript } from '../lib/manuscript-import'
 import { sortChapterNodes, sortManuscriptNodes } from '../lib/planning-data'
 import type { RevisionChapter, RevisionRound, RevisionRoundView, RevisionTarget } from '../lib/revision-workbench'
-import { diffLines } from '../lib/text-diff'
+import { RevisionDiff } from './RevisionDiff'
 import type { NodeRecord } from '../lib/types'
 import { useUnsavedDraft } from '../hooks/useUnsavedDraft'
 import { captureProjectSession, isCurrentDocumentSaved, isCurrentProjectSession, useAppStore } from '../stores/app-store'
@@ -70,25 +71,6 @@ function RoundSetup({ nodes, busy, onCreate, onCancel }: {
   </Panel>
 }
 
-function RevisionDiff({ original, candidate, latest = false, afterConfirmation = false }: { original: string; candidate: string | null; latest?: boolean; afterConfirmation?: boolean }) {
-  const lines = useMemo(() => candidate !== null && [original, candidate].every(value => value.split(/\r\n|\r|\n/u, 801).length <= 800)
-    ? diffLines(original.replace(/\r\n?/gu, '\n'), candidate.replace(/\r\n?/gu, '\n'))
-    : null, [original, candidate])
-  const originalTitle = afterConfirmation ? '本轮确认的正文' : latest ? '当前磁盘正文' : '审阅基准原文'
-  const candidateTitle = afterConfirmation ? '当前磁盘正文' : '已保存改稿'
-  return <section className="revision-compare">
-    <h3>{candidate === null ? originalTitle : `对比：${originalTitle} → ${candidateTitle}`}</h3>
-    {candidate === null ? <pre className="revision-text" aria-label={originalTitle}>{original || '（空白正文）'}</pre>
-      : lines ? <>
-        {candidate === original ? <p className="field-hint">改稿与原文相同，确认只记录审阅进度。</p> : lines.every(line => line.kind === 'same') ? <p className="field-hint">文本相同，换行格式有变化。</p> : <p className="revision-legend"><span className="removed">− {afterConfirmation ? '后续移除' : '原文移除'}</span><span className="added">+ {afterConfirmation ? '后续新增' : '改稿新增'}</span></p>}
-        <pre className="revision-text" aria-label={afterConfirmation ? '确认后的正文差异' : '改稿差异'}>{lines.map((line, index) => <span className={line.kind} key={index}>{line.kind === 'added' ? '+ ' : line.kind === 'removed' ? '− ' : '  '}{line.text}{'\n'}</span>)}</pre>
-      </> : <>
-        <p className="field-hint">正文较长，以下展示两份完整正文。</p>
-        <div className="revision-text-pair"><div><h4>{originalTitle}</h4><pre className="revision-text" aria-label={originalTitle}>{original}</pre></div><div><h4>{candidateTitle}</h4><pre className="revision-text" aria-label={candidateTitle}>{candidate}</pre></div></div>
-      </>}
-  </section>
-}
-
 function withLineEndings(value: string, template: string) {
   // Textareas return LF; keep uniform CRLF (or CR) used in the source draft.
   const remainder = template.replace(/\r\n/gu, '')
@@ -118,6 +100,7 @@ function ProjectRevisionWorkbench({ projectPath, nodes }: { projectPath: string;
   const [view, setView] = useState<RevisionRoundView | null>(null)
   const [draft, setDraft] = useState('')
   const [creating, setCreating] = useState(false)
+  const [batchOpen, setBatchOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [retry, setRetry] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -357,6 +340,7 @@ function ProjectRevisionWorkbench({ projectPath, nodes }: { projectPath: string;
     : !current?.candidate ? '保存改稿后可以确认' + entryLabel + '。'
     : '有变化时，应用前会保留原文版本。'
   return <div className="workspace-view revision-workbench">
+    {batchOpen && view && <RevisionBatchImport projectPath={projectPath} roundId={view.round.id} chapters={view.chapters} busy={busy} error={error} run={run} onClose={() => setBatchOpen(false)} onRefresh={async () => { const session = captureProjectSession(); const next = await projectApi.openRevisionRound({ projectPath, roundId: view.round.id, nodeId: current?.nodeId }); if (active(session)) install(next) }} />}
     <div className="revision-scroll" ref={scrollRegion}>
     <header className="view-header"><div><p className="eyebrow">MANUSCRIPT REVIEW</p><h1>整卷修订</h1><p>选择章或小节，保存改稿并逐项确认。回到本页时继续上次的审阅位置。</p></div>
       <Button variant="outline" disabled={!ready || creating} onClick={() => runGuarded(() => { setError(''); setNotice(''); setCreating(true) })}><Plus size={15} />新建修订</Button>
@@ -381,7 +365,7 @@ function ProjectRevisionWorkbench({ projectPath, nodes }: { projectPath: string;
             <strong>已确认 {view.round.confirmedCount} / {view.round.chapterCount} 项{changedCount > 0 && <span className="revision-changed"> · {changedCount} 项确认后有改动</span>}</strong>
             <progress aria-label="修订进度" value={view.round.confirmedCount} max={view.round.chapterCount} />
             <span>本轮范围：{chapterCount} 章 · {sectionCount} 小节{excludedSections > 0 && `；所选章还有 ${excludedSections} 个小节未纳入`}</span>
-            <div><Button variant="ghost" disabled={!ready} onClick={() => openRound(view.round.id)}><RefreshCw size={14} />检查本轮正文</Button></div>
+            <div><Button variant="outline" disabled={!ready} onClick={() => runGuarded(() => setBatchOpen(true))}>批量载入改稿</Button><Button variant="ghost" disabled={!ready} onClick={() => openRound(view.round.id)}><RefreshCw size={14} />检查本轮正文</Button></div>
           </div>
         </Panel>
         <div className="revision-grid">
@@ -415,8 +399,8 @@ function ProjectRevisionWorkbench({ projectPath, nodes }: { projectPath: string;
               <Button variant="ghost" disabled={!ready} onClick={() => openRound(view.round.id, current.nodeId)}><RefreshCw size={14} />刷新原文</Button>
             </div>
             {changedAfterConfirmation
-              ? <RevisionDiff original={current.candidate ?? current.original} candidate={current.currentContent} afterConfirmation />
-              : <RevisionDiff original={stale ? current.currentContent! : current.original} candidate={current.candidate} latest={stale} />}
+              ? <RevisionDiff key={current.nodeId + ":" + current.version} original={current.candidate ?? current.original} candidate={current.currentContent} afterConfirmation />
+              : <RevisionDiff key={current.nodeId + ":" + current.version} original={stale ? current.currentContent! : current.original} candidate={current.candidate} latest={stale} />}
             {!current.confirmedAt ? <details className="revision-draft-editor" open={draftOpen} onToggle={event => setDraftOpen(event.currentTarget.open)}>
               <summary>{current.candidate === null ? '录入改稿' : '编辑改稿'}{dirty && <small>未保存</small>}</summary>
               <div className="revision-draft-fields">

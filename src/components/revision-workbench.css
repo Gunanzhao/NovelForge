@@ -69,3 +69,14 @@
   .revision-grid, .revision-setup-fields, .revision-round-bar, .revision-text-pair { grid-template-columns: minmax(0, 1fr); }
   .revision-queue-list { max-height: 195px; }
 }
+
+.modal-card.revision-batch-modal { width: min(860px, calc(100vw - 48px)); display: flex; flex-direction: column; overflow: hidden; }
+.revision-batch-modal .modal-body { overflow: auto; min-height: 0; }
+.revision-batch-modal .modal-header, .revision-batch-modal .modal-footer { flex-shrink: 0; }
+.revision-batch-row { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.revision-batch-row strong { font-size: 14px; }
+
+.revision-diff-blocks pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.revision-diff-blocks details { padding: 8px; border-block: 1px dashed var(--line); }
+.revision-diff-blocks summary { cursor: pointer; color: var(--muted); }
+.revision-diff-change:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
